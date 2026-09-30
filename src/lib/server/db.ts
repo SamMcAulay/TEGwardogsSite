@@ -160,6 +160,13 @@ const MIGRATIONS: string[] = [
 
   CREATE INDEX kills_distance ON kills(distance_m DESC) WHERE suicide = 0 AND teamkill = 0;
   `,
+  /* sql */ `
+  -- Longest-kill lists are infantry only; index exactly that set.
+  DROP INDEX kills_distance;
+  CREATE INDEX kills_distance_infantry ON kills(distance_m DESC)
+    WHERE suicide = 0 AND teamkill = 0 AND distance_m IS NOT NULL
+      AND cause NOT LIKE 'Id.Vehicle.%' AND cause NOT LIKE 'Vehicle.%';
+  `,
 ];
 
 type GlobalWithDb = typeof globalThis & { __tegDb?: Database.Database };

@@ -2,6 +2,7 @@
 // is handed, so tests run it against an in-memory database.
 
 import type Database from 'better-sqlite3';
+import { causeInfo } from '../game';
 import { dayOf, stmt } from './db';
 import type { LivePlayer, ServerStatus } from './rcon';
 
@@ -375,6 +376,9 @@ export function ingestKills(conn: Database.Database, serverId: string, events: F
       const teamkill =
         !suicide && !!killer && !!victim && !!factionOf.get(killer) && factionOf.get(killer) === factionOf.get(victim);
       const distance = e.distance != null ? e.distance / 100 : null;
+      // Longest-kill records are for infantry shots; artillery and vehicle guns would own them otherwise.
+      const kind = causeInfo(e.cause).kind;
+      const infantry = kind !== 'vehicle' && kind !== 'vehicle weapon';
 
       const res = insert.run({
         eventId: e.eventId,
@@ -422,7 +426,7 @@ export function ingestKills(conn: Database.Database, serverId: string, events: F
           headshots: headshot && !teamkill ? 1 : 0,
           suicides: 0,
           teamkills: teamkill ? 1 : 0,
-          longest: !teamkill && distance ? distance : 0,
+          longest: !teamkill && infantry && distance ? distance : 0,
         });
       }
       if (victim) {

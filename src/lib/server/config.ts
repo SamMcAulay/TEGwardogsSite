@@ -29,8 +29,11 @@ const configSchema = z.object({ servers: z.array(serverSchema).min(1) });
 export type ServerConfig = z.infer<typeof serverSchema>;
 
 export const env = {
-  databasePath: process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'teg-wardogs.db'),
-  serversConfigPath: process.env.SERVERS_CONFIG ?? path.join(process.cwd(), 'config', 'servers.json'),
+  databasePath: process.env.DATABASE_PATH
+    ? path.resolve(process.env.DATABASE_PATH)
+    : path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'teg-wardogs.db'),
+  serversConfigPath:
+    process.env.SERVERS_CONFIG ?? path.join(/*turbopackIgnore: true*/ process.cwd(), 'config', 'servers.json'),
   demoMode: process.env.DEMO_MODE === 'true',
   pollIntervalMs: Math.max(2000, Number(process.env.POLL_INTERVAL_MS ?? 5000)),
   steamApiKey: process.env.STEAM_API_KEY || null,
@@ -51,8 +54,8 @@ let cached: ServerConfig[] | null = null;
 
 export function getServerConfigs(): ServerConfig[] {
   if (cached) return cached;
-  if (fs.existsSync(env.serversConfigPath)) {
-    const raw = JSON.parse(fs.readFileSync(env.serversConfigPath, 'utf8'));
+  if (fs.existsSync(/*turbopackIgnore: true*/ env.serversConfigPath)) {
+    const raw = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ env.serversConfigPath, 'utf8'));
     cached = configSchema.parse(raw).servers;
   } else if (env.demoMode) {
     cached = DEMO_SERVERS;

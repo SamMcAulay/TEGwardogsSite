@@ -115,7 +115,12 @@ export class DemoNetwork {
       // The first server in each region is the busy one; later ones fill up less.
       const draw = flagshipSeen.has(cfg.region) ? 0.45 + this.r() * 0.3 : 1;
       flagshipSeen.add(cfg.region);
-      const server = new DemoServer(cfg, draw, rng(seed + cfg.id.length * 7919 + cfg.id.charCodeAt(0)), now);
+      const server = new DemoServer(
+        cfg,
+        draw,
+        rng(seed + [...cfg.id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261)),
+        now,
+      );
       this.servers.set(cfg.id, server);
       // Start mid-evening rather than empty.
       const target = this.targetPopulation(server, now);
@@ -188,6 +193,7 @@ export class DemoNetwork {
   }
 
   private seat(s: DemoServer, now: number) {
+    if (s.seats.size >= MAX_PLAYERS - 2) return;
     const r = this.r;
     const candidate = weighted(
       r,
@@ -242,7 +248,9 @@ export class DemoNetwork {
               ? killer.player.sidearm
               : killer.player.primary;
       const profile = CLASS_PROFILE[weapon.cls];
-      distance = (profile.min + Math.pow(r(), 1.8) * (profile.max - profile.min)) * 100;
+      // Mostly short and mid range, with a thin tail of long shots past the usual envelope.
+      const tail = r() < 0.01 ? 1 + Math.abs(gaussian(r)) * 0.35 : 1;
+      distance = (profile.min + Math.pow(r(), 1.8) * (profile.max - profile.min)) * tail * 100;
       if (r() < profile.hs * Math.min(1.6, 0.6 + killer.player.skill * 0.4)) tags.push('Headshot');
       if (weapon.cls === 'vehicle' && r() < 0.1) tags.push('VehicleExplosion');
       if (weapon.cls === 'melee') tags.push('WeaponMelee');

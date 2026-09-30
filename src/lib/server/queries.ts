@@ -474,6 +474,8 @@ export function playerMatches(steamId: string, limit = 15, offset = 0): PlayerMa
 // Kill feed
 
 export interface KillRow {
+  /** Insertion order; used as the feed's pagination cursor. */
+  seq: number;
   eventId: string;
   serverId: string;
   serverName: string;
@@ -491,7 +493,9 @@ export interface KillRow {
   tags: string;
 }
 
-const KILL_COLUMNS = `k.event_id eventId, k.server_id serverId, s.short_name serverName, k.match_id matchId, k.ts,
+// Kill queries use CROSS JOIN, which in SQLite fixes the join order: kills stays the outer loop, so
+// ORDER BY rowid or distance walks an index instead of sorting every matching row.
+const KILL_COLUMNS = `k.rowid seq, k.event_id eventId, k.server_id serverId, s.short_name serverName, k.match_id matchId, k.ts,
   k.killer_steam_id killerSteamId, k.killer_name killerName, k.victim_steam_id victimSteamId, k.victim_name victimName,
   k.cause, k.distance_m distance, k.headshot, k.suicide, k.teamkill, k.tags`;
 
@@ -510,23 +514,23 @@ export function recentKills(q: KillQuery = {}): KillRow[] {
   if (q.steamId) where.push('(k.killer_steam_id = @steamId OR k.victim_steam_id = @steamId)');
   if (q.matchId) where.push('k.match_id = @matchId');
   if (q.cause) where.push('k.cause = @cause');
-  if (q.before) where.push('k.ts < @before');
+  if (q.before) where.push('k.rowid < @before');
   // A player's kills and deaths come from two indexes; UNION lets SQLite use both.
   if (q.steamId && !q.serverId && !q.matchId && !q.cause) {
-    const b = q.before ? 'AND k.ts < @before' : '';
+    const b = q.before ? 'AND k.rowid < @before' : '';
     return stmt(
       db(),
       `SELECT * FROM (
-         SELECT ${KILL_COLUMNS} FROM kills k JOIN servers s ON s.id = k.server_id WHERE k.killer_steam_id = @steamId ${b}
+         SELECT ${KILL_COLUMNS} FROM kills k CROSS JOIN servers s ON s.id = k.server_id WHERE k.killer_steam_id = @steamId ${b}
          UNION
-         SELECT ${KILL_COLUMNS} FROM kills k JOIN servers s ON s.id = k.server_id WHERE k.victim_steam_id = @steamId ${b}
-       ) ORDER BY ts DESC, eventId LIMIT @limit`,
+         SELECT ${KILL_COLUMNS} FROM kills k CROSS JOIN servers s ON s.id = k.server_id WHERE k.victim_steam_id = @steamId ${b}
+       ) ORDER BY seq DESC LIMIT @limit`,
     ).all({ steamId: q.steamId, before: q.before ?? null, limit: q.limit ?? 30 }) as KillRow[];
   }
   return stmt(
     db(),
-    `SELECT ${KILL_COLUMNS} FROM kills k JOIN servers s ON s.id = k.server_id
-     ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY k.ts DESC, k.rowid DESC LIMIT @limit`,
+    `SELECT ${KILL_COLUMNS} FROM kills k CROSS JOIN servers s ON s.id = k.server_id
+     ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY k.rowid DESC LIMIT @limit`,
   ).all({
     serverId: q.serverId ?? null,
     steamId: q.steamId ?? null,
@@ -694,9 +698,9 @@ export function weaponTopPlayers(
 export function longestKills(since: number, limit = 10): KillRow[] {
   return stmt(
     db(),
-    `SELECT ${KILL_COLUMNS} FROM kills k JOIN servers s ON s.id = k.server_id
+    `SELECT ${KILL_COLUMNS} FROM kills k CROSS JOIN servers s ON s.id = k.server_id
      WHERE k.suicide = 0 AND k.teamkill = 0 AND k.distance_m IS NOT NULL AND k.ts >= ?
-       AND k.cause NOT LIKE '%Vehicle%'
+       AND k.cause NOT LIKE 'Id.Vehicle.%' AND k.cause NOT LIKE 'Vehicle.%'
      ORDER BY k.distance_m DESC LIMIT ?`,
   ).all(since, limit) as KillRow[];
 }
@@ -736,4 +740,51 @@ export function mapStats(since: number): { map: string; matches: number; avgLeng
     `SELECT map, COUNT(*) matches, AVG(ended_at - started_at) avgLength, AVG(peak_players) avgPeak FROM matches
      WHERE started_at >= ? AND ended_at IS NOT NULL AND peak_players >= 2 GROUP BY map ORDER BY matches DESC`,
   ).all(since) as { map: string; matches: number; avgLength: number; avgPeak: number }[];
+}
+
+export function recentPlayers(limit = 30): PlayerSearchRow[] {
+  return stmt(
+    db(),
+    `SELECT steam_id steamId, name, avatar_url avatarUrl, last_seen lastSeen, NULL matchedAlias FROM players
+     ORDER BY last_seen DESC LIMIT ?`,
+  ).all(limit) as PlayerSearchRow[];
+}
+
+export function newPlayers(since: number, limit = 10): (PlayerSearchRow & { firstSeen: number })[] {
+  return stmt(
+    db(),
+    `SELECT steam_id steamId, name, avatar_url avatarUrl, last_seen lastSeen, first_seen firstSeen, NULL matchedAlias
+     FROM players WHERE first_seen >= ? ORDER BY first_seen DESC LIMIT ?`,
+  ).all(since, limit) as (PlayerSearchRow & { firstSeen: number })[];
+}
+
+export function weaponLongest(cause: string, since: number, limit = 10): KillRow[] {
+  return stmt(
+    db(),
+    `SELECT ${KILL_COLUMNS} FROM kills k CROSS JOIN servers s ON s.id = k.server_id
+     WHERE k.cause = ? AND k.ts >= ? AND k.suicide = 0 AND k.teamkill = 0 AND k.distance_m IS NOT NULL
+     ORDER BY k.distance_m DESC LIMIT ?`,
+  ).all(cause, since, limit) as KillRow[];
+}
+
+export function weaponDaily(cause: string, days = 30): { day: string; kills: number }[] {
+  const start = dayOf(nowSec() - (days - 1) * 86400);
+  const rows = stmt(
+    db(),
+    `SELECT day, SUM(kills) kills FROM weapon_daily WHERE cause = ? AND day >= ? GROUP BY day`,
+  ).all(cause, start) as { day: string; kills: number }[];
+  const byDay = new Map(rows.map((r) => [r.day, r.kills]));
+  return Array.from({ length: days }, (_, i) => {
+    const day = dayOf(nowSec() - (days - 1 - i) * 86400);
+    return { day, kills: byDay.get(day) ?? 0 };
+  });
+}
+
+/** How often each of two players killed the other. */
+export function headToHead(a: string, b: string): { aKills: number; bKills: number } {
+  const count = stmt(
+    db(),
+    `SELECT COUNT(*) n FROM kills WHERE killer_steam_id = ? AND victim_steam_id = ? AND suicide = 0`,
+  );
+  return { aKills: (count.get(a, b) as { n: number }).n, bKills: (count.get(b, a) as { n: number }).n };
 }

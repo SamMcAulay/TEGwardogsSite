@@ -5,15 +5,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "sh scripts/start.sh",
     "lint": "eslint",
     "seed": "tsx scripts/seed-demo.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "demo": "DEMO_MODE=true next dev",
+    "format": "prettier --write src scripts",
+    "postbuild": "cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
-    "lucide-react": "^1.49.0",
     "next": "16.3.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -32,5 +34,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

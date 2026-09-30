@@ -1,7 +1,10 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Self-contained server bundle for Docker / a VPS (see README).
+  output: 'standalone',
+  serverExternalPackages: ['better-sqlite3'],
+  poweredByHeader: false,
 };
 
 export default nextConfig;
