@@ -40,7 +40,7 @@ describe('createApi', () => {
       throw new Error('steam_disabled');
     });
     const api = createApi({ json, text: vi.fn() } as unknown as Warcon, new TtlCache());
-    const ids = Array.from({ length: 150 }, (_, i) => String(76561198000000000 + i));
+    const ids = Array.from({ length: 150 }, (_, i) => String(BigInt('76561198000000000') + BigInt(i)));
     await expect(api.steamProfiles(ids)).resolves.toEqual({});
     expect(json).toHaveBeenCalledTimes(2);
   });
