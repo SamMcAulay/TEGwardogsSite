@@ -20,7 +20,7 @@ const isHttpUrl = (v: string) => {
   }
 };
 
-export function loadSiteEnv(src: NodeJS.ProcessEnv = process.env): SiteEnv {
+export function loadSiteEnv(src: Record<string, string | undefined> = process.env): SiteEnv {
   const missing: string[] = [];
   const req = (key: string) => {
     const v = (src[key] ?? '').trim();
