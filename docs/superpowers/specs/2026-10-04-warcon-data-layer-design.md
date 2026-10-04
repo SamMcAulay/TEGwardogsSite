@@ -236,3 +236,26 @@ visitors ──https──▶ Cloudflare ──existing tunnel──▶ teg-ward
 - The Weapons section.
 - Any change to Warcon, the game servers, the status bots or the modlog bot.
 - Buying or configuring the permanent domain.
+
+## 12. Corrections made while planning
+
+Reading Warcon's source for the exact shapes changed five details. These override the sections
+above where they differ.
+
+1. **Player weapons, most killed and nemeses come from the dossier** (`GET
+   /api/servers/:id/players/:steamId`, its `combat` part), not the career. The dossier also
+   carries private fields (risk, watchlist, bans, org lists, notes, mod actions, VAC counts); the
+   dossier schema names only `steamId`, `name`, `names`, `online`, `steam.avatar`, `summary`,
+   `combat` and `perServer`, so the rest never leaves the client. The profile's recent kills are
+   the dossier's `combat.recent`, so no per-server kill queries are needed for it.
+2. **Live player pings are removed from the server page.** The current page shows a ping column;
+   pings are on the never-shown list, so the column goes and the schema drops `ping`.
+3. **Short name, region and location.** Warcon has no region or location. `shortName` is the
+   text before the first `" - "` in Warcon's name (`EU#1`), `region` the letters before `#` (`OC`
+   shown as `OCE`), and the location line is removed.
+4. **The player page loses more than the daily chart.** Warcon has no per-period player totals
+   and ranks only by all-time kills, so the "this week" stats and the multi-metric rank list are
+   replaced by one all-time kills rank and the win/loss streak. Per-weapon headshots, longest and
+   average distance are not in the dossier, so the weapon table shows kills only.
+5. **Kill feed paging.** Warcon pages kills with a `before` time per server. "Older" is offered
+   when one server is selected; "All servers" shows the latest kills only.
