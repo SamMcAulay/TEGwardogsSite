@@ -18,6 +18,16 @@ const serverSchema = z.object({
     })
     .optional(),
   /**
+   * Steam query endpoint (A2S, UDP), used when there is no RCON password. Gives status, map and
+   * player count only. `port` is the server's query port, not its game port.
+   */
+  query: z
+    .object({
+      host: z.string().min(1),
+      port: z.number().int().min(1).max(65535),
+    })
+    .optional(),
+  /**
    * Name of the environment variable holding the bearer token the game server sends with its
    * kill feed (`[WDServerFeed] Token=`). Servers without one get kill/death totals from RCON only.
    */
@@ -38,6 +48,8 @@ export const env = {
   pollIntervalMs: Math.max(2000, Number(process.env.POLL_INTERVAL_MS ?? 5000)),
   steamApiKey: process.env.STEAM_API_KEY || null,
   workerEnabled: process.env.WORKER_ENABLED !== 'false',
+  /** Discord webhook for server offline / back online alerts. */
+  discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || null,
 };
 
 /** The servers shown when no config file exists: TEG's WARDOGS network, used by demo mode. */

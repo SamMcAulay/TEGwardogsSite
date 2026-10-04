@@ -46,7 +46,7 @@ function Logo() {
 
 function OnlinePill() {
   const servers = getServers();
-  const online = servers.reduce((a, s) => a + s.players.length, 0);
+  const online = servers.reduce((a, s) => a + s.playerCount, 0);
   const up = servers.filter((s) => s.online).length;
   return (
     <Link

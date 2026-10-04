@@ -51,6 +51,8 @@ export interface ServerRow {
   lastOnlineAt: number | null;
   status: ServerStatus | null;
   players: LivePlayer[];
+  /** Players connected. Steam-query servers report a count but no player list. */
+  playerCount: number;
   joinCode: string | null;
   startedAt: number | null;
   error: string | null;
@@ -78,6 +80,8 @@ const STALE_SECONDS = 60;
 function toServer(r: RawServer, now: number): ServerRow {
   const fresh = r.updated_at != null && now - r.updated_at < STALE_SECONDS;
   const online = !!r.online && fresh;
+  const status: ServerStatus | null = online && r.status_json ? JSON.parse(r.status_json) : null;
+  const players: LivePlayer[] = online && r.players_json ? JSON.parse(r.players_json) : [];
   return {
     id: r.id,
     name: r.name,
@@ -87,8 +91,9 @@ function toServer(r: RawServer, now: number): ServerRow {
     online,
     updatedAt: r.updated_at,
     lastOnlineAt: r.last_online_at,
-    status: online && r.status_json ? JSON.parse(r.status_json) : null,
-    players: online && r.players_json ? JSON.parse(r.players_json) : [],
+    status,
+    players,
+    playerCount: players.length || status?.players?.current || 0,
     joinCode: r.join_code,
     startedAt: r.started_at,
     error: r.error,
@@ -139,7 +144,7 @@ export function networkSummary(servers = getServers()): NetworkSummary {
   ).get(dayStart) as { peak: number };
   const online = servers.filter((s) => s.online);
   return {
-    playersOnline: online.reduce((a, s) => a + s.players.length, 0),
+    playersOnline: online.reduce((a, s) => a + s.playerCount, 0),
     capacity: online.reduce((a, s) => a + (s.status?.players.max ?? 0), 0),
     serversOnline: online.length,
     serversTotal: servers.length,

@@ -146,7 +146,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             label="Players"
             value={
               <>
-                {server.players.length}
+                {server.playerCount}
                 <span className="text-lg text-dim">/{st?.players.max ?? '—'}</span>
               </>
             }
@@ -206,7 +206,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Panel>
         </div>
 
-        <Panel title="Live scoreboard" action={<span>{server.players.length} connected</span>}>
+        <Panel title="Live scoreboard" action={<span>{server.playerCount} connected</span>}>
           {server.players.length ? (
             <div className="grid gap-3 lg:grid-cols-3">
               {factions.map((f) => (
@@ -218,6 +218,8 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                 />
               ))}
             </div>
+          ) : server.playerCount ? (
+            <Empty>This server reports a player count but not a scoreboard (no RCON access yet).</Empty>
           ) : (
             <Empty>No one is playing right now.</Empty>
           )}

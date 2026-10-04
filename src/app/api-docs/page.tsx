@@ -20,6 +20,12 @@ const ENDPOINTS = [
     about: 'All-time and 7-day totals, ranks, favourite weapons and whether the player is online now.',
     example: '/api/players/76561198000000000',
   },
+  {
+    path: '/api/health',
+    about:
+      'Site and data collection health: whether the poller is running, and per server its data source, last poll and last kill feed event. 503 when the site itself is unhealthy.',
+    example: '/api/health',
+  },
 ];
 
 export default function ApiDocsPage() {

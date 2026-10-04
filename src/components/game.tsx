@@ -72,7 +72,7 @@ export function FactionScores({
 
 export function ServerCard({ server }: { server: ServerRow }) {
   const st = server.status;
-  const pop = server.players.length;
+  const pop = server.playerCount;
   const max = st?.players.max ?? 0;
   const fill = max ? pop / max : 0;
   return (

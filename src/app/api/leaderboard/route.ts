@@ -28,6 +28,6 @@ export function GET(req: Request) {
         matches: r.matches,
       })),
     },
-    { headers: { 'Cache-Control': 'public, max-age=30' } },
+    { headers: { 'Cache-Control': 'public, max-age=30, s-maxage=30' } },
   );
 }

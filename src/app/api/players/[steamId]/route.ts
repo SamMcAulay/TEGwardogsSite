@@ -22,6 +22,6 @@ export async function GET(_req: Request, ctx: RouteContext<'/api/players/[steamI
       },
       weapons: playerWeapons(steamId, 0, 10),
     },
-    { headers: { 'Cache-Control': 'public, max-age=30' } },
+    { headers: { 'Cache-Control': 'public, max-age=30, s-maxage=30' } },
   );
 }

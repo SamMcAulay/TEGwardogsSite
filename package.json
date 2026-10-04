@@ -8,6 +8,8 @@
     "start": "sh scripts/start.sh",
     "lint": "eslint",
     "seed": "tsx scripts/seed-demo.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "backup": "node scripts/backup.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "demo": "DEMO_MODE=true next dev",

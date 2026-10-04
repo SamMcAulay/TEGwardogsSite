@@ -1,0 +1,63 @@
+# Deploys main to the VPS over SSH after CI passes: pulls the repo there and rebuilds the containers.
+#
+# Off until you set it up (repo Settings > Secrets and variables > Actions):
+#   Variables: DEPLOY_ENABLED = true, DEPLOY_PATH = /opt/teg-wardogs (where the repo is cloned on the VPS)
+#   Secrets:   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key whose public half is in the VPS user's
+#              ~/.ssh/authorized_keys), optional VPS_PORT
+# The VPS user needs to be in the `docker` group, and the clone there needs read access to this repo
+# (a deploy key, or the repo is public).
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: SSH key
+        env:
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+          PORT: ${{ secrets.VPS_PORT || '22' }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -p "$PORT" "$HOST" >> ~/.ssh/known_hosts
+      - name: Pull, rebuild, restart
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          PORT: ${{ secrets.VPS_PORT || '22' }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "$PORT" "$USER@$HOST" DEPLOY_PATH="$DEPLOY_PATH" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          # Fails rather than overwrite anything edited by hand on the VPS (.env and servers.json are untracked).
+          git pull --ff-only --quiet origin main
+          profile=""
+          grep -qE '^TUNNEL_TOKEN=.+' .env && profile="--profile tunnel"
+          docker compose $profile up -d --build --remove-orphans
+          docker image prune -f >/dev/null
+          for i in $(seq 1 30); do
+            state="$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q stats)")"
+            [ "$state" = healthy ] && echo "healthy" && exit 0
+            sleep 3
+          done
+          echo "stats container did not become healthy" >&2
+          docker compose logs --tail 50 stats >&2
+          exit 1
+          REMOTE

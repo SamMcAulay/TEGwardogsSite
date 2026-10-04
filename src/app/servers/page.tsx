@@ -81,7 +81,7 @@ export default function ServersPage() {
                               </div>
                               <div className="text-right">
                                 <div className="display num text-2xl leading-none">
-                                  {s.players.length}
+                                  {s.playerCount}
                                   <span className="text-base text-dim">/{st.players.max}</span>
                                 </div>
                                 {st.matchSeconds != null && (

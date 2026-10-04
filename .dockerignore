@@ -1,6 +1,12 @@
 node_modules
 .next
 data
+backups
 .git
+.github
 .env
+.env.*
+!.env.example
+config/servers.json
+docs/screenshots
 *.log

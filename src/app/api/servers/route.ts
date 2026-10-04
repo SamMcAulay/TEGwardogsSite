@@ -12,7 +12,7 @@ export function GET() {
     location: s.location,
     online: s.online,
     map: s.status?.map ?? null,
-    players: s.players.length,
+    players: s.playerCount,
     maxPlayers: s.status?.players.max ?? null,
     matchSeconds: s.status?.matchSeconds ?? null,
     factionScores: s.status?.factionScores ?? [],
@@ -26,5 +26,5 @@ export function GET() {
       deaths: p.deaths,
     })),
   }));
-  return NextResponse.json({ servers }, { headers: { 'Cache-Control': 'public, max-age=5' } });
+  return NextResponse.json({ servers }, { headers: { 'Cache-Control': 'public, max-age=5, s-maxage=5' } });
 }

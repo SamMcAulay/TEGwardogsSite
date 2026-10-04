@@ -134,7 +134,8 @@ export function recordObservation(
       JSON.stringify(status.factionScores ?? []),
       scores[0]?.score ? scores[0].name : null,
       status.lighting ?? null,
-      obs.players.length,
+      // Steam-query servers report a count but no player list.
+      obs.players.length || status.players?.current || 0,
       matchId,
     );
 

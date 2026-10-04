@@ -5,7 +5,11 @@ The Employed Gamers' WARDOGS servers.
 
 Everything comes from the game servers themselves. A background worker polls each server's
 **RCON HTTP API** every few seconds, and servers can push kills to the site through the game's
-**kill feed** (`[WDServerFeed]`). All of it lands in a single SQLite file.
+**kill feed** (`[WDServerFeed]`). Servers without an RCON password fall back to a **Steam query**
+(status and player count only). All of it lands in a single SQLite file.
+
+**Deploying?** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers a VPS behind Cloudflare Tunnel, step
+by step, including what to ask the game server admins for.
 
 ![Home](docs/screenshots/home.png)
 
@@ -26,7 +30,7 @@ Everything comes from the game servers themselves. A background worker polls eac
 | `/weapons`, `/weapons/:cause` | Kills, share, headshot %, average and longest distance per weapon; top users and longest kills per weapon |
 | `/feed` | Live kill feed across the network or per server, with an archive |
 | `/compare` | Two players side by side, with head-to-head kills |
-| `/api/*` | Public read-only JSON (`/api-docs`): servers, leaderboards, players |
+| `/api/*` | Public read-only JSON (`/api-docs`): servers, leaderboards, players, health |
 
 ## Quick start (demo data)
 
@@ -43,11 +47,15 @@ connects to a real server.
 
 ## Connecting real servers
 
+The full production walkthrough is [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). In short:
+
 1. **Server list.** Copy `config/servers.example.json` to `config/servers.json` with one entry
    per server. `id` becomes the URL slug and the key stats are stored under, so don't change it later.
 2. **Secrets.** Copy `.env.example` to `.env`. Put each server's RCON password in the variable its
    `passwordEnv` names. This is the `Password=` under `[/Script/WDRCON.WDRCONSettings]`, or the
-   contents of `Saved/RCON/ADMIN-PASSWORD.txt`.
+   contents of `Saved/RCON/ADMIN-PASSWORD.txt`. No password yet? Give the server a
+   `"query": { "host": "...", "port": 27015 }` block and it's polled over Steam query instead:
+   online status, map and player count, but no scoreboard or player stats.
 3. **Kill feed (recommended).** Without it, kills and deaths come from the scoreboard only: no
    weapons, headshots or distances. To turn it on, pick a random token per server, put it in the
    `.env` variable named by `feedTokenEnv`, and add this to the server's `ServerSettings.ini`:
@@ -60,14 +68,17 @@ connects to a real server.
 
    Restart the game server. It posts to `Url` + `/api/ingest/events`; the game adds that suffix
    itself, so `Url` is just the site's origin.
-4. **Build and run.**
+4. **Check connections.** `npm run doctor` tests each server's RCON and query ports, the feed
+   tokens, and (with `SITE_URL` set) the public site and kill feed endpoint through Cloudflare.
+5. **Build and run.**
 
    ```sh
    npm run build
    npm start
    ```
 
-   Or with Docker: `docker compose up -d --build` (the database lives in `./data`).
+   Or with Docker: `docker compose up -d --build` (the database lives in `./data`), adding
+   `--profile tunnel` to run a Cloudflare Tunnel alongside it.
 
 The RCON listener has to be reachable from wherever the site runs. If it's bound to `127.0.0.1`
 on the game host, run the site on the same machine or put a reverse proxy in front of it.
@@ -85,6 +96,9 @@ checks every five minutes.
 | `SITE_URL` | none | Public URL, used in link previews |
 | `WORKER_ENABLED` | `true` | Set `false` on extra web replicas so only one process polls |
 | `DEMO_MODE` | `false` | Simulated servers, no config file needed |
+| `DISCORD_WEBHOOK_URL` | none | Optional; posts when a server goes offline and comes back |
+| `TUNNEL_TOKEN` | none | Cloudflare Tunnel token, for `docker compose --profile tunnel` |
+| `BACKUP_DIR` / `BACKUP_KEEP` | `./backups` / `14` | Where `npm run backup` writes, and how many it keeps |
 
 ## How stats are counted
 
@@ -105,7 +119,7 @@ checks every five minutes.
 ## Development
 
 ```sh
-npm test          # vitest: recorder, feed ingest, formatting
+npm test          # vitest: recorder, feed ingest, Steam query, formatting
 npm run lint
 npm run typecheck
 npm run format
@@ -115,12 +129,16 @@ Code layout:
 
 ```
 src/lib/server/rcon.ts       WDRCON client (read-only routes)
+src/lib/server/a2s.ts        Steam query client, the fallback when there's no RCON password
 src/lib/server/recorder.ts   polls + kill feed -> matches, sessions, rollups
 src/lib/server/worker.ts     polling loop, started from src/instrumentation.ts
 src/lib/server/queries.ts    everything the pages read
 src/lib/demo/                simulated servers for demo mode
 src/app/                     pages and API routes
 src/app/globals.css          colour tokens (re-skin here)
+scripts/doctor.ts            deployment connectivity checks
+scripts/backup.mjs           online SQLite backup (runs inside the image too)
+deploy/                      install.sh, nginx and systemd alternatives
 ```
 
 The RCON API reference used here is the reverse-engineered one maintained by the

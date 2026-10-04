@@ -7,6 +7,7 @@
       "region": "EU",
       "location": "Amsterdam, NL",
       "rcon": { "url": "http://203.0.113.10:7776", "passwordEnv": "RCON_PASSWORD_EU1" },
+      "query": { "host": "203.0.113.10", "port": 27015 },
       "feedTokenEnv": "FEED_TOKEN_EU1"
     },
     {
@@ -16,6 +17,7 @@
       "region": "NA",
       "location": "Chicago, US",
       "rcon": { "url": "http://198.51.100.20:7776", "passwordEnv": "RCON_PASSWORD_NA1" },
+      "query": { "host": "198.51.100.20", "port": 27015 },
       "feedTokenEnv": "FEED_TOKEN_NA1"
     }
   ]

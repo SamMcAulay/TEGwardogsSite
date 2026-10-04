@@ -1,0 +1,33 @@
+# Bare-metal alternative to Docker. Assumes the repo at /opt/teg-wardogs, built with
+# `npm ci && npm run build`, owned by a `teg` user.
+#   sudo cp deploy/systemd/teg-wardogs*.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now teg-wardogs teg-wardogs-backup.timer
+[Unit]
+Description=TEG WARDOGS stats site
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=teg
+Group=teg
+WorkingDirectory=/opt/teg-wardogs
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Loopback only; nginx or cloudflared sits in front.
+Environment=HOSTNAME=127.0.0.1
+# scripts/start.sh loads .env and resolves the data/config paths.
+ExecStart=/usr/bin/env sh scripts/start.sh
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/teg-wardogs/data /opt/teg-wardogs/backups
+
+[Install]
+WantedBy=multi-user.target
