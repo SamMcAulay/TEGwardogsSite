@@ -45,13 +45,29 @@ export function createWarcon(opts: { baseUrl: string; token: string; timeoutMs?:
     return res;
   }
 
+  async function readBody<T>(res: Response, path: string, reader: () => Promise<T>): Promise<T> {
+    try {
+      return await reader();
+    } catch (e) {
+      const timedOut = e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError');
+      if (timedOut) {
+        throw new WarconError(`${path}: no answer in ${timeoutMs} ms`, 'timeout', res.status, path);
+      }
+      if (e instanceof SyntaxError) {
+        throw new WarconError(`${path}: answer is not valid JSON`, 'schema', res.status, path);
+      }
+      throw new WarconError(`${path}: Warcon unreachable`, 'unreachable', res.status, path);
+    }
+  }
+
   return {
     async json(path, schema) {
       const res = await request(path, 'application/json');
       if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
         throw new WarconError(`${path}: expected JSON, got ${res.headers.get('content-type') ?? 'nothing'}`, 'http', res.status, path);
       }
-      const parsed = schema.safeParse(await res.json());
+      const body = await readBody(res, path, () => res.json());
+      const parsed = schema.safeParse(body);
       if (!parsed.success) {
         const where = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
         throw new WarconError(`${path}: unexpected answer (${where})`, 'schema', res.status, path);
@@ -59,7 +75,8 @@ export function createWarcon(opts: { baseUrl: string; token: string; timeoutMs?:
       return parsed.data;
     },
     async text(path) {
-      return (await request(path, 'text/csv')).text();
+      const res = await request(path, 'text/csv');
+      return readBody(res, path, () => res.text());
     },
   };
 }

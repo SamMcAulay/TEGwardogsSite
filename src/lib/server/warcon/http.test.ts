@@ -54,4 +54,25 @@ describe('createWarcon', () => {
   test('text() returns the raw body', async () => {
     await expect(client(async () => res(200, 'a,b\n1,2', 'text/csv')).text('/api/e')).resolves.toBe('a,b\n1,2');
   });
+
+  test('malformed JSON body is caught and becomes schema error', async () => {
+    const err = await client(async () => res(200, 'not json', 'application/json')).json('/api/x', okSchema).catch((e) => e);
+    expect(err).toBeInstanceOf(WarconError);
+    expect(err).toMatchObject({ kind: 'schema', endpoint: '/api/x' });
+    expect(String(err.message)).toMatch(/\/api\/x[\s\S]*not valid JSON/);
+  });
+
+  test('timeout during body read is caught and becomes timeout error', async () => {
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => {
+        throw new DOMException('x', 'TimeoutError');
+      },
+    };
+    const err = await client(async () => mockResponse as unknown as Response).json('/api/x', okSchema).catch((e) => e);
+    expect(err).toBeInstanceOf(WarconError);
+    expect(err).toMatchObject({ kind: 'timeout', endpoint: '/api/x' });
+  });
 });
