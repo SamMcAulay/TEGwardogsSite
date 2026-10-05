@@ -9,8 +9,10 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      # Loopback only: the public reaches it through the Cloudflare tunnel.
-      - '127.0.0.1:${PORT:-3000}:3000'
+      # Loopback only: the public reaches it through the Cloudflare tunnel. Warcon already holds
+      # 127.0.0.1:3000 on the VPS, so the site defaults to 3100. SITE_HOST_PORT, not PORT: PORT in
+      # .env would also move the port the app listens on inside the container.
+      - '127.0.0.1:${SITE_HOST_PORT:-3100}:3000'
     networks: [warcon]
     stop_grace_period: 15s
     logging:

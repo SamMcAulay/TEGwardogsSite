@@ -14,7 +14,8 @@ visitors ──https──▶ Cloudflare ──existing tunnel──▶ teg-ward
 ```
 
 The site reaches Warcon over Docker, not through Cloudflare, so no Access bypass is needed for that
-traffic. The container publishes `127.0.0.1:3000` only and has no volumes: nothing to back up.
+traffic. The container publishes `127.0.0.1:3100` only (Warcon already holds 3000; change it with
+`SITE_HOST_PORT` in `.env`) and has no volumes: nothing to back up.
 
 ## 2. Create the Warcon key
 
@@ -56,7 +57,7 @@ It must print `ok` for every line.
 
 ```sh
 docker compose up -d --build
-curl -s http://127.0.0.1:3000/api/health
+curl -s http://127.0.0.1:3100/api/health
 ```
 
 The response should contain `"warcon":"ok"`.
@@ -70,7 +71,7 @@ Zero Trust, Networks, Tunnels, the tunnel serving `tegwardogs.fyi`, Public hostn
   Check with `docker ps --format '{{.Names}} {{.Networks}}' | grep cloudflared`.
 - If `cloudflared` runs in Docker but is not on `warcon_default`, connect it first:
   `docker network connect warcon_default <cloudflared container>`, then use `teg-wardogs-site:3000`.
-- Otherwise (cloudflared runs on the host) use `127.0.0.1:3000`.
+- Otherwise (cloudflared runs on the host) use `127.0.0.1:3100`.
 
 ## 6. Check Access
 
