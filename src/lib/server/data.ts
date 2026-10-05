@@ -163,15 +163,25 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   const kept: WBoardRow[] = [];
   let bannedSeen = 0;
   let stale = first.stale || banned.stale;
-  let scanned = 0;
-  for (let p = 1; p <= lastWarconPage && p <= page + BOARD_SCAN_EXTRA && kept.length < want; p++) {
-    const cur = p === 1 ? first : await board(p);
+  let scanned: number;
+  const take = (cur: Awaited<ReturnType<typeof board>>) => {
     stale ||= cur.stale;
-    scanned = p;
     for (const r of cur.value.rows) {
       if (banned.ids.has(r.steamId)) bannedSeen++;
       else kept.push(r);
     }
+  };
+  // Every Warcon page up to the one asked for is needed anyway: fetch them together, in order.
+  take(first);
+  scanned = 1;
+  const upTo = Math.min(page, lastWarconPage);
+  const needed = await Promise.all(Array.from({ length: upTo - 1 }, (_, i) => board(i + 2)));
+  for (const cur of needed) take(cur);
+  scanned = upTo;
+  // Banned players removed leave the page short: top up from the following pages.
+  for (let p = upTo + 1; p <= lastWarconPage && p <= page + BOARD_SCAN_EXTRA && kept.length < want; p++) {
+    take(await board(p));
+    scanned = p;
   }
   // Exact once every Warcon page was read; otherwise Warcon's total less the banned rows met so far.
   const total = scanned >= lastWarconPage ? kept.length : Math.max(kept.length, first.value.total - bannedSeen);

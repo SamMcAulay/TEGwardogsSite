@@ -133,6 +133,23 @@ describe('leaderboard without org-banned players', () => {
     expect(p2.data.rows.map((x) => [x.rank, x.name])).toEqual([[3, 'P4']]);
   });
 
+  test('the pages a deep page needs are fetched at the same time, not one after another', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const pages = [[1, 2], [3, 4], [5, 6], [7, 8]];
+    api.board.mockImplementation(async (_id: string, q: { page: number }) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return fresh({ ok: true, total: 8, pageSize: 2, rows: (pages[q.page - 1] ?? []).map(row) });
+    });
+    banned();
+    const r = await leaderboard({ metric: 'kills', period: '7d', page: 4 });
+    expect(r.data.rows.map((x) => [x.rank, x.name])).toEqual([[7, 'P7'], [8, 'P8']]);
+    expect(peak).toBeGreaterThanOrEqual(3); // pages 2, 3 and 4 together after page 1
+  });
+
   test('applies to a single server board as well', async () => {
     boardPages([[1, 2]], 50);
     banned(1);

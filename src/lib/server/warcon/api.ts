@@ -9,7 +9,14 @@ import {
   type WMatchView, type WSeenPlayer, type WServer, type WSteamProfiles,
 } from './schemas';
 
-export const TTL = { live: 10_000, kills: 10_000, stats: 60_000, endedMatch: 3_600_000, steam: 86_400_000, bans: 600_000 } as const;
+export const TTL = { live: 10_000, kills: 10_000, stats: 300_000, endedMatch: 3_600_000, steam: 86_400_000, bans: 600_000 } as const;
+
+/**
+ * How long past freshness the last copy is still served at once while a fresh one loads in the
+ * background. Boards, careers and analytics barely move in half an hour; live status and the kill
+ * feed are never more than one extra refresh behind.
+ */
+export const SERVE_STALE = { live: 20_000, kills: 20_000, stats: 1_800_000, bans: 1_800_000 } as const;
 
 export type Range = '7d' | '30d' | '90d' | 'all';
 export type Sort = 'kills' | 'deaths' | 'kd' | 'perHour' | 'playtime' | 'matches' | 'wins' | 'winRate' | 'cash';
@@ -45,7 +52,10 @@ const qs = (params: Record<string, string | number | null | undefined>) => {
 
 /** steamCache holds one entry per Steam ID, apart from the main cache so avatars don't evict it. */
 export function createApi(client: Warcon, cache: TtlCache, steamCache = new TtlCache({ maxEntries: 5000 })) {
-  const cached = <T>(path: string, ttl: number, load: () => Promise<T>): Promise<Cached<T>> => cache.get<T>(path, ttl, load);
+  const serveStaleFor = (ttl: number) =>
+    ttl === TTL.live || ttl === TTL.kills ? SERVE_STALE.live : ttl === TTL.bans ? SERVE_STALE.bans : ttl === TTL.stats ? SERVE_STALE.stats : 0;
+  const cached = <T>(path: string, ttl: number, load: () => Promise<T>): Promise<Cached<T>> =>
+    cache.get<T>(path, ttl, load, { serveStaleMs: serveStaleFor(ttl) });
   // After a failed profiles call (often: no Steam key on the panel) skip asking for a while.
   let steamFailedAt = -Infinity;
 
@@ -85,7 +95,7 @@ export function createApi(client: Warcon, cache: TtlCache, steamCache = new TtlC
     match(serverId: string, matchId: number): Promise<Cached<WMatchView>> {
       const path = `/api/servers/${enc(serverId)}/matches/${matchId}`;
       // An ended match never changes; one still running is refreshed like a list.
-      return cache.get<WMatchView>(path, (v) => (v.match.endedAt ? TTL.endedMatch : TTL.stats), () => client.json(path, matchBody));
+      return cache.get<WMatchView>(path, (v) => (v.match.endedAt ? TTL.endedMatch : TTL.stats), () => client.json(path, matchBody), { serveStaleMs: SERVE_STALE.stats });
     },
 
     /** TTL: opts.ttl when given; counts and one match's kills use the stats TTL; else the feed's. */
