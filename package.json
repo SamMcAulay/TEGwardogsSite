@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "mock": "node scripts/mock-warcon.mjs",
+    "dev:mock": "node scripts/mock-warcon.mjs & MOCK=$!; next dev; kill $MOCK",
     "build": "next build",
     "start": "sh scripts/start.sh",
     "lint": "eslint",
