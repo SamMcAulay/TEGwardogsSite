@@ -36,14 +36,16 @@ export function MapBackdrop({ map, className }: { map: string | null | undefined
 
 export function FactionScores({
   scores,
-  cap = 100,
+  cap,
   compact,
 }: {
   scores: FactionScore[];
-  cap?: number;
+  /** points that fill the bar; without one, the leading score does */
+  cap?: number | null;
   compact?: boolean;
 }) {
   const lead = Math.max(...scores.map((s) => s.score));
+  const full = cap ?? Math.max(lead, 1);
   return (
     <div className={cx('grid', compact ? 'gap-1.5' : 'gap-3')}>
       {scores.map((f) => (
@@ -60,7 +62,7 @@ export function FactionScores({
             <div
               className="absolute inset-y-0 left-0 transition-[width] duration-700"
               style={{
-                width: `${Math.min(100, (f.score / cap) * 100)}%`,
+                width: `${Math.min(100, (f.score / full) * 100)}%`,
                 background: factionColor(f.name, f.colorHex),
               }}
             />
@@ -117,7 +119,7 @@ export function ServerCard({ server }: { server: ServerRow }) {
                 King of the Hill{st.matchSeconds != null && <span className="num"> · {clock(st.matchSeconds)}</span>}
               </span>
             </div>
-            <FactionScores scores={st.factionScores} compact />
+            <FactionScores scores={st.factionScores} cap={st.scoreCap} compact />
           </>
         ) : (
           <div className="py-5 text-center text-sm text-muted">

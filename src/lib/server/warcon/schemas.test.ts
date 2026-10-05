@@ -44,7 +44,7 @@ describe('schemas are the privacy boundary', () => {
         startedAt: null,
         status: {
           serverName: 'S', map: 'M', experiences: [], lighting: 'Day', matchSeconds: 10,
-          playerCount: 1, maxPlayers: 64, scores: [{ name: 'Valkyra', colorHex: '#f00', score: 3 }],
+          playerCount: 1, maxPlayers: 64, scoreCap: 500, scores: [{ name: 'Valkyra', colorHex: '#f00', score: 3 }],
         },
         players: [{ name: 'A', steamId: '76561198000000001', faction: 'Valkyra', kills: 1, deaths: 0, cash: 5, ping: 40 }],
         observedAt: '2026-10-04T12:00:00Z',

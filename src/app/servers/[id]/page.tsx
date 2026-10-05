@@ -27,8 +27,12 @@ import type { LivePlayer } from '@/lib/server/views';
 
 export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): Promise<Metadata> {
   const { id } = await params;
-  const s = await getServer(id);
-  return { title: s ? s.data.name : 'Server not found' };
+  try {
+    const s = await getServer(id);
+    return { title: s ? s.data.name : 'Server not found' };
+  } catch {
+    return { title: 'Server' };
+  }
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -90,7 +94,20 @@ function Scoreboard({ faction, players, score }: { faction: string; players: Liv
 export default async function ServerPage({ params, searchParams }: PageProps<'/servers/[id]'>) {
   const { id } = await params;
   const sp = await searchParams;
-  const loadedServer = await getServer(id);
+  const loadedServer = await safe(getServer(id));
+  if (loadedServer instanceof Error) {
+    // Warcon is unreachable and nothing is cached: an outage, not a missing server.
+    return (
+      <>
+        <PageHeader title="Server" />
+        <Container className="mt-8">
+          <Panel title="Server">
+            <Section loaded={loadedServer}>{() => null}</Section>
+          </Panel>
+        </Container>
+      </>
+    );
+  }
   if (!loadedServer) notFound();
   const server = loadedServer.data;
   const range = sp.range === '7d' ? '7d' : '24h';
@@ -183,10 +200,12 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                   <div className="mb-5 flex items-end justify-between">
                     <div>
                       <div className="display text-3xl leading-none">{mapName(st.map)}</div>
-                      <div className="mt-1 text-xs text-muted">First to 100 points</div>
+                      {st.scoreCap != null && (
+                        <div className="mt-1 text-xs text-muted">First to {st.scoreCap} points</div>
+                      )}
                     </div>
                   </div>
-                  <FactionScores scores={st.factionScores} cap={100} />
+                  <FactionScores scores={st.factionScores} cap={st.scoreCap} />
                 </>
               ) : (
                 <Empty>Server is offline.</Empty>

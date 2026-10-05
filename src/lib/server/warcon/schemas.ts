@@ -36,6 +36,7 @@ const live = z.object({
       matchSeconds: z.number().nullable(),
       playerCount: z.number(),
       maxPlayers: z.number(),
+      scoreCap: z.number().nullable(),
       scores: z.array(z.object({ name: z.string(), colorHex: z.string(), score: z.number() })),
     })
     .nullable(),

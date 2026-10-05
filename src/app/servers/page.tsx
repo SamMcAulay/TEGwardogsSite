@@ -98,7 +98,7 @@ export default async function ServersPage() {
                                     )}
                                   </div>
                                 </div>
-                                <FactionScores scores={st.factionScores} compact />
+                                <FactionScores scores={st.factionScores} cap={st.scoreCap} compact />
                               </>
                             ) : (
                               <div className="flex h-full flex-col items-start justify-center gap-2 text-sm text-muted">

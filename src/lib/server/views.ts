@@ -34,6 +34,8 @@ export interface ServerStatus {
   lighting: string | null;
   matchSeconds?: number;
   players: { current: number; max: number };
+  /** points to win the round, when Warcon reports one */
+  scoreCap: number | null;
   factionScores: FactionScore[];
 }
 

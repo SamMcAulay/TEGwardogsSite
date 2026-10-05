@@ -53,6 +53,7 @@ function serverRow(s: { id: string; name: string }, live: WLive | null): ServerR
       lighting: st.lighting || null,
       matchSeconds: st.matchSeconds ?? undefined,
       players: { current: st.playerCount, max: st.maxPlayers },
+      scoreCap: st.scoreCap,
       factionScores: st.scores,
     },
     players: (live?.players ?? []).map((p) => ({ name: p.name, steamId: p.steamId, faction: p.faction ?? '', kills: p.kills, deaths: p.deaths, cash: p.cash })),

@@ -45,12 +45,13 @@ describe('getServers', () => {
       if (id === 's2') throw new Error('down');
       return fresh({
         ok: true, gameServerId: 'J1', startedAt: '2026-10-04T10:00:00Z', observedAt: '2026-10-04T12:00:00Z',
-        status: { serverName: 'x', map: 'M', experiences: [], lighting: 'Day', matchSeconds: 5, playerCount: 1, maxPlayers: 64, scores: [] },
+        status: { serverName: 'x', map: 'M', experiences: [], lighting: 'Day', matchSeconds: 5, playerCount: 1, maxPlayers: 64, scoreCap: 500, scores: [] },
         players: [{ name: 'A', steamId: '76561198000000001', faction: null, kills: 1, deaths: 0, cash: 0 }],
       });
     });
     const r = await getServers();
     expect(r.data.map((s) => [s.id, s.online, s.playerCount])).toEqual([['s1', true, 1], ['s2', false, 0]]);
+    expect(r.data[0].status?.scoreCap).toBe(500);
     expect(r.data[0].players[0]).not.toHaveProperty('ping');
     expect(r.missing).toEqual(['s2']);
   });
