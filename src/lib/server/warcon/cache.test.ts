@@ -127,3 +127,48 @@ describe('TtlCache', () => {
     });
   });
 });
+
+describe('serve the last copy, refresh in the background', () => {
+  test('past freshness but inside the window: the old value comes back at once, unflagged, and one refresh starts', async () => {
+    const c = clock();
+    const cache = new TtlCache({ now: c.now });
+    await cache.get('k', 1000, async () => 1);
+    c.advance(1500);
+    let release!: (v: number) => void;
+    const load = vi.fn(() => new Promise<number>((r) => (release = r)));
+    expect(await cache.get('k', 1000, load, { serveStaleMs: 5000 })).toEqual({ value: 1, stale: false });
+    expect(await cache.get('k', 1000, load, { serveStaleMs: 5000 })).toEqual({ value: 1, stale: false });
+    expect(load).toHaveBeenCalledTimes(1);
+    release(2);
+    await new Promise((r) => setTimeout(r, 0));
+    expect((await cache.get('k', 1000, load, { serveStaleMs: 5000 })).value).toBe(2);
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed background refresh is swallowed and the old value keeps being served', async () => {
+    const c = clock();
+    const cache = new TtlCache({ now: c.now });
+    await cache.get('k', 1000, async () => 1);
+    c.advance(1500);
+    const load = vi.fn(async () => Promise.reject(new Error('down')));
+    expect(await cache.get('k', 1000, load, { serveStaleMs: 5000 })).toEqual({ value: 1, stale: false });
+    await new Promise((r) => setTimeout(r, 0));
+    expect((await cache.get('k', 1000, load, { serveStaleMs: 5000 })).value).toBe(1);
+  });
+
+  test('older than the window: the caller waits for a fresh load as before', async () => {
+    const c = clock();
+    const cache = new TtlCache({ now: c.now });
+    await cache.get('k', 1000, async () => 1);
+    c.advance(1000 + 5001);
+    expect((await cache.get('k', 1000, async () => 2, { serveStaleMs: 5000 })).value).toBe(2);
+  });
+
+  test('without the option nothing changes: an expired value waits for a reload', async () => {
+    const c = clock();
+    const cache = new TtlCache({ now: c.now });
+    await cache.get('k', 1000, async () => 1);
+    c.advance(1500);
+    expect((await cache.get('k', 1000, async () => 2)).value).toBe(2);
+  });
+});

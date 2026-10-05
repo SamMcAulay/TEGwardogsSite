@@ -20,7 +20,7 @@ vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, getMatch, getPlayer, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, regionOf, shortNameOf } from './data';
+import { adjustedRank, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, regionOf, shortNameOf } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -131,6 +131,40 @@ describe('leaderboard without org-banned players', () => {
     expect(p1.data.rows.map((x) => [x.rank, x.name])).toEqual([[1, 'P1'], [2, 'P3']]);
     const p2 = await leaderboard({ metric: 'kills', period: '7d', page: 2 });
     expect(p2.data.rows.map((x) => [x.rank, x.name])).toEqual([[3, 'P4']]);
+  });
+
+  test('the pages a deep page needs are fetched at the same time, not one after another', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const pages = [[1, 2], [3, 4], [5, 6], [7, 8]];
+    api.board.mockImplementation(async (_id: string, q: { page: number }) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return fresh({ ok: true, total: 8, pageSize: 2, rows: (pages[q.page - 1] ?? []).map(row) });
+    });
+    banned();
+    const r = await leaderboard({ metric: 'kills', period: '7d', page: 4 });
+    expect(r.data.rows.map((x) => [x.rank, x.name])).toEqual([[7, 'P7'], [8, 'P8']]);
+    expect(peak).toBeGreaterThanOrEqual(3); // pages 2, 3 and 4 together after page 1
+  });
+
+  test('a very deep page is capped and never fans out unbounded requests to Warcon', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    api.board.mockImplementation(async (_id: string, q: { page: number }) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 1));
+      inFlight--;
+      return fresh({ ok: true, total: 10_000, pageSize: 50, rows: [row((q.page % 9) + 1)] });
+    });
+    banned();
+    const r = await leaderboard({ metric: 'kills', period: '7d', page: 1000 });
+    expect(api.board.mock.calls.length).toBeLessThanOrEqual(MAX_BOARD_PAGE + 10);
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(r.data.total).toBeLessThanOrEqual(MAX_BOARD_PAGE * 50);
   });
 
   test('applies to a single server board as well', async () => {

@@ -37,13 +37,28 @@ export class TtlCache {
     return this.entries.size;
   }
 
-  async get<T>(key: string, ttlMs: number | ((value: T) => number), load: () => Promise<T>): Promise<Cached<T>> {
+  /**
+   * opts.serveStaleMs: for this long past freshness, answer at once with the last value and refresh
+   * it in the background (one refresh per key; a failed one is noted and swallowed). Older than
+   * that, the caller waits for a fresh load as without the option.
+   */
+  async get<T>(
+    key: string,
+    ttlMs: number | ((value: T) => number),
+    load: () => Promise<T>,
+    opts: { serveStaleMs?: number } = {},
+  ): Promise<Cached<T>> {
+    const serveStaleMs = opts.serveStaleMs ?? 0;
     const hit = this.entries.get(key);
     if (hit) {
       // Map keeps insertion order: re-inserting marks the key most recently used.
       this.entries.delete(key);
       this.entries.set(key, hit);
       if (this.now() < hit.freshUntil) return { value: hit.value as T, stale: false };
+      if (this.now() < hit.freshUntil + serveStaleMs) {
+        this.refreshInBackground(key, ttlMs, load);
+        return { value: hit.value as T, stale: false };
+      }
     }
 
     // A recent failure: answer from what we have rather than asking Warcon again yet.
@@ -68,6 +83,20 @@ export class TtlCache {
       this.noteFailure(key, e);
       return this.fallback<T>(key, e);
     }
+  }
+
+  private refreshInBackground<T>(key: string, ttlMs: number | ((value: T) => number), load: () => Promise<T>) {
+    if (this.loading.has(key)) return;
+    if ((this.failures.get(key)?.until ?? 0) > this.now()) return;
+    const pending = load().finally(() => this.loading.delete(key));
+    this.loading.set(key, pending);
+    pending.then(
+      (value) => {
+        this.failures.delete(key);
+        this.store(key, { value, freshUntil: this.now() + (typeof ttlMs === 'function' ? ttlMs(value) : ttlMs) });
+      },
+      (e) => this.noteFailure(key, e),
+    );
   }
 
   /** The last value as stale while inside the stale window, else the error. */
