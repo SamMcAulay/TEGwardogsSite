@@ -249,7 +249,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
               ))}
             </div>
           ) : server.playerCount ? (
-            <Empty>This server reports a player count but not a scoreboard (no RCON access yet).</Empty>
+            <Empty>This server reports a player count but not a scoreboard.</Empty>
           ) : (
             <Empty>No one is playing right now.</Empty>
           )}

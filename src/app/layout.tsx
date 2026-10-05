@@ -8,7 +8,7 @@ import { safe } from '@/components/section';
 import { getServers } from '@/lib/server/data';
 import './globals.css';
 
-// Every page reads live data from the local database.
+// Every page reads live data from Warcon (cached briefly in memory).
 export const dynamic = 'force-dynamic';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -23,7 +23,7 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains', 
 export const metadata: Metadata = {
   title: { default: 'TEG WARDOGS — Servers, Stats & Leaderboards', template: '%s · TEG WARDOGS' },
   description:
-    'Live server status, player profiles, match history, leaderboards and weapon statistics for The Employed Gamers WARDOGS servers.',
+    'Live server status, player profiles, match history and leaderboards for The Employed Gamers WARDOGS servers.',
   metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined,
 };
 
@@ -94,8 +94,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="max-w-md">
               <Logo />
               <p className="mt-4 text-xs leading-relaxed text-dim">
-                Community statistics for The Employed Gamers WARDOGS servers, collected from the official server RCON
-                API and kill feed. Not affiliated with Bulkhead or Team17. All times UTC.
+                Community statistics for The Employed Gamers WARDOGS servers, taken from the TEG Warcon panel. Not affiliated with Bulkhead or Team17. All times UTC.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-x-12 gap-y-2 text-[13px]">

@@ -3,7 +3,6 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   // Self-contained server bundle for Docker / a VPS (see README).
   output: 'standalone',
-  serverExternalPackages: ['better-sqlite3'],
   poweredByHeader: false,
   // HSTS and TLS are Cloudflare's job (docs/DEPLOYMENT.md); these are the app-level ones.
   headers() {
@@ -19,7 +18,7 @@ const nextConfig: NextConfig = {
       },
       {
         // The public JSON API is meant to be read from other sites (Discord bots, overlays).
-        source: '/api/:path((?!ingest).*)',
+        source: '/api/:path*',
         headers: [{ key: 'Access-Control-Allow-Origin', value: '*' }],
       },
     ];

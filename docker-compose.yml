@@ -1,38 +1,18 @@
-# docker compose up -d --build                      site only, on 127.0.0.1:3000
-# docker compose --profile tunnel up -d --build     site + Cloudflare Tunnel (no open ports needed)
-# docker compose run --rm doctor                    connectivity checks (scripts/doctor.ts)
-# docker compose exec stats node scripts/backup.mjs database backup into ./backups
-#
-# ./data and ./backups must be writable by uid 1001: deploy/install.sh sets that up.
+# docker compose up -d --build            the site, on 127.0.0.1:3000 and the warcon_default network
+# docker compose run --rm doctor          checks the Warcon key and every endpoint (deploy gate)
 
 services:
-  stats:
+  site:
     build: .
+    image: teg-wardogs-site:latest
+    container_name: teg-wardogs-site
     restart: unless-stopped
-    ports:
-      # Loopback only: the public reaches it through the tunnel or a reverse proxy, never directly.
-      - '127.0.0.1:${PORT:-3000}:3000'
     env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./backups:/app/backups
-      - ./config:/app/config:ro
-    stop_grace_period: 30s
-    logging:
-      driver: json-file
-      options: { max-size: 10m, max-file: '3' }
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    profiles: [tunnel]
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
-    # In the Cloudflare dashboard, point the tunnel's public hostname at http://stats:3000
-    depends_on:
-      stats:
-        condition: service_healthy
+    ports:
+      # Loopback only: the public reaches it through the Cloudflare tunnel.
+      - '127.0.0.1:${PORT:-3000}:3000'
+    networks: [warcon]
+    stop_grace_period: 15s
     logging:
       driver: json-file
       options: { max-size: 10m, max-file: '3' }
@@ -40,13 +20,13 @@ services:
   doctor:
     build: { context: ., target: build }
     profiles: [tools]
-    user: '1001'
     env_file: .env
-    environment:
-      HOME: /tmp
-      DATABASE_PATH: /app/data/teg-wardogs.db
-      SERVERS_CONFIG: /app/config/servers.json
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config:ro
+    environment: { HOME: /tmp }
+    networks: [warcon]
     command: ['node_modules/.bin/tsx', 'scripts/doctor.ts']
+
+networks:
+  warcon:
+    external: true
+    # Warcon's compose project lives in /home/debian/warcon, so its default network is warcon_default.
+    name: warcon_default

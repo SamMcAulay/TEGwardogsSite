@@ -1,9 +1,0 @@
-[Unit]
-Description=TEG WARDOGS database backup
-
-[Service]
-Type=oneshot
-User=teg
-WorkingDirectory=/opt/teg-wardogs
-EnvironmentFile=-/opt/teg-wardogs/.env
-ExecStart=/usr/bin/env node scripts/backup.mjs

@@ -35,7 +35,7 @@ export default async function ServersPage() {
           </>
         }
         title="Servers"
-        description="Every TEG WARDOGS server, polled over RCON every few seconds. Population is sampled each minute."
+        description="Every TEG WARDOGS server, live from Warcon."
         actions={
           <div className="text-right">
             <div className="display num text-4xl leading-none">
