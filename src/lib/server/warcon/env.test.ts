@@ -14,6 +14,11 @@ describe('loadSiteEnv', () => {
     });
   });
 
+  test('the token keeps a trailing slash; only the URLs lose theirs', () => {
+    expect(loadSiteEnv({ ...base, WARCON_TOKEN: 'wk_abc/' }).warconToken).toBe('wk_abc/');
+    expect(loadSiteEnv({ ...base, WARCON_BASE_URL: 'http://warcon:3000//' }).warconBaseUrl).toBe('http://warcon:3000');
+  });
+
   test('SERVER_IDS keeps order and drops blanks', () => {
     expect(loadSiteEnv({ ...base, SERVER_IDS: ' b, a ,,' }).serverIds).toEqual(['b', 'a']);
   });

@@ -25,11 +25,12 @@ export function loadSiteEnv(src: Record<string, string | undefined> = process.en
   const req = (key: string) => {
     const v = (src[key] ?? '').trim();
     if (!v) missing.push(key);
-    return v.replace(/\/+$/, '');
+    return v;
   };
-  const warconBaseUrl = req('WARCON_BASE_URL');
+  const noSlash = (v: string) => v.replace(/\/+$/, '');
+  const warconBaseUrl = noSlash(req('WARCON_BASE_URL'));
   const warconToken = req('WARCON_TOKEN');
-  const siteUrl = req('SITE_URL');
+  const siteUrl = noSlash(req('SITE_URL'));
   if (missing.length) throw new Error(`Missing required environment variables:\n  ${missing.join('\n  ')}`);
   for (const [key, v] of [['WARCON_BASE_URL', warconBaseUrl], ['SITE_URL', siteUrl]] as const) {
     if (!isHttpUrl(v)) throw new Error(`${key} must be an absolute http(s) URL, got: ${v}`);
