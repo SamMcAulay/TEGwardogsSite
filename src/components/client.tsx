@@ -39,7 +39,6 @@ const NAV = [
   { href: '/leaderboards', label: 'Leaderboards' },
   { href: '/players', label: 'Players' },
   { href: '/matches', label: 'Matches' },
-  { href: '/weapons', label: 'Weapons' },
   { href: '/feed', label: 'Kill Feed' },
 ];
 

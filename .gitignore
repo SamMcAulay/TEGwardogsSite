@@ -42,8 +42,6 @@ yarn-error.log*
 next-env.d.ts
 
 # local data and config
-/data/
-/backups/
 /config/servers.json
 .env*.local
 .env

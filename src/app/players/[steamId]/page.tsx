@@ -198,9 +198,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                       return (
                         <tr key={w.cause}>
                           <td>
-                            <Link href={`/weapons/${encodeURIComponent(w.cause)}`} className="link font-medium">
-                              {info.label}
-                            </Link>
+                            <span className="font-medium">{info.label}</span>
                             <span className="ml-2 text-xs text-dim capitalize">{info.kind}</span>
                           </td>
                           <td className="hidden sm:table-cell">

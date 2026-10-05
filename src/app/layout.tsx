@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { NavLinks, SearchBox } from '@/components/client';
 import { Container, StatusDot } from '@/components/ui';
 import { int } from '@/lib/format';
-import { getServers } from '@/lib/server/queries';
+import { safe } from '@/components/section';
+import { getServers } from '@/lib/server/data';
 import './globals.css';
 
 // Every page reads live data from the local database.
@@ -44,8 +45,10 @@ function Logo() {
   );
 }
 
-function OnlinePill() {
-  const servers = getServers();
+async function OnlinePill() {
+  const loaded = await safe(getServers());
+  if (loaded instanceof Error) return null;
+  const servers = loaded.data;
   const online = servers.reduce((a, s) => a + s.playerCount, 0);
   const up = servers.filter((s) => s.online).length;
   return (
@@ -104,9 +107,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </Link>
               <Link className="link text-muted" href="/leaderboards">
                 Leaderboards
-              </Link>
-              <Link className="link text-muted" href="/weapons">
-                Weapons
               </Link>
               <Link className="link text-muted" href="/players">
                 Players

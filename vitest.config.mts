@@ -7,8 +7,6 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
     env: {
-      DEMO_MODE: 'true',
-      SERVERS_CONFIG: '/nonexistent/servers.json',
       WARCON_BASE_URL: 'http://warcon.test',
       WARCON_TOKEN: 'test-token',
       SITE_URL: 'https://stats.test',

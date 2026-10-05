@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
 import { ago, clock, metres } from '@/lib/format';
-import { nowSec } from '@/lib/server/db';
 import { causeInfo, factionColor, mapName, REGION_NAMES } from '@/lib/game';
-import type { FactionScore, KillRow as WarconKillRow, ServerRow } from '@/lib/server/views';
+import type { FactionScore, KillRow, ServerRow } from '@/lib/server/views';
 
-// `cursor` is only needed for paging, so rows from the old queries layer are accepted too.
-type KillRow = Omit<WarconKillRow, 'cursor'>;
 import { cx, StatusDot } from './ui';
+
+const nowSec = () => Math.floor(Date.now() / 1000);
 
 /** Contour-line terrain for a map, as a decorative backdrop. */
 export function MapBackdrop({ map, className }: { map: string | null | undefined; className?: string }) {
