@@ -1,26 +1,79 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { BarChart } from '@/components/charts';
 import { AutoRefresh } from '@/components/client';
 import { FactionScores, KillList, MapBackdrop } from '@/components/game';
 import { PlayerLink } from '@/components/player';
+import { safe } from '@/components/section';
 import { Badge, Container, Empty, Meter, Panel, Stat, StatGrid } from '@/components/ui';
 import { dateTime, duration, int, kd, metres, money } from '@/lib/format';
 import { causeLabel, factionColor, lightingName, mapName } from '@/lib/game';
-import { nowSec } from '@/lib/server/db';
-import {
-  getMatch,
-  matchScoreboard,
-  matchTimeline,
-  matchWeapons,
-  recentKills,
-  type MatchPlayerRow,
-} from '@/lib/server/queries';
+import { getMatch } from '@/lib/server/data';
+import type { MatchPlayerRow } from '@/lib/server/views';
 
-export async function generateMetadata({ params }: PageProps<'/matches/[id]'>): Promise<Metadata> {
-  const m = getMatch(Number((await params).id));
-  return { title: m ? `${mapName(m.map)} on ${m.serverName}` : 'Match not found' };
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+export async function generateMetadata({ params }: PageProps<'/matches/[serverId]/[matchId]'>): Promise<Metadata> {
+  const { serverId, matchId } = await params;
+  const id = Number(matchId);
+  if (!Number.isInteger(id) || id < 1) return { title: 'Match not found' };
+  const loaded = await safe(getMatch(serverId, id));
+  if (loaded === null) return { title: 'Match not found' };
+  if (loaded instanceof Error) return { title: 'Match' };
+  const m = loaded.data.match;
+  return { title: `${mapName(m.map)} on ${m.serverName}` };
+}
+
+/** Score over time, one line per faction on a shared scale. */
+function ScoreTimeline({
+  timeline,
+  factions,
+}: {
+  timeline: number[][];
+  factions: { name: string; colorHex: string | null }[];
+}) {
+  const W = 100;
+  const H = 100;
+  const t1 = Math.max(1, timeline[timeline.length - 1][0]);
+  const max = Math.max(1, ...timeline.flatMap((r) => r.slice(1)));
+  const x = (t: number) => (t / t1) * W;
+  const y = (v: number) => H - (v / max) * H;
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted">
+        {factions.map((f) => (
+          <span key={f.name} className="flex items-center gap-1.5">
+            <span className="h-2 w-2" style={{ background: factionColor(f.name, f.colorHex ?? undefined) }} />
+            {f.name}{' '}
+            <span className="num text-text">{timeline[timeline.length - 1][factions.indexOf(f) + 1] ?? 0}</span>
+          </span>
+        ))}
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        className="h-[150px] w-full"
+        role="img"
+        aria-label="Score over time"
+      >
+        {factions.map((f, i) => (
+          <polyline
+            key={f.name}
+            fill="none"
+            stroke={factionColor(f.name, f.colorHex ?? undefined)}
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+            strokeLinejoin="round"
+            points={timeline.map((r) => `${x(r[0]).toFixed(2)},${y(r[i + 1] ?? 0).toFixed(2)}`).join(' ')}
+          />
+        ))}
+      </svg>
+      <div className="num mt-1 flex justify-between text-[11px] text-dim">
+        <span>{duration(timeline[0][0])}</span>
+        <span>{duration(t1)}</span>
+      </div>
+    </div>
+  );
 }
 
 function TeamTable({ name, rows, winner }: { name: string; rows: MatchPlayerRow[]; winner: boolean }) {
@@ -75,22 +128,30 @@ function TeamTable({ name, rows, winner }: { name: string; rows: MatchPlayerRow[
   );
 }
 
-export default async function MatchPage({ params }: PageProps<'/matches/[id]'>) {
-  const id = Number((await params).id);
-  const match = Number.isInteger(id) ? getMatch(id) : null;
-  if (!match) notFound();
-
+export default async function MatchPage({ params }: PageProps<'/matches/[serverId]/[matchId]'>) {
+  const { serverId, matchId } = await params;
+  const id = Number(matchId);
+  if (!Number.isInteger(id) || id < 1) notFound();
+  const loadedMatch = await safe(getMatch(serverId, id));
+  if (loadedMatch === null) notFound();
+  if (loadedMatch instanceof Error)
+    return (
+      <Container className="mt-16">
+        <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
+      </Container>
+    );
+  const { match, lines, timeline, factions, awards, kills, weapons } = loadedMatch.data;
   const now = nowSec();
-  const board = matchScoreboard(id);
-  const weapons = matchWeapons(id);
-  const timeline = matchTimeline(id, 120);
-  const feed = recentKills({ matchId: id, limit: 25 });
-  const factions = match.scores.length ? match.scores.map((s) => s.name) : ['Valkyra', 'Lonestar', 'Manticore'];
-  const totalKills = board.reduce((a, r) => a + r.kills, 0);
-  const headshots = board.reduce((a, r) => a + r.headshots, 0);
-  const longest = board.reduce((a, r) => (r.longest > (a?.longest ?? 0) ? r : a), null as MatchPlayerRow | null);
-  const mvp = [...board].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)[0];
+
+  const teams = factions.length
+    ? factions.map((f) => f.name)
+    : [...new Set(lines.map((l) => l.faction).filter((f): f is string => !!f))];
+  const totalKills = lines.reduce((a, r) => a + r.kills, 0);
+  const headshots = lines.reduce((a, r) => a + r.headshots, 0);
+  const longest = lines.reduce((a, r) => (r.longest > (a?.longest ?? 0) ? r : a), null as MatchPlayerRow | null);
+  const mvp = [...lines].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)[0];
   const live = !match.endedAt;
+  const feed = kills.slice(0, 25);
 
   return (
     <>
@@ -121,14 +182,14 @@ export default async function MatchPage({ params }: PageProps<'/matches/[id]'>) 
             </p>
           </div>
           <div className="panel p-4">
-            <FactionScores scores={match.scores} />
+            <FactionScores scores={match.scores} cap={null} />
           </div>
         </Container>
       </header>
 
       <Container className="mt-8 space-y-4">
         <StatGrid className="grid-cols-2 md:grid-cols-5">
-          <Stat label="Players" value={int(board.length)} sub={`Peak ${match.peakPlayers} at once`} />
+          <Stat label="Players" value={int(lines.length)} sub={`Peak ${match.peakPlayers} at once`} />
           <Stat label="Kills" value={int(totalKills)} />
           <Stat label="Headshots" value={int(headshots)} />
           <Stat
@@ -145,29 +206,22 @@ export default async function MatchPage({ params }: PageProps<'/matches/[id]'>) 
         </StatGrid>
 
         <div className="grid gap-4 xl:grid-cols-3">
-          {factions.map((f) => (
+          {teams.map((f) => (
             <TeamTable
               key={f}
               name={f}
-              rows={board.filter((r) => r.faction === f)}
+              rows={lines.filter((r) => r.faction === f)}
               winner={!live && match.winner === f}
             />
           ))}
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <Panel title="Kill tempo" className="lg:col-span-2" action="Kills per 2 minutes">
+          <Panel title="Score timeline" className="lg:col-span-2" action="Score by time into the round">
             {timeline.length > 1 ? (
-              <BarChart
-                bars={timeline.map((b) => ({
-                  label: duration(b.ts - match.startedAt < 0 ? 0 : b.ts - match.startedAt),
-                  value: b.kills,
-                  detail: `${b.kills} kills`,
-                }))}
-                height={150}
-              />
+              <ScoreTimeline timeline={timeline} factions={factions} />
             ) : (
-              <Empty>{timeline.length ? 'Too short to chart.' : 'No kill feed for this round.'}</Empty>
+              <Empty>{timeline.length ? 'Too short to chart.' : 'No score history for this round.'}</Empty>
             )}
           </Panel>
           <Panel title="Weapons used" flush>
@@ -186,7 +240,25 @@ export default async function MatchPage({ params }: PageProps<'/matches/[id]'>) 
           </Panel>
         </div>
 
-        <Panel title="Kill feed" flush action={feed.length === 25 ? 'Latest 25' : undefined}>
+        <Panel title="Awards" flush>
+          {awards.length ? (
+            <ul className="grid divide-y divide-line sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-3">
+              {awards.map((a) => (
+                <li key={a.key} className="px-4 py-3">
+                  <div className="eyebrow !text-[0.66rem]">{a.label}</div>
+                  <div className="mt-1 flex items-baseline justify-between gap-3 text-sm">
+                    <PlayerLink steamId={a.steamId} name={a.name} avatar={false} />
+                    <span className="num font-semibold">{a.value}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty>No awards for this round.</Empty>
+          )}
+        </Panel>
+
+        <Panel title="Kill feed" flush action={kills.length > 25 ? 'Latest 25' : undefined}>
           {feed.length ? <KillList kills={feed} /> : <Empty>No kill feed for this round.</Empty>}
         </Panel>
       </Container>

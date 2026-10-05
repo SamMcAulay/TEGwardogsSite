@@ -4,25 +4,28 @@ import { Avatar } from '@/components/player';
 import { Container, Empty, PageHeader, Panel, cx } from '@/components/ui';
 import { duration, int, kd, metres, pct } from '@/lib/format';
 import { causeLabel } from '@/lib/game';
-import {
-  getPlayer,
-  headToHead,
-  playerTotals,
-  playerWeapons,
-  searchPlayers,
-  type PlayerProfile,
-} from '@/lib/server/queries';
+import { safe } from '@/components/section';
+import { getPlayer, headToHead, searchPlayers } from '@/lib/server/data';
+import type { Loaded, PlayerProfile } from '@/lib/server/views';
 import { one } from '@/lib/url';
 
 export const metadata: Metadata = { title: 'Compare players' };
 
+type Resolved = Loaded<PlayerProfile> | 'none' | 'warming' | Error;
+
 /** Accepts a Steam ID or a name; a name resolves to the best search match. */
-function resolve(input: string | undefined): PlayerProfile | null {
+async function resolve(input: string | undefined): Promise<Resolved | null> {
   const v = input?.trim();
   if (!v) return null;
-  if (/^\d{17}$/.test(v)) return getPlayer(v);
-  const hit = searchPlayers(v, 1)[0];
-  return hit ? getPlayer(hit.steamId) : null;
+  let steamId = v;
+  if (!/^\d{17}$/.test(v)) {
+    const hits = await safe(searchPlayers(v));
+    if (hits instanceof Error) return hits;
+    if (hits === 'warming') return 'warming';
+    if (!hits[0]) return 'none';
+    steamId = hits[0].steamId;
+  }
+  return (await safe(getPlayer(steamId))) ?? 'none';
 }
 
 function PlayerInput({ name, value, label }: { name: string; value?: string; label: string }) {
@@ -43,17 +46,18 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
   const sp = await searchParams;
   const qa = one(sp.a);
   const qb = one(sp.b);
-  const a = resolve(qa);
-  const b = resolve(qb);
+  const [ra, rb] = await Promise.all([resolve(qa), resolve(qb)]);
+  const a = ra && typeof ra === 'object' && !(ra instanceof Error) ? ra : null;
+  const b = rb && typeof rb === 'object' && !(rb instanceof Error) ? rb : null;
+  const down = ra instanceof Error || rb instanceof Error;
+  const warming = ra === 'warming' || rb === 'warming';
+  const h2hLoaded = a && b ? await safe(headToHead(a.data.steamId, b.data.steamId)) : null;
+  const h2h = h2hLoaded && !(h2hLoaded instanceof Error) ? h2hLoaded.data : null;
 
   const rows: { label: string; a: number; b: number; fmt: (v: number) => string; lowerBetter?: boolean }[] = [];
-  let h2h: { aKills: number; bKills: number } | null = null;
-  let weeks: [ReturnType<typeof playerTotals>, ReturnType<typeof playerTotals>] | null = null;
   if (a && b) {
-    const ta = a.totals;
-    const tb = b.totals;
-    weeks = [playerTotals(a.steamId, '7d'), playerTotals(b.steamId, '7d')];
-    h2h = headToHead(a.steamId, b.steamId);
+    const ta = a.data.totals;
+    const tb = b.data.totals;
     rows.push(
       { label: 'Kills', a: ta.kills, b: tb.kills, fmt: int },
       { label: 'Deaths', a: ta.deaths, b: tb.deaths, fmt: int, lowerBetter: true },
@@ -78,13 +82,6 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
       { label: 'Longest kill', a: ta.longest, b: tb.longest, fmt: metres },
       { label: 'Playtime', a: ta.playtime, b: tb.playtime, fmt: duration },
       { label: 'Rounds', a: ta.matches, b: tb.matches, fmt: int },
-      { label: 'Kills · 7d', a: weeks[0].kills, b: weeks[1].kills, fmt: int },
-      {
-        label: 'K/D · 7d',
-        a: weeks[0].kills / Math.max(1, weeks[0].deaths),
-        b: weeks[1].kills / Math.max(1, weeks[1].deaths),
-        fmt: (v) => v.toFixed(2),
-      },
     );
   }
 
@@ -107,15 +104,19 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
         {!a || !b ? (
           <Panel>
             <Empty>
-              {qa || qb
-                ? `Could not find ${!a && qa ? `“${qa}”` : ''}${!a && qa && !b && qb ? ' or ' : ''}${!b && qb ? `“${qb}”` : ''}${!qa || !qb ? 'both players' : ''}.`
-                : 'Enter two players to compare.'}
+              {down
+                ? 'Stats are temporarily unavailable. Try again in a minute.'
+                : warming
+                  ? 'Search is warming up. Try again in a moment.'
+                  : qa || qb
+                    ? `Could not find ${!a && qa ? `“${qa}”` : ''}${!a && qa && !b && qb ? ' or ' : ''}${!b && qb ? `“${qb}”` : ''}${!qa || !qb ? 'both players' : ''}.`
+                    : 'Enter two players to compare.'}
             </Empty>
           </Panel>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 panel p-5">
-              {[a, b].map((p, i) => (
+              {[a.data, b.data].map((p, i) => (
                 <Link
                   key={p.steamId}
                   href={`/players/${p.steamId}`}
@@ -127,20 +128,20 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
                   <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={56} />
                   <div className="min-w-0">
                     <div className="display truncate text-2xl leading-none">{p.name}</div>
-                    <div className="mt-1 text-xs text-muted">
-                      Main: {causeLabel(playerWeapons(p.steamId, 0, 1)[0]?.cause)}
-                    </div>
+                    <div className="mt-1 text-xs text-muted">Main: {causeLabel(p.weapons[0]?.cause)}</div>
                   </div>
                 </Link>
               ))}
-              <div className="col-start-2 row-start-1 text-center">
-                <div className="eyebrow !text-[0.62rem]">Head to head</div>
-                <div className="display num text-3xl leading-none">
-                  <span className={cx(h2h!.aKills > h2h!.bKills && 'text-accent')}>{h2h!.aKills}</span>
-                  <span className="mx-2 text-dim">–</span>
-                  <span className={cx(h2h!.bKills > h2h!.aKills && 'text-accent')}>{h2h!.bKills}</span>
+              {h2h && (
+                <div className="col-start-2 row-start-1 text-center">
+                  <div className="eyebrow !text-[0.62rem]">Head to head</div>
+                  <div className="display num text-3xl leading-none">
+                    <span className={cx(h2h.aKills > h2h.bKills && 'text-accent')}>{h2h.aKills}</span>
+                    <span className="mx-2 text-dim">–</span>
+                    <span className={cx(h2h.bKills > h2h.aKills && 'text-accent')}>{h2h.bKills}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             <Panel flush>
               <table className="table">
@@ -181,8 +182,9 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
               </table>
             </Panel>
             <p className="text-xs text-dim">
-              K/D {kd(a.totals.kills, a.totals.deaths)} vs {kd(b.totals.kills, b.totals.deaths)} all-time · headshot
-              rates {pct(a.totals.headshots, a.totals.kills)} vs {pct(b.totals.headshots, b.totals.kills)}.
+              K/D {kd(a.data.totals.kills, a.data.totals.deaths)} vs {kd(b.data.totals.kills, b.data.totals.deaths)}{' '}
+              all-time · headshot rates {pct(a.data.totals.headshots, a.data.totals.kills)} vs{' '}
+              {pct(b.data.totals.headshots, b.data.totals.kills)}.
             </p>
           </div>
         )}

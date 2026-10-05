@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { AutoRefresh } from '@/components/client';
 import { KillList } from '@/components/game';
 import { Container, Empty, PageHeader, Panel, Segmented, StatusDot } from '@/components/ui';
-import { getServers, recentKills } from '@/lib/server/queries';
+import { Section, safe } from '@/components/section';
+import { getServers, recentKills } from '@/lib/server/data';
 import { one, withParams } from '@/lib/url';
 
 export const metadata: Metadata = { title: 'Kill feed' };
@@ -12,11 +13,18 @@ const LIMIT = 60;
 
 export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
   const sp = await searchParams;
-  const servers = getServers();
-  const serverId = servers.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
-  const before = Number(one(sp.before)) || null;
-  const kills = recentKills({ serverId, before, limit: LIMIT });
-  const oldest = kills[kills.length - 1]?.seq;
+  const servers = await safe(getServers());
+  const serverList = servers instanceof Error ? [] : servers.data;
+  const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
+  const before = serverId ? (one(sp.before) ?? null) : null;
+  const kindParam = one(sp.kind);
+  const kind =
+    (['headshot', 'teamKill', 'suicide', 'vehicle', 'environment'] as const).find((k) => k === kindParam) ?? '';
+  const minM = Number(one(sp.minM)) || null;
+  const kills = await safe(
+    recentKills({ serverId, before, limit: LIMIT, kind, minM, cause: one(sp.cause) ?? undefined }),
+  );
+  const oldest = !(kills instanceof Error) && serverId ? kills.data[kills.data.length - 1]?.cursor : undefined;
 
   return (
     <>
@@ -36,7 +44,7 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
             active={serverId ?? 'all'}
             items={[
               { key: 'all', label: 'All servers', href: withParams('/feed', sp, { server: null, before: null }) },
-              ...servers.map((s) => ({
+              ...serverList.map((s) => ({
                 key: s.id,
                 label: s.shortName,
                 href: withParams('/feed', sp, { server: s.id, before: null }),
@@ -44,10 +52,42 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
             ]}
           />
         </div>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <Segmented
+            label="Kind"
+            active={kind || 'all'}
+            items={[
+              { key: 'all', label: 'All', href: withParams('/feed', sp, { kind: null, before: null }) },
+              {
+                key: 'headshot',
+                label: 'Headshots',
+                href: withParams('/feed', sp, { kind: 'headshot', before: null }),
+              },
+              {
+                key: 'teamKill',
+                label: 'Team kills',
+                href: withParams('/feed', sp, { kind: 'teamKill', before: null }),
+              },
+              { key: 'vehicle', label: 'Vehicles', href: withParams('/feed', sp, { kind: 'vehicle', before: null }) },
+            ]}
+          />
+          <Segmented
+            label="Min distance"
+            active={String(minM ?? 'any')}
+            items={[
+              { key: 'any', label: 'Any', href: withParams('/feed', sp, { minM: null, before: null }) },
+              ...[100, 250, 400].map((m) => ({
+                key: String(m),
+                label: `${m} m`,
+                href: withParams('/feed', sp, { minM: m, before: null }),
+              })),
+            ]}
+          />
+        </div>
       </PageHeader>
       <Container className="mt-8">
         <Panel
-          title={serverId ? servers.find((s) => s.id === serverId)?.name : 'All servers'}
+          title={serverId ? serverList.find((s) => s.id === serverId)?.name : 'All servers'}
           action={
             before ? (
               <Link href={withParams('/feed', sp, { before: null })} className="link">
@@ -57,17 +97,23 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
           }
           flush
         >
-          {kills.length ? <KillList kills={kills} showServer={!serverId} /> : <Empty>No kills recorded.</Empty>}
-          {kills.length === LIMIT && oldest && (
-            <div className="border-t border-line px-4 py-3 text-right">
-              <Link
-                href={withParams('/feed', sp, { before: oldest })}
-                className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em] transition-colors hover:border-accent hover:text-accent"
-              >
-                Older →
-              </Link>
-            </div>
-          )}
+          <Section loaded={kills}>
+            {(rows) => (
+              <>
+                {rows.length ? <KillList kills={rows} showServer={!serverId} /> : <Empty>No kills recorded.</Empty>}
+                {rows.length === LIMIT && oldest && (
+                  <div className="border-t border-line px-4 py-3 text-right">
+                    <Link
+                      href={withParams('/feed', sp, { before: oldest })}
+                      className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em] transition-colors hover:border-accent hover:text-accent"
+                    >
+                      Older →
+                    </Link>
+                  </div>
+                )}
+              </>
+            )}
+          </Section>
         </Panel>
       </Container>
     </>
