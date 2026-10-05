@@ -15,7 +15,7 @@ export async function GET(_req: Request, ctx: RouteContext<'/api/players/[steamI
   return Response.json(
     {
       steamId: p.steamId, name: p.name, avatarUrl: p.avatarUrl, firstSeen: p.firstSeen, lastSeen: p.lastSeen,
-      rank: p.rank, totals: p.totals, online: p.onlineOn ? { serverId: p.onlineOn.serverId } : null,
+      rank: typeof p.rank === 'number' ? p.rank : null, totals: p.totals, online: p.onlineOn ? { serverId: p.onlineOn.serverId } : null,
       weapons: p.weapons.slice(0, 10),
     },
     { headers: { 'cache-control': 'public, s-maxage=60' } },

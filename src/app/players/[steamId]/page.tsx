@@ -128,9 +128,11 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
               </div>
             </div>
             <div className="space-y-1 text-sm lg:text-right">
-              <Link href="/leaderboards?metric=kills&period=all" className="link font-display text-lg font-semibold">
-                {player.rank ? `#${player.rank} on the all-time kills board` : 'Unranked'}
-              </Link>
+              {player.rank !== 'unavailable' && (
+                <Link href="/leaderboards?metric=kills&period=all" className="link font-display text-lg font-semibold">
+                  {player.rank ? `#${player.rank} on the all-time kills board` : 'Unranked'}
+                </Link>
+              )}
               {player.streak && (
                 <div className="text-muted">
                   {player.streak.n} {player.streak.kind === 'win' ? 'wins' : 'losses'} in a row
