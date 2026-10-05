@@ -6,24 +6,26 @@ export const metadata: Metadata = { title: 'Public API' };
 const ENDPOINTS = [
   {
     path: '/api/servers',
-    about: 'Live status of every server: map, population, faction scores, join code and the connected player list.',
+    about:
+      'Live status of every server. Fields: id, name, shortName, region, online, map, players, maxPlayers, joinCode, updatedAt.',
     example: '/api/servers',
   },
   {
     path: '/api/leaderboard',
     about:
-      'A leaderboard page. metric: kills | kd | kph | headshots | hsr | longest | playtime. period: today | 7d | 30d | all. Optional server, limit (≤100), offset.',
-    example: '/api/leaderboard?metric=kd&period=7d&limit=10',
+      'A leaderboard page of 50 rows. metric: kills | deaths | kd | perHour | playtime | matches | wins | winRate | cash. period: 7d | 30d | 90d | all. Optional server and page. Returns metric, period, page, total, pageSize and rows (rank, steamId, name, avatarUrl, kills, deaths, headshots, playtime, matches, wins, cash, value, lastSeen).',
+    example: '/api/leaderboard?metric=kd&period=30d',
   },
   {
     path: '/api/players/{steamId}',
-    about: 'All-time and 7-day totals, ranks, favourite weapons and whether the player is online now.',
+    about:
+      'Fields: steamId, name, avatarUrl, firstSeen, lastSeen, rank, totals, online (serverId or null) and weapons (top 10). 404 for an unknown player.',
     example: '/api/players/76561198000000000',
   },
   {
     path: '/api/health',
     about:
-      'Site and data collection health: whether the poller is running, and per server its data source, last poll and last kill feed event. 503 when the site itself is unhealthy.',
+      'Site health: { ok, warcon, servers }. warcon is ok, unreachable, key_rejected, key_lacks_view or error. 503 only when the site is misconfigured.',
     example: '/api/health',
   },
 ];

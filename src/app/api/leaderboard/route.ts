@@ -1,33 +1,18 @@
-import { NextResponse } from 'next/server';
-import { leaderboard, parseMetric, parsePeriod } from '@/lib/server/queries';
+import { leaderboard } from '@/lib/server/data';
+import { parseMetric, parsePeriod } from '@/lib/server/views';
 
 export const dynamic = 'force-dynamic';
 
-export function GET(req: Request) {
-  const url = new URL(req.url);
-  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 25));
-  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
-  const metric = parseMetric(url.searchParams.get('metric'));
-  const period = parsePeriod(url.searchParams.get('period'));
-  const { rows, total } = leaderboard({ metric, period, serverId: url.searchParams.get('server'), limit, offset });
-  return NextResponse.json(
-    {
-      metric,
-      period,
-      total,
-      rows: rows.map((r) => ({
-        rank: r.rank,
-        steamId: r.steamId,
-        name: r.name,
-        value: r.value,
-        kills: r.kills,
-        deaths: r.deaths,
-        headshots: r.headshots,
-        playtime: r.playtime,
-        longest: r.longest,
-        matches: r.matches,
-      })),
-    },
-    { headers: { 'Cache-Control': 'public, max-age=30, s-maxage=30' } },
+export async function GET(req: Request) {
+  const q = new URL(req.url).searchParams;
+  const metric = parseMetric(q.get('metric'));
+  const period = parsePeriod(q.get('period'));
+  const page = Math.max(1, Math.floor(Number(q.get('page'))) || 1);
+  const loaded = await leaderboard({ metric, period, serverId: q.get('server'), page }).catch(() => undefined);
+  if (!loaded) return Response.json({ error: 'unavailable' }, { status: 503 });
+  const { rows, total, pageSize } = loaded.data;
+  return Response.json(
+    { metric, period, page, total, pageSize, rows },
+    { headers: { 'cache-control': 'public, s-maxage=60' } },
   );
 }

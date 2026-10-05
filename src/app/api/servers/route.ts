@@ -1,30 +1,22 @@
-import { NextResponse } from 'next/server';
-import { getServers } from '@/lib/server/queries';
+import { getServers } from '@/lib/server/data';
 
 export const dynamic = 'force-dynamic';
 
-/** Public live status for every server. Player lists omit cash and ping. */
-export function GET() {
-  const servers = getServers().map((s) => ({
+/** Public live status for every server. No player list, no private fields. */
+export async function GET() {
+  const loaded = await getServers().catch(() => undefined);
+  if (!loaded) return Response.json({ error: 'unavailable' }, { status: 503 });
+  const servers = loaded.data.map((s) => ({
     id: s.id,
     name: s.name,
+    shortName: s.shortName,
     region: s.region,
-    location: s.location,
     online: s.online,
     map: s.status?.map ?? null,
     players: s.playerCount,
     maxPlayers: s.status?.players.max ?? null,
-    matchSeconds: s.status?.matchSeconds ?? null,
-    factionScores: s.status?.factionScores ?? [],
     joinCode: s.joinCode,
     updatedAt: s.updatedAt,
-    playerList: s.players.map((p) => ({
-      steamId: p.steamId,
-      name: p.name,
-      faction: p.faction,
-      kills: p.kills,
-      deaths: p.deaths,
-    })),
   }));
-  return NextResponse.json({ servers }, { headers: { 'Cache-Control': 'public, max-age=5, s-maxage=5' } });
+  return Response.json({ servers }, { headers: { 'cache-control': 'public, s-maxage=10' } });
 }

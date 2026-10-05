@@ -1,14 +1,16 @@
 import type { MetadataRoute } from 'next';
-import { getServers } from '@/lib/server/queries';
+import { getServers } from '@/lib/server/data';
+import { siteEnv } from '@/lib/server/warcon/env';
 
 export const dynamic = 'force-dynamic';
 
-const PAGES = ['', '/servers', '/leaderboards', '/matches', '/players', '/weapons', '/feed', '/compare', '/api-docs'];
+const PAGES = ['', '/servers', '/leaderboards', '/players', '/matches', '/feed'];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const site = (process.env.SITE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const { siteUrl } = siteEnv();
+  const servers = await getServers().then((l) => l.data, () => []);
   return [
-    ...PAGES.map((p) => ({ url: site + p, changeFrequency: 'hourly' as const })),
-    ...getServers().map((s) => ({ url: `${site}/servers/${s.id}`, changeFrequency: 'always' as const })),
+    ...PAGES.map((p) => ({ url: siteUrl + p, changeFrequency: 'hourly' as const })),
+    ...servers.map((s) => ({ url: `${siteUrl}/servers/${s.id}`, changeFrequency: 'always' as const })),
   ];
 }
