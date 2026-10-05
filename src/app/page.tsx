@@ -4,62 +4,54 @@ import { AutoRefresh } from '@/components/client';
 import { KillList, MapBackdrop, ServerCard } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import { Container, Meter, Panel, PanelLink, RankCell, Stat, StatGrid } from '@/components/ui';
-import { compact, int, kd, metres, pct } from '@/lib/format';
-import { causeLabel, factionColor } from '@/lib/game';
-import { nowSec } from '@/lib/server/db';
-import {
-  factionWins,
-  getServers,
-  leaderboard,
-  longestKills,
-  networkSummary,
-  periodStartTs,
-  population,
-  recentKills,
-  weaponStats,
-  type LeaderRow,
-} from '@/lib/server/queries';
+import { Section, safe } from '@/components/section';
+import { compact, int, kd, pct } from '@/lib/format';
+import { factionColor } from '@/lib/game';
+import { factionWins, getServers, leaderboard, networkSummary, population, recentKills } from '@/lib/server/data';
+import type { LeaderRow, Loaded } from '@/lib/server/views';
 
 function MiniBoard({
   title,
-  rows,
+  loaded,
   value,
   href,
 }: {
   title: string;
-  rows: LeaderRow[];
+  loaded: Loaded<{ rows: LeaderRow[] }> | Error;
   value: (r: LeaderRow) => string;
   href: string;
 }) {
   return (
     <Panel title={title} action={<PanelLink href={href}>Full board</PanelLink>} flush>
-      <ol className="divide-y divide-line">
-        {rows.map((r) => (
-          <li key={r.steamId} className="flex items-center gap-3 px-4 py-2.5">
-            <RankCell rank={r.rank} />
-            <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} className="flex-1 text-sm" />
-            <span className="num font-display text-[15px] font-bold">{value(r)}</span>
-          </li>
-        ))}
-        {!rows.length && <li className="px-4 py-8 text-center text-sm text-muted">No data yet.</li>}
-      </ol>
+      <Section loaded={loaded}>
+        {({ rows }) => (
+          <ol className="divide-y divide-line">
+            {rows.slice(0, 5).map((r) => (
+              <li key={r.steamId} className="flex items-center gap-3 px-4 py-2.5">
+                <RankCell rank={r.rank} />
+                <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} className="flex-1 text-sm" />
+                <span className="num font-display text-[15px] font-bold">{value(r)}</span>
+              </li>
+            ))}
+            {!rows.length && <li className="px-4 py-8 text-center text-sm text-muted">No data yet.</li>}
+          </ol>
+        )}
+      </Section>
     </Panel>
   );
 }
 
-export default function Home() {
-  const servers = getServers();
-  const summary = networkSummary(servers);
-  const now = nowSec();
-  const pop = population(null, now - 86400, 600);
-  const week = periodStartTs('7d');
-  const kills = leaderboard({ metric: 'kills', period: '7d', limit: 5 }).rows;
-  const kdBoard = leaderboard({ metric: 'kd', period: '7d', limit: 5 }).rows;
-  const longest = longestKills(week, 5);
-  const feed = recentKills({ limit: 12 });
-  const weapons = weaponStats('7d').slice(0, 8);
-  const wins = factionWins(null, week);
-  const totalWins = wins.reduce((a, w) => a + w.wins, 0);
+export default async function Home() {
+  const servers = await safe(getServers());
+  const serverRows = servers instanceof Error ? [] : servers.data;
+  const [summary, pop, kills, kdBoard, feed, wins] = await Promise.all([
+    safe(networkSummary(serverRows)),
+    safe(population(null, '24h')),
+    safe(leaderboard({ metric: 'kills', period: '7d' })),
+    safe(leaderboard({ metric: 'kd', period: '7d' })),
+    safe(recentKills({ limit: 12 })),
+    safe(factionWins(null)),
+  ]);
 
   return (
     <>
@@ -100,23 +92,21 @@ export default function Home() {
             </div>
           </div>
           <StatGrid className="grid-cols-2">
-            <Stat
-              label="Players online"
-              value={int(summary.playersOnline)}
-              sub={`of ${int(summary.capacity)} slots`}
-              accent
-            />
-            <Stat label="Servers online" value={`${summary.serversOnline}/${summary.serversTotal}`} sub="TEG network" />
-            <Stat
-              label="Kills today"
-              value={compact(summary.killsToday)}
-              sub={`${int(summary.matchesToday)} matches`}
-            />
-            <Stat
-              label="Players today"
-              value={int(summary.playersToday)}
-              sub={`${int(summary.totalPlayers)} tracked all-time`}
-            />
+            <Section loaded={summary}>
+              {(sm) => (
+                <>
+                  <Stat
+                    label="Players online"
+                    value={int(sm.playersOnline)}
+                    sub={`of ${int(sm.capacity)} slots`}
+                    accent
+                  />
+                  <Stat label="Servers online" value={`${sm.serversOnline}/${sm.serversTotal}`} sub="TEG network" />
+                  <Stat label="Kills today" value={compact(sm.killsToday)} sub={`${int(sm.matchesToday)} matches`} />
+                  <Stat label="Players today" value={int(sm.playersToday)} sub="last 24 hours" />
+                </>
+              )}
+            </Section>
           </StatGrid>
         </Container>
       </section>
@@ -127,106 +117,90 @@ export default function Home() {
             <h2 className="display text-2xl">Live servers</h2>
             <PanelLink href="/servers">All servers</PanelLink>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {servers.map((s) => (
-              <ServerCard key={s.id} server={s} />
-            ))}
-          </div>
+          <Section loaded={servers}>
+            {(rows) => (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {rows.map((s) => (
+                  <ServerCard key={s.id} server={s} />
+                ))}
+              </div>
+            )}
+          </Section>
         </section>
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel
             title="Network population · 24h"
-            action={<span className="num">Peak today {int(summary.peakToday)}</span>}
+            action={
+              summary instanceof Error ? null : <span className="num">Peak today {int(summary.data.peakToday)}</span>
+            }
             className="lg:col-span-2"
           >
-            <AreaChart points={pop.map((p) => ({ t: p.ts, v: p.players }))} height={220} unit=" players" />
+            <Section loaded={pop}>
+              {(points) => (
+                <AreaChart points={points.map((p) => ({ t: p.ts, v: p.players }))} height={220} unit=" players" />
+              )}
+            </Section>
           </Panel>
           <Panel title="Faction wins · 7 days">
-            <div className="space-y-4">
-              {wins.map((w) => (
-                <div key={w.faction}>
-                  <div className="mb-1.5 flex items-baseline justify-between">
-                    <span className="font-display text-sm font-semibold uppercase tracking-[0.1em]">{w.faction}</span>
-                    <span className="num text-sm">
-                      <span className="font-semibold">{int(w.wins)}</span>
-                      <span className="ml-2 text-muted">{pct(w.wins, totalWins, 0)}</span>
-                    </span>
+            <Section loaded={wins}>
+              {(data) => {
+                const totalWins = data.reduce((a, w) => a + w.wins, 0);
+                return (
+                  <div className="space-y-4">
+                    {data.map((w) => (
+                      <div key={w.faction}>
+                        <div className="mb-1.5 flex items-baseline justify-between">
+                          <span className="font-display text-sm font-semibold uppercase tracking-[0.1em]">
+                            {w.faction}
+                          </span>
+                          <span className="num text-sm">
+                            <span className="font-semibold">{int(w.wins)}</span>
+                            <span className="ml-2 text-muted">{pct(w.wins, totalWins, 0)}</span>
+                          </span>
+                        </div>
+                        <Meter value={w.wins} max={totalWins} color={factionColor(w.faction)} />
+                      </div>
+                    ))}
+                    {!data.length && (
+                      <div className="py-8 text-center text-sm text-muted">No finished matches yet.</div>
+                    )}
+                    <p className="pt-2 text-xs text-dim">
+                      Rounds won across all servers, matches with at least two players.
+                    </p>
                   </div>
-                  <Meter value={w.wins} max={totalWins} color={factionColor(w.faction)} />
-                </div>
-              ))}
-              {!wins.length && <div className="py-8 text-center text-sm text-muted">No finished matches yet.</div>}
-              <p className="pt-2 text-xs text-dim">Rounds won across all servers, matches with at least two players.</p>
-            </div>
+                );
+              }}
+            </Section>
           </Panel>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-2">
           <MiniBoard
             title="Most kills · 7d"
-            rows={kills}
+            loaded={kills}
             value={(r) => int(r.kills)}
             href="/leaderboards?metric=kills"
           />
           <MiniBoard
             title="Best K/D · 7d"
-            rows={kdBoard}
+            loaded={kdBoard}
             value={(r) => kd(r.kills, r.deaths)}
             href="/leaderboards?metric=kd"
           />
-          <Panel
-            title="Longest kills · 7d"
-            action={<PanelLink href="/leaderboards?metric=longest">Full board</PanelLink>}
-            flush
-          >
-            <ol className="divide-y divide-line">
-              {longest.map((k, i) => (
-                <li key={k.eventId} className="flex items-center gap-3 px-4 py-2.5">
-                  <RankCell rank={i + 1} />
-                  <div className="min-w-0 flex-1">
-                    <PlayerLink steamId={k.killerSteamId} name={k.killerName} avatar={false} className="text-sm" />
-                    <div className="truncate text-xs text-dim">{causeLabel(k.cause)}</div>
-                  </div>
-                  <span className="num font-display text-[15px] font-bold">{metres(k.distance)}</span>
-                </li>
-              ))}
-            </ol>
-          </Panel>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Panel
-            title="Live kill feed"
-            action={<PanelLink href="/feed">Open feed</PanelLink>}
-            flush
-            className="lg:col-span-2"
-          >
-            {feed.length ? (
-              <KillList kills={feed} showServer />
-            ) : (
-              <div className="p-8 text-center text-muted">Quiet.</div>
-            )}
-          </Panel>
-          <Panel title="Weapon meta · 7d" action={<PanelLink href="/weapons">All weapons</PanelLink>} flush>
-            <ul className="divide-y divide-line">
-              {weapons.map((w) => (
-                <li key={w.cause}>
-                  <Link
-                    href={`/weapons/${encodeURIComponent(w.cause)}`}
-                    className="block px-4 py-2.5 transition-colors hover:bg-surface-2"
-                  >
-                    <div className="mb-1.5 flex items-baseline justify-between text-sm">
-                      <span className="font-medium">{causeLabel(w.cause)}</span>
-                      <span className="num text-muted">
-                        <span className="font-semibold text-text">{compact(w.kills)}</span> kills
-                      </span>
-                    </div>
-                    <Meter value={w.kills} max={weapons[0].kills} />
-                  </Link>
-                </li>
-              ))}
-            </ul>
+        <div>
+          <Panel title="Live kill feed" action={<PanelLink href="/feed">Open feed</PanelLink>} flush>
+            <Section loaded={feed}>
+              {(rows) =>
+                rows.length ? (
+                  <KillList kills={rows} showServer />
+                ) : (
+                  <div className="p-8 text-center text-muted">Quiet.</div>
+                )
+              }
+            </Section>
           </Panel>
         </div>
       </Container>

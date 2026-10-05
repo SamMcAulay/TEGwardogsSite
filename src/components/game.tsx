@@ -3,8 +3,10 @@ import { contours } from '@/lib/topo';
 import { ago, clock, metres } from '@/lib/format';
 import { nowSec } from '@/lib/server/db';
 import { causeInfo, factionColor, mapName, REGION_NAMES } from '@/lib/game';
-import type { KillRow, ServerRow } from '@/lib/server/queries';
-import type { FactionScore } from '@/lib/server/rcon';
+import type { FactionScore, KillRow as WarconKillRow, ServerRow } from '@/lib/server/views';
+
+// `cursor` is only needed for paging, so rows from the old queries layer are accepted too.
+type KillRow = Omit<WarconKillRow, 'cursor'>;
 import { cx, StatusDot } from './ui';
 
 /** Contour-line terrain for a map, as a decorative backdrop. */
@@ -92,7 +94,6 @@ export function ServerCard({ server }: { server: ServerRow }) {
         </div>
         <div className="absolute bottom-3 left-4">
           <div className="display text-2xl leading-none text-text">{server.shortName}</div>
-          <div className="mt-1 text-xs text-muted">{server.location}</div>
         </div>
         <div className="absolute right-4 bottom-3 text-right">
           <div className="display num text-2xl leading-none text-text">
@@ -120,7 +121,7 @@ export function ServerCard({ server }: { server: ServerRow }) {
           </>
         ) : (
           <div className="py-5 text-center text-sm text-muted">
-            {server.lastOnlineAt ? `Last seen ${ago(server.lastOnlineAt)}` : 'Waiting for first contact'}
+            {server.updatedAt ? `Last seen ${ago(server.updatedAt)}` : 'Waiting for first contact'}
           </div>
         )}
       </div>

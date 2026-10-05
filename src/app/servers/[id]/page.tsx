@@ -21,17 +21,17 @@ import {
 } from '@/components/ui';
 import { ago, clock, compact, dateTime, duration, int, kd, money } from '@/lib/format';
 import { factionColor, lightingName, mapName, REGION_NAMES } from '@/lib/game';
-import { nowSec } from '@/lib/server/db';
-import { getServer, leaderboard, listMatches, population, recentKills, serverTotals } from '@/lib/server/queries';
-import type { LivePlayer } from '@/lib/server/rcon';
+import { Section, safe } from '@/components/section';
+import { getServer, leaderboard, listMatches, population, recentKills, serverTotals } from '@/lib/server/data';
+import type { LivePlayer } from '@/lib/server/views';
 
 export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): Promise<Metadata> {
   const { id } = await params;
-  const s = getServer(id);
-  return { title: s ? s.name : 'Server not found' };
+  const s = await getServer(id);
+  return { title: s ? s.data.name : 'Server not found' };
 }
 
-const RANGES = { '24h': { seconds: 86400, bucket: 600 }, '7d': { seconds: 7 * 86400, bucket: 3600 } } as const;
+const nowSec = () => Math.floor(Date.now() / 1000);
 
 function Scoreboard({ faction, players, score }: { faction: string; players: LivePlayer[]; score?: number }) {
   const sorted = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
@@ -60,7 +60,6 @@ function Scoreboard({ faction, players, score }: { faction: string; players: Liv
               <th className="r">K</th>
               <th className="r">D</th>
               <th className="r hidden sm:table-cell">Cash</th>
-              <th className="r">Ping</th>
             </tr>
           </thead>
           <tbody>
@@ -72,12 +71,11 @@ function Scoreboard({ faction, players, score }: { faction: string; players: Liv
                 <td className="r font-semibold">{p.kills}</td>
                 <td className="r text-muted">{p.deaths}</td>
                 <td className="r hidden text-muted sm:table-cell">{money(p.cash)}</td>
-                <td className="r text-dim">{p.pingMs}</td>
               </tr>
             ))}
             {!sorted.length && (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-muted">
+                <td colSpan={4} className="py-6 text-center text-muted">
                   Nobody
                 </td>
               </tr>
@@ -92,16 +90,18 @@ function Scoreboard({ faction, players, score }: { faction: string; players: Liv
 export default async function ServerPage({ params, searchParams }: PageProps<'/servers/[id]'>) {
   const { id } = await params;
   const sp = await searchParams;
-  const server = getServer(id);
-  if (!server) notFound();
-
+  const loadedServer = await getServer(id);
+  if (!loadedServer) notFound();
+  const server = loadedServer.data;
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
-  const pop = population(server.id, now - RANGES[range].seconds, RANGES[range].bucket);
-  const totals = serverTotals(server.id, '7d');
-  const matches = listMatches({ serverId: server.id, limit: 8 }).rows;
-  const top = leaderboard({ metric: 'kills', period: '7d', serverId: server.id, limit: 10 }).rows;
-  const kills = recentKills({ serverId: server.id, limit: 15 });
+  const [pop, totals, matches, top, kills] = await Promise.all([
+    safe(population(server.id, range)),
+    safe(serverTotals(server.id)),
+    safe(listMatches({ serverId: server.id, limit: 8 })),
+    safe(leaderboard({ metric: 'kills', period: '7d', serverId: server.id })),
+    safe(recentKills({ serverId: server.id, limit: 15 })),
+  ]);
   const st = server.status;
   const factions = st?.factionScores.map((f) => f.name) ?? ['Valkyra', 'Lonestar', 'Manticore'];
 
@@ -115,7 +115,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
               Servers
             </Link>
             <span className="text-dim">/</span>
-            {REGION_NAMES[server.region]} · {server.location}
+            {REGION_NAMES[server.region] ?? server.region}
           </>
         }
         title={
@@ -127,7 +127,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
         description={
           server.online
             ? `Up ${duration(server.startedAt ? now - server.startedAt : 0)} · last polled ${ago(server.updatedAt, now)}`
-            : `Offline${server.lastOnlineAt ? ` · last seen ${ago(server.lastOnlineAt, now)}` : ''}${server.error ? ` · ${server.error}` : ''}`
+            : `Offline${server.updatedAt ? ` · last seen ${ago(server.updatedAt, now)}` : ''}`
         }
         actions={
           server.joinCode && (
@@ -158,9 +158,17 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             value={st?.matchSeconds != null ? clock(st.matchSeconds) : '—'}
             sub="King of the Hill"
           />
-          <Stat label="Kills · 7d" value={compact(totals.kills)} />
-          <Stat label="Players · 7d" value={int(totals.players)} />
-          <Stat label="Avg round" value={duration(totals.avgLength)} sub={`${int(totals.matches)} rounds`} />
+          <Section loaded={totals}>
+            {(t) => (
+              <>
+                <Stat label="Players · 7d" value={int(t.uniquePlayers)} />
+                <Stat label="Matches · 7d" value={int(t.matches)} />
+                <Stat label="Kills · 7d" value={compact(t.kills)} />
+                <Stat label="Headshots · 7d" value={compact(t.headshots)} />
+                <Stat label="Peak · 7d" value={int(t.peak)} />
+              </>
+            )}
+          </Section>
         </StatGrid>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -175,11 +183,10 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                   <div className="mb-5 flex items-end justify-between">
                     <div>
                       <div className="display text-3xl leading-none">{mapName(st.map)}</div>
-                      <div className="mt-1 text-xs text-muted">First to {st.scoreCap ?? 100} points</div>
+                      <div className="mt-1 text-xs text-muted">First to 100 points</div>
                     </div>
-                    {st.scoreTick && <Badge>Tick {st.scoreTick.current}s</Badge>}
                   </div>
-                  <FactionScores scores={st.factionScores} cap={st.scoreCap ?? 100} />
+                  <FactionScores scores={st.factionScores} cap={100} />
                 </>
               ) : (
                 <Empty>Server is offline.</Empty>
@@ -197,12 +204,16 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
               />
             }
           >
-            <AreaChart
-              points={pop.map((p) => ({ t: p.ts, v: p.players }))}
-              capacity={st?.players.max}
-              height={230}
-              unit=" players"
-            />
+            <Section loaded={pop}>
+              {(points) => (
+                <AreaChart
+                  points={points.map((p) => ({ t: p.ts, v: p.players }))}
+                  capacity={st?.players.max}
+                  height={230}
+                  unit=" players"
+                />
+              )}
+            </Section>
           </Panel>
         </div>
 
@@ -232,41 +243,45 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             flush
             action={<PanelLink href={`/matches?server=${server.id}`}>All rounds</PanelLink>}
           >
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Map</th>
-                    <th>Started</th>
-                    <th className="r">Length</th>
-                    <th className="r">Peak</th>
-                    <th>Winner</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matches.map((m) => (
-                    <tr key={m.id}>
-                      <td>
-                        <Link href={`/matches/${m.id}`} className="link font-medium">
-                          {mapName(m.map)}
-                        </Link>
-                        {!m.endedAt && (
-                          <span className="ml-2">
-                            <Badge tone="good">Live</Badge>
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-muted">{dateTime(m.startedAt)}</td>
-                      <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
-                      <td className="r">{m.peakPlayers}</td>
-                      <td>
-                        {m.endedAt ? <FactionTag name={m.winner} /> : <span className="text-dim">In progress</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Section loaded={matches}>
+              {({ rows }) => (
+                <div className="overflow-x-auto">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Map</th>
+                        <th>Started</th>
+                        <th className="r">Length</th>
+                        <th className="r">Peak</th>
+                        <th>Winner</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((m) => (
+                        <tr key={m.id}>
+                          <td>
+                            <Link href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
+                              {mapName(m.map)}
+                            </Link>
+                            {!m.endedAt && (
+                              <span className="ml-2">
+                                <Badge tone="good">Live</Badge>
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-muted">{dateTime(m.startedAt)}</td>
+                          <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
+                          <td className="r">{m.peakPlayers}</td>
+                          <td>
+                            {m.endedAt ? <FactionTag name={m.winner} /> : <span className="text-dim">In progress</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
           </Panel>
           <Panel
             title="Top players · 7d"
@@ -274,35 +289,41 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             flush
             action={<PanelLink href={`/leaderboards?server=${server.id}`}>Leaderboard</PanelLink>}
           >
-            <table className="table">
-              <thead>
-                <tr>
-                  <th className="w-10">#</th>
-                  <th>Player</th>
-                  <th className="r">Kills</th>
-                  <th className="r">K/D</th>
-                </tr>
-              </thead>
-              <tbody>
-                {top.map((r) => (
-                  <tr key={r.steamId}>
-                    <td>
-                      <RankCell rank={r.rank} />
-                    </td>
-                    <td className="max-w-44">
-                      <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} />
-                    </td>
-                    <td className="r font-semibold">{int(r.kills)}</td>
-                    <td className="r text-muted">{kd(r.kills, r.deaths)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Section loaded={top}>
+              {({ rows }) => (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th className="w-10">#</th>
+                      <th>Player</th>
+                      <th className="r">Kills</th>
+                      <th className="r">K/D</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.slice(0, 10).map((r) => (
+                      <tr key={r.steamId}>
+                        <td>
+                          <RankCell rank={r.rank} />
+                        </td>
+                        <td className="max-w-44">
+                          <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} />
+                        </td>
+                        <td className="r font-semibold">{int(r.kills)}</td>
+                        <td className="r text-muted">{kd(r.kills, r.deaths)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Section>
           </Panel>
         </div>
 
         <Panel title="Kill feed" flush action={<PanelLink href={`/feed?server=${server.id}`}>Full feed</PanelLink>}>
-          {kills.length ? <KillList kills={kills} /> : <Empty>No kills recorded yet.</Empty>}
+          <Section loaded={kills}>
+            {(rows) => (rows.length ? <KillList kills={rows} /> : <Empty>No kills recorded yet.</Empty>)}
+          </Section>
         </Panel>
       </Container>
     </>
