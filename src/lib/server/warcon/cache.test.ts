@@ -51,8 +51,10 @@ describe('TtlCache', () => {
   });
 
   test('a failure with nothing cached throws, and is not cached', async () => {
-    const cache = new TtlCache();
+    const c = clock();
+    const cache = new TtlCache({ now: c.now });
     await expect(cache.get('k', 1000, async () => Promise.reject(new Error('down')))).rejects.toThrow('down');
+    c.advance(15_001);
     expect((await cache.get('k', 1000, async () => 2)).value).toBe(2);
   });
 
@@ -79,5 +81,49 @@ describe('TtlCache', () => {
     await cache.get('a', 1000, load);
     await cache.get('b', 1000, load);
     expect(load).toHaveBeenCalledTimes(1); // only b reloaded
+  });
+  describe('failure backoff', () => {
+    test('after one failure, calls within 15 s serve the stale value without loading', async () => {
+      const c = clock();
+      const cache = new TtlCache({ now: c.now });
+      await cache.get('k', 1000, async () => 1);
+      c.advance(2000);
+      const boom = vi.fn(async () => {
+        throw new Error('down');
+      });
+      expect(await cache.get('k', 1000, boom)).toEqual({ value: 1, stale: true });
+      for (let i = 0; i < 5; i++) {
+        c.advance(2000);
+        expect(await cache.get('k', 1000, boom)).toEqual({ value: 1, stale: true });
+      }
+      expect(boom).toHaveBeenCalledTimes(1);
+    });
+
+    test('with no stale value, calls within 15 s rethrow the last error without loading', async () => {
+      const c = clock();
+      const cache = new TtlCache({ now: c.now });
+      const boom = vi.fn(async () => {
+        throw new Error('down');
+      });
+      await expect(cache.get('k', 1000, boom)).rejects.toThrow('down');
+      const ok = vi.fn(async () => 2);
+      for (let i = 0; i < 5; i++) {
+        c.advance(1000);
+        await expect(cache.get('k', 1000, ok)).rejects.toThrow('down');
+      }
+      expect(boom).toHaveBeenCalledTimes(1);
+      expect(ok).not.toHaveBeenCalled();
+    });
+
+    test('after 15 s, one new load is attempted (shared by concurrent callers)', async () => {
+      const c = clock();
+      const cache = new TtlCache({ now: c.now });
+      await expect(cache.get('k', 1000, async () => Promise.reject(new Error('down')))).rejects.toThrow('down');
+      c.advance(15_001);
+      const ok = vi.fn(async () => 3);
+      const all = await Promise.all([cache.get('k', 1000, ok), cache.get('k', 1000, ok), cache.get('k', 1000, ok)]);
+      expect(all.every((r) => r.value === 3 && !r.stale)).toBe(true);
+      expect(ok).toHaveBeenCalledTimes(1);
+    });
   });
 });

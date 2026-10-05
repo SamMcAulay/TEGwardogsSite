@@ -28,6 +28,16 @@ describe('parseBoardCsv', () => {
     expect(serialized).not.toContain('PRIVATE-NOTE');
     expect(serialized).not.toContain('watched');
   });
+
+  test('throws when the steam_id or name column is missing', () => {
+    expect(() => parseBoardCsv('rank,name,playtime_min\n1,A,5')).toThrow(/steam_id/);
+    expect(() => parseBoardCsv('rank,steam_id,playtime_min\n1,76561198000000001,5')).toThrow(/name/);
+  });
+
+  test('skips rows whose steam id is not 17 digits', () => {
+    const csv = ['steam_id,name,playtime_min', '76561198000000001,Good,5', '1234,Short,5', ',Blank,5', '7656119800000000x,Bad,5'].join('\n');
+    expect(parseBoardCsv(csv).map((h) => h.name)).toEqual(['Good']);
+  });
 });
 
 describe('SearchIndex', () => {
@@ -56,6 +66,37 @@ describe('SearchIndex', () => {
     t = 15 * 60_000 + 1;
     load.mockRejectedValueOnce(new Error('down'));
     expect(await idx.search('owl')).toHaveLength(2);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  test('after a failed refresh, waits 60 s before trying again', async () => {
+    let t = 0;
+    const load = vi.fn(async () => CSV);
+    const idx = new SearchIndex({ load, now: () => t });
+    await idx.search('owl');
+    t = 15 * 60_000 + 1;
+    load.mockRejectedValue(new Error('down'));
+    expect(await idx.search('owl')).toHaveLength(2);
+    t += 30_000;
+    expect(await idx.search('owl')).toHaveLength(2);
+    t += 29_000;
+    expect(await idx.search('owl')).toHaveLength(2);
+    expect(load).toHaveBeenCalledTimes(2);
+    t += 2_000;
+    await idx.search('owl');
+    expect(load).toHaveBeenCalledTimes(3);
+  });
+
+  test('a failing first load says warming without retrying for 60 s', async () => {
+    let t = 0;
+    const load = vi.fn(async () => Promise.reject(new Error('down')));
+    const idx = new SearchIndex({ load, now: () => t });
+    expect(await idx.search('owl')).toBe('warming');
+    t += 59_000;
+    expect(await idx.search('owl')).toBe('warming');
+    expect(load).toHaveBeenCalledTimes(1);
+    t += 2_000;
+    expect(await idx.search('owl')).toBe('warming');
     expect(load).toHaveBeenCalledTimes(2);
   });
 

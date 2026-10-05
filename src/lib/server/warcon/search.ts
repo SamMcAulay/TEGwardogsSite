@@ -31,26 +31,35 @@ function cells(line: string): string[] {
   return out;
 }
 
+/** Throws when the export has no steam_id or name column (a changed format, not an empty board). */
 export function parseBoardCsv(csv: string): SearchHit[] {
-  const [head, ...lines] = csv.split(/\r?\n/).filter(Boolean);
+  const [head = '', ...lines] = csv.split(/\r?\n/).filter(Boolean);
   const cols = cells(head);
   const at = (name: string) => cols.indexOf(name);
   const [id, name, minutes, lastSeen] = [at('steam_id'), at('name'), at('playtime_min'), at('last_seen')];
-  return lines.map((line) => {
-    const c = cells(line);
-    return { steamId: c[id], name: c[name], minutes: Number(c[minutes]) || 0, lastSeen: c[lastSeen] || null };
-  });
+  for (const [col, i] of [['steam_id', id], ['name', name]] as const) {
+    if (i < 0) throw new Error(`board export has no ${col} column`);
+  }
+  return lines
+    .map((line) => {
+      const c = cells(line);
+      return { steamId: c[id] ?? '', name: c[name] ?? '', minutes: Number(c[minutes]) || 0, lastSeen: c[lastSeen] || null };
+    })
+    .filter((h) => /^\d{17}$/.test(h.steamId));
 }
 
 export class SearchIndex {
   private hits: SearchHit[] | null = null;
   private loadedAt = 0;
+  private failedAt = -Infinity;
   private loading: Promise<void> | null = null;
   private readonly refreshMs: number;
+  private readonly retryMs: number;
   private readonly now: () => number;
 
-  constructor(private readonly opts: { load: () => Promise<string>; refreshMs?: number; now?: () => number }) {
+  constructor(private readonly opts: { load: () => Promise<string>; refreshMs?: number; retryMs?: number; now?: () => number }) {
     this.refreshMs = opts.refreshMs ?? 15 * 60_000;
+    this.retryMs = opts.retryMs ?? 60_000;
     this.now = opts.now ?? Date.now;
   }
 
@@ -65,12 +74,17 @@ export class SearchIndex {
         this.hits = parseBoardCsv(csv).sort((a, b) => b.minutes - a.minutes);
         this.loadedAt = this.now();
       })
-      .catch((e) => console.error('[search] board export failed:', e instanceof Error ? e.message : e))
+      .catch((e) => {
+        // Keep the old list (or 'warming') and leave Warcon alone for a minute.
+        this.failedAt = this.now();
+        console.error('[search] board export failed:', e instanceof Error ? e.message : e);
+      })
       .finally(() => (this.loading = null)));
   }
 
   async search(q: string, limit = 25): Promise<SearchHit[] | 'warming'> {
-    if (!this.hits || this.now() - this.loadedAt > this.refreshMs) await this.refresh();
+    const due = !this.hits || this.now() - this.loadedAt > this.refreshMs;
+    if (due && this.now() - this.failedAt >= this.retryMs) await this.refresh();
     if (!this.hits) return 'warming';
     const query = q.trim().toLowerCase();
     if (query.length < 2) return [];
