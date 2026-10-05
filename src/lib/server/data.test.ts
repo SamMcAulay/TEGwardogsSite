@@ -14,6 +14,8 @@ const api = {
   steamProfiles: vi.fn(async () => ({})),
 };
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => ({ search: async () => [] }) }));
+const bans = { orgBannedIds: vi.fn() };
+vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
@@ -30,6 +32,7 @@ const SERVERS = [
 beforeEach(() => {
   vi.clearAllMocks();
   api.servers.mockResolvedValue(fresh(SERVERS));
+  bans.orgBannedIds.mockResolvedValue({ ids: new Set<string>(), stale: false });
 });
 
 describe('labels', () => {
@@ -101,6 +104,51 @@ describe('leaderboard', () => {
     const r = await leaderboard({ metric: 'perHour', period: '90d' });
     expect(api.board).toHaveBeenCalledWith('s1', { scope: 'org', range: '90d', sort: 'perHour', page: 1 });
     expect(r.data.rows[0]).toMatchObject({ playtime: 7200, value: 20 });
+  });
+});
+
+describe('leaderboard without org-banned players', () => {
+  const row = (n: number) => ({ rank: n, steamId: `7656119800000000${n}`, name: `P${n}`, minutes: 60, kills: 10 - n, deaths: 1, headshots: 0, matches: 1, wins: 1, losses: 0, draws: 0, cash: 0, lastSeen: null });
+  const boardPages = (pages: number[][], pageSize: number) =>
+    api.board.mockImplementation(async (_id: string, q: { page: number }) =>
+      fresh({ ok: true, total: pages.flat().length, pageSize, rows: (pages[q.page - 1] ?? []).map(row) }),
+    );
+  const banned = (...ns: number[]) => bans.orgBannedIds.mockResolvedValue({ ids: new Set(ns.map((n) => `7656119800000000${n}`)), stale: false });
+
+  test('banned players are removed and the ranks renumbered with no gaps', async () => {
+    boardPages([[1, 2, 3]], 50);
+    banned(2);
+    const r = await leaderboard({ metric: 'kills', period: '7d' });
+    expect(r.data.rows.map((x) => [x.rank, x.name])).toEqual([[1, 'P1'], [2, 'P3']]);
+    expect(r.data.total).toBe(2);
+  });
+
+  test('a page short of players is filled from the next Warcon page', async () => {
+    boardPages([[1, 2], [3, 4]], 2);
+    banned(2);
+    const p1 = await leaderboard({ metric: 'kills', period: '7d' });
+    expect(p1.data.rows.map((x) => [x.rank, x.name])).toEqual([[1, 'P1'], [2, 'P3']]);
+    const p2 = await leaderboard({ metric: 'kills', period: '7d', page: 2 });
+    expect(p2.data.rows.map((x) => [x.rank, x.name])).toEqual([[3, 'P4']]);
+  });
+
+  test('applies to a single server board as well', async () => {
+    boardPages([[1, 2]], 50);
+    banned(1);
+    const r = await leaderboard({ metric: 'kills', period: '7d', serverId: 's1' });
+    expect(r.data.rows.map((x) => x.name)).toEqual(['P2']);
+  });
+
+  test('if the ban list cannot be read at all, the board fails instead of showing banned players', async () => {
+    boardPages([[1, 2]], 50);
+    bans.orgBannedIds.mockRejectedValue(new Error('org ban list unavailable'));
+    await expect(leaderboard({ metric: 'kills', period: '7d' })).rejects.toThrow();
+  });
+
+  test('a stale ban list marks the board stale', async () => {
+    boardPages([[1]], 50);
+    bans.orgBannedIds.mockResolvedValue({ ids: new Set<string>(), stale: true });
+    expect((await leaderboard({ metric: 'kills', period: '7d' })).stale).toBe(true);
   });
 });
 

@@ -237,5 +237,14 @@ const seenPlayer = z.object({
 export const seenBody = z.object({ ok: z.literal(true), players: z.array(seenPlayer), total: z.number() });
 export type WSeenPlayer = z.infer<typeof seenPlayer>;
 
+/** The banned-player list (players/seen?flag=banned): who, and on which list — nothing else.
+ *  Used only to keep org-banned players off leaderboards; never shown. */
+export const bannedBody = z.object({
+  ok: z.literal(true),
+  players: z.array(z.object({ steamId: z.string(), banned: z.enum(['org', 'server']).nullable() })),
+  total: z.number(),
+});
+export type WBannedPage = Omit<z.infer<typeof bannedBody>, 'ok'>;
+
 export const steamProfilesBody = z.record(z.string(), z.object({ name: z.string(), avatar: z.string() }).nullable());
 export type WSteamProfiles = z.infer<typeof steamProfilesBody>;

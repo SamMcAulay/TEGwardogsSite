@@ -3,13 +3,13 @@
 import { TtlCache, type Cached } from './cache';
 import type { Warcon } from './http';
 import {
-  analyticsBody, boardBody, careerBody, dossierBody, killsBody, liveBody, matchBody, matchListBody,
+  analyticsBody, bannedBody, boardBody, careerBody, dossierBody, killsBody, liveBody, matchBody, matchListBody,
   seenBody, serversBody, steamProfilesBody,
-  type WAnalytics, type WBoard, type WCareer, type WDossier, type WKills, type WLive, type WMatchList,
+  type WAnalytics, type WBannedPage, type WBoard, type WCareer, type WDossier, type WKills, type WLive, type WMatchList,
   type WMatchView, type WSeenPlayer, type WServer, type WSteamProfiles,
 } from './schemas';
 
-export const TTL = { live: 10_000, kills: 10_000, stats: 60_000, endedMatch: 3_600_000, steam: 86_400_000 } as const;
+export const TTL = { live: 10_000, kills: 10_000, stats: 60_000, endedMatch: 3_600_000, steam: 86_400_000, bans: 600_000 } as const;
 
 export type Range = '7d' | '30d' | '90d' | 'all';
 export type Sort = 'kills' | 'deaths' | 'kd' | 'perHour' | 'playtime' | 'matches' | 'wins' | 'winRate' | 'cash';
@@ -114,6 +114,15 @@ export function createApi(client: Warcon, cache: TtlCache, steamCache = new TtlC
     seen(serverId: string, q: { limit?: number; sort?: 'lastSeen' } = {}): Promise<Cached<WSeenPlayer[]>> {
       const path = `/api/servers/${enc(serverId)}/players/seen${qs({ sort: q.sort ?? 'lastSeen', dir: 'desc', limit: q.limit ?? 30 })}`;
       return cached(path, TTL.stats, async () => (await client.json(path, seenBody)).players);
+    },
+
+    /** One page (100) of the players on this server who are banned, org list or the server's own. */
+    bannedPage(serverId: string, offset: number): Promise<Cached<WBannedPage>> {
+      const path = `/api/servers/${enc(serverId)}/players/seen${qs({ flag: 'banned', sort: 'lastSeen', dir: 'desc', limit: 100, offset })}`;
+      return cached(path, TTL.bans, async () => {
+        const { players, total } = await client.json(path, bannedBody);
+        return { players, total };
+      });
     },
 
     /** Cached per Steam ID for a day; only ids not cached are asked for, 100 per call. Never throws. */
