@@ -1,6 +1,6 @@
 // One cached function per Warcon endpoint the site reads. Freshness per kind of data is
 // spec §5.1; everything else about caching is TtlCache's.
-import type { Cached, TtlCache } from './cache';
+import { TtlCache, type Cached } from './cache';
 import type { Warcon } from './http';
 import {
   analyticsBody, boardBody, careerBody, dossierBody, killsBody, liveBody, matchBody, matchListBody,
@@ -43,8 +43,11 @@ const qs = (params: Record<string, string | number | null | undefined>) => {
   return parts.length ? `?${parts.join('&')}` : '';
 };
 
-export function createApi(client: Warcon, cache: TtlCache) {
+/** steamCache holds one entry per Steam ID, apart from the main cache so avatars don't evict it. */
+export function createApi(client: Warcon, cache: TtlCache, steamCache = new TtlCache({ maxEntries: 5000 })) {
   const cached = <T>(path: string, ttl: number, load: () => Promise<T>): Promise<Cached<T>> => cache.get<T>(path, ttl, load);
+  // After a failed profiles call (often: no Steam key on the panel) skip asking for a while.
+  let steamFailedAt = -Infinity;
 
   return {
     servers(): Promise<Cached<WServer[]>> {
@@ -85,7 +88,8 @@ export function createApi(client: Warcon, cache: TtlCache) {
       return cache.get<WMatchView>(path, (v) => (v.match.endedAt ? TTL.endedMatch : TTL.stats), () => client.json(path, matchBody));
     },
 
-    kills(serverId: string, q: KillQuery): Promise<Cached<WKills>> {
+    /** TTL: opts.ttl when given; counts and one match's kills use the stats TTL; else the feed's. */
+    kills(serverId: string, q: KillQuery, opts: { ttl?: number } = {}): Promise<Cached<WKills>> {
       const path = `/api/servers/${enc(serverId)}/kills${qs({
         limit: q.limit ?? 50,
         before: q.before?.ts,
@@ -99,7 +103,7 @@ export function createApi(client: Warcon, cache: TtlCache) {
         minM: q.minM,
         count: q.count ? 1 : undefined,
       })}`;
-      return cached(path, q.match ? TTL.stats : TTL.kills, () => client.json(path, killsBody));
+      return cached(path, opts.ttl ?? (q.match || q.count ? TTL.stats : TTL.kills), () => client.json(path, killsBody));
     },
 
     analytics(serverId: string, range: '24h' | '7d' | '30d'): Promise<Cached<WAnalytics>> {
@@ -112,18 +116,34 @@ export function createApi(client: Warcon, cache: TtlCache) {
       return cached(path, TTL.stats, async () => (await client.json(path, seenBody)).players);
     },
 
+    /** Cached per Steam ID for a day; only ids not cached are asked for, 100 per call. Never throws. */
     async steamProfiles(ids: string[]): Promise<WSteamProfiles> {
       const unique = [...new Set(ids)].filter((id) => /^\d{17}$/.test(id)).sort();
       const out: WSteamProfiles = {};
-      for (let i = 0; i < unique.length; i += 100) {
-        const batch = unique.slice(i, i + 100);
-        const path = `/api/steam/profiles?ids=${batch.join(',')}`;
+      const todo: string[] = [];
+      for (const id of unique) {
+        const hit = steamCache.peek<WSteamProfiles[string]>(id);
+        if (!hit) todo.push(id);
+        else if (hit.value) out[id] = hit.value;
+      }
+      if (Date.now() - steamFailedAt < 60_000) return out;
+      let failed = false;
+      for (let i = 0; i < todo.length; i += 100) {
+        const batch = todo.slice(i, i + 100);
         try {
-          Object.assign(out, (await cached(path, TTL.steam, () => client.json(path, steamProfilesBody))).value);
+          const got = await client.json(`/api/steam/profiles?ids=${batch.join(',')}`, steamProfilesBody);
+          for (const id of batch) {
+            // An id Warcon has no profile for is remembered as null, so it isn't asked for again today.
+            const p = got[id] ?? null;
+            steamCache.put(id, p, TTL.steam);
+            if (p) out[id] = p;
+          }
         } catch {
           // Avatars are decoration: no Steam key on the panel, or the limit hit, means badges.
+          failed = true;
         }
       }
+      if (failed) steamFailedAt = Date.now();
       return out;
     },
 

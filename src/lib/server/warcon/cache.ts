@@ -87,6 +87,20 @@ export class TtlCache {
     }
   }
 
+  /** A fresh value for key, without loading. */
+  peek<T>(key: string): { value: T } | undefined {
+    const hit = this.entries.get(key);
+    if (!hit || this.now() >= hit.freshUntil) return undefined;
+    this.entries.delete(key);
+    this.entries.set(key, hit);
+    return { value: hit.value as T };
+  }
+
+  /** Store a value loaded outside get() (one batched call filling many keys). */
+  put(key: string, value: unknown, ttlMs: number) {
+    this.store(key, { value, freshUntil: this.now() + ttlMs });
+  }
+
   private store(key: string, entry: Entry) {
     this.entries.delete(key);
     this.entries.set(key, entry);

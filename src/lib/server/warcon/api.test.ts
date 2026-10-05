@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { createApi } from './api';
+import { createApi, TTL } from './api';
 import { TtlCache } from './cache';
 import type { Warcon } from './http';
 
@@ -43,5 +43,35 @@ describe('createApi', () => {
     const ids = Array.from({ length: 150 }, (_, i) => String(BigInt('76561198000000000') + BigInt(i)));
     await expect(api.steamProfiles(ids)).resolves.toEqual({});
     expect(json).toHaveBeenCalledTimes(2);
+  });
+
+  test('steamProfiles caches per id and fetches only the ids it has not seen', async () => {
+    const json = vi.fn(async (path: string) =>
+      Object.fromEntries(path.split('ids=')[1].split(',').map((id) => [id, { name: `n${id.slice(-1)}`, avatar: `a${id.slice(-1)}` }])),
+    );
+    const api = createApi({ json, text: vi.fn() } as unknown as Warcon, new TtlCache());
+    const id = (n: number) => `7656119800000000${n}`;
+    expect(await api.steamProfiles([id(1), id(2)])).toEqual({ [id(1)]: { name: 'n1', avatar: 'a1' }, [id(2)]: { name: 'n2', avatar: 'a2' } });
+    const second = await api.steamProfiles([id(2), id(3)]);
+    expect(json).toHaveBeenCalledTimes(2);
+    expect(json.mock.calls[1][0]).toBe(`/api/steam/profiles?ids=${id(3)}`);
+    expect(second).toEqual({ [id(2)]: { name: 'n2', avatar: 'a2' }, [id(3)]: { name: 'n3', avatar: 'a3' } });
+    await api.steamProfiles([id(1), id(3)]);
+    expect(json).toHaveBeenCalledTimes(2);
+  });
+
+  test('count queries are cached for the stats TTL; an explicit ttl overrides', async () => {
+    let t = 0;
+    const { client, json } = fake({ ok: true, kills: [], total: 3 });
+    const api = createApi(client, new TtlCache({ now: () => t }));
+    await api.kills('s1', { killer: '1', victim: '2', limit: 1, count: true });
+    await api.kills('s1', { match: 9 }, { ttl: TTL.endedMatch });
+    t = TTL.kills + 1;
+    await api.kills('s1', { killer: '1', victim: '2', limit: 1, count: true });
+    await api.kills('s1', { match: 9 }, { ttl: TTL.endedMatch });
+    expect(json).toHaveBeenCalledTimes(2);
+    t = TTL.stats + 1;
+    await api.kills('s1', { killer: '1', victim: '2', limit: 1, count: true });
+    expect(json).toHaveBeenCalledTimes(3);
   });
 });
