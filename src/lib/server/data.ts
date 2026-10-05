@@ -29,6 +29,13 @@ async function serverList() {
   return { list, stale };
 }
 
+/** Server ids a caller may read: all visible ones for null, the one asked for if visible, else none. */
+async function visibleIds(serverId: string | null | undefined): Promise<string[]> {
+  const ids = (await serverList()).list.map((s) => s.id);
+  if (!serverId) return ids;
+  return ids.includes(serverId) ? [serverId] : [];
+}
+
 function serverRow(s: { id: string; name: string }, live: WLive | null): ServerRow {
   const st = live?.status ?? null;
   const shortName = shortNameOf(s.name);
@@ -94,7 +101,7 @@ export async function networkSummary(servers: ServerRow[]): Promise<Loaded<Netwo
 }
 
 export async function population(serverId: string | null, range: '24h' | '7d'): Promise<Loaded<PopulationPoint[]>> {
-  const ids = serverId ? [serverId] : (await serverList()).list.map((s) => s.id);
+  const ids = await visibleIds(serverId);
   const r = await fanOut(ids, (id) => warcon().analytics(id, range));
   const byTs = new Map<number, PopulationPoint>();
   for (const { value } of r.ok) {
@@ -127,7 +134,7 @@ function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes
 }
 
 export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number }) {
-  const anchor = q.serverId ?? (await serverList()).list[0]?.id;
+  const anchor = (await visibleIds(q.serverId))[0];
   if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: 50 });
   const { value, stale } = await warcon().board(anchor, { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric, page: q.page ?? 1 });
   const avatars = await warcon().steamProfiles(value.rows.map((r) => r.steamId));
@@ -191,7 +198,13 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
   const { list } = await serverList();
   const anchor = list[0]?.id;
   if (!anchor) return null;
-  const [dossier, career] = await Promise.all([warcon().dossier(anchor, steamId), warcon().career(anchor, steamId)]);
+  let dossier, career;
+  try {
+    [dossier, career] = await Promise.all([warcon().dossier(anchor, steamId), warcon().career(anchor, steamId)]);
+  } catch (e) {
+    if ((e as { kind?: string }).kind === 'not_found') return null;
+    throw e;
+  }
   const d = dossier.value;
   const c = career.value;
   if (!d.summary.firstSeen && c.matches === 0) return null;
@@ -310,6 +323,7 @@ export async function getMatch(serverId: string, matchId: number) {
 }
 
 export async function serverTotals(serverId: string) {
+  if (!(await visibleIds(serverId)).length) return loaded({ uniquePlayers: 0, matches: 0, kills: 0, headshots: 0, peak: 0 });
   const { value, stale } = await warcon().analytics(serverId, '7d');
   return loaded(
     { uniquePlayers: value.summary.uniquePlayers, matches: value.summary.matches, kills: value.combat?.kills ?? 0, headshots: value.combat?.headshots ?? 0, peak: value.summary.peakPlayers },
@@ -318,7 +332,7 @@ export async function serverTotals(serverId: string) {
 }
 
 export async function factionWins(serverId: string | null) {
-  const ids = serverId ? [serverId] : (await serverList()).list.map((s) => s.id);
+  const ids = await visibleIds(serverId);
   const r = await fanOut(ids, (id) => warcon().analytics(id, '7d'));
   const wins = new Map<string, number>();
   for (const { value } of r.ok) for (const t of value.wins.teams) wins.set(t.name, (wins.get(t.name) ?? 0) + t.wins);

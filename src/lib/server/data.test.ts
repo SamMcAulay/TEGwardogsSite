@@ -16,7 +16,8 @@ const api = {
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => ({ search: async () => [] }) }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
-import { getPlayer, getServers, leaderboard, recentKills, regionOf, shortNameOf } from './data';
+import { WarconError } from './warcon/http';
+import { getPlayer, population, getServers, leaderboard, recentKills, regionOf, shortNameOf } from './data';
 
 const fresh = <T>(value: T) => ({ value, stale: false });
 const SERVERS = [
@@ -83,5 +84,22 @@ describe('recentKills', () => {
     const r = await recentKills({ limit: 1 });
     expect(r.data.map((x) => x.eventId)).toEqual(['a']);
     expect(r.missing).toEqual(['s2']);
+  });
+});
+
+describe('not found and hidden servers', () => {
+  test('a 404 from Warcon for a player is null', async () => {
+    api.dossier.mockRejectedValue(new WarconError('x', 'not_found', 404, '/api/x'));
+    api.career.mockResolvedValue(fresh({}));
+    expect(await getPlayer('76561198000000009')).toBeNull();
+  });
+
+  test('a server outside the visible list never reaches Warcon', async () => {
+    const r = await leaderboard({ metric: 'kills', period: '7d', serverId: 'hidden' });
+    expect(r.data.rows).toEqual([]);
+    expect(api.board).not.toHaveBeenCalled();
+    const p = await population('hidden', '24h');
+    expect(p.data).toEqual([]);
+    expect(api.analytics).not.toHaveBeenCalled();
   });
 });
