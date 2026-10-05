@@ -75,3 +75,15 @@ describe('createApi', () => {
     expect(json).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('bannedPage', () => {
+  test('asks for banned players 100 at a time from an offset, cached for 10 minutes', async () => {
+    const { client, json } = fake({ ok: true, players: [], total: 0 });
+    const cache = new TtlCache();
+    const get = vi.spyOn(cache, 'get');
+    await createApi(client, cache).bannedPage('s1', 200);
+    expect(json.mock.calls[0][0]).toBe('/api/servers/s1/players/seen?flag=banned&sort=lastSeen&dir=desc&limit=100&offset=200');
+    expect(get.mock.calls[0][1]).toBe(TTL.bans);
+    expect(TTL.bans).toBe(600_000);
+  });
+});

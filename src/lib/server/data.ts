@@ -4,7 +4,8 @@ import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
 import { TTL, type KillKind } from './warcon/api';
-import type { WKill, WLive, WMatchSummary } from './warcon/schemas';
+import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
+import { orgBannedIds } from './bans';
 import type {
   KillRow, LeaderRow, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, ServerRow,
@@ -138,13 +139,48 @@ function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes
   }
 }
 
+/** Warcon board pages scanned past the one asked for, to fill it after removing banned players. */
+const BOARD_SCAN_EXTRA = 10;
+
+/**
+ * A leaderboard page without org-banned players. Warcon serves 50 rows a page with its own ranks;
+ * banned rows are dropped, the page is filled from the following Warcon pages, and ranks are
+ * renumbered so the board reads 1, 2, 3 with no gaps. Throws if the ban list has never loaded, so
+ * the page shows "unavailable" rather than banned players.
+ */
 export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number }) {
   const anchor = (await visibleIds(q.serverId))[0];
   if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: 50 });
-  const { value, stale } = await warcon().board(anchor, { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric, page: q.page ?? 1 });
-  const avatars = await warcon().steamProfiles(value.rows.map((r) => r.steamId));
-  const rows: LeaderRow[] = value.rows.map((r) => ({
-    rank: r.rank,
+  const banned = await orgBannedIds();
+  const page = q.page ?? 1;
+  const board = (p: number) =>
+    warcon().board(anchor, { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric, page: p });
+
+  const first = await board(1);
+  const pageSize = first.value.pageSize;
+  const want = page * pageSize;
+  const lastWarconPage = Math.max(1, Math.ceil(first.value.total / pageSize));
+  const kept: WBoardRow[] = [];
+  let bannedSeen = 0;
+  let stale = first.stale || banned.stale;
+  let scanned = 0;
+  for (let p = 1; p <= lastWarconPage && p <= page + BOARD_SCAN_EXTRA && kept.length < want; p++) {
+    const cur = p === 1 ? first : await board(p);
+    stale ||= cur.stale;
+    scanned = p;
+    for (const r of cur.value.rows) {
+      if (banned.ids.has(r.steamId)) bannedSeen++;
+      else kept.push(r);
+    }
+  }
+  // Exact once every Warcon page was read; otherwise Warcon's total less the banned rows met so far.
+  const total = scanned >= lastWarconPage ? kept.length : Math.max(kept.length, first.value.total - bannedSeen);
+
+  const start = (page - 1) * pageSize;
+  const slice = kept.slice(start, start + pageSize);
+  const avatars = await warcon().steamProfiles(slice.map((r) => r.steamId));
+  const rows: LeaderRow[] = slice.map((r, i) => ({
+    rank: start + i + 1,
     steamId: r.steamId,
     name: r.name,
     avatarUrl: avatars[r.steamId]?.avatar || null,
@@ -158,7 +194,7 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     value: metricValue(q.metric, r),
     lastSeen: sec(r.lastSeen),
   }));
-  return loaded({ rows, total: value.total, pageSize: value.pageSize }, stale);
+  return loaded({ rows, total, pageSize }, stale);
 }
 
 export async function searchPlayers(q: string): Promise<PlayerSearchRow[] | 'warming'> {

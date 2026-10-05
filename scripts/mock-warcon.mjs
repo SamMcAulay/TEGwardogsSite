@@ -80,6 +80,17 @@ function board(params) {
   return rows;
 }
 
+// The three best killers are on the org ban list, so the boards visibly skip them in development;
+// one more player is banned on a single server only, which the site must ignore.
+const ORG_BANNED = board(new URLSearchParams('sort=kills')).slice(0, 3).map((r) => r.steamId);
+const SERVER_BANNED = [PLAYERS[PLAYERS.length - 1].steamId];
+function bannedList(q) {
+  const all = [...ORG_BANNED.map((steamId) => ({ steamId, banned: 'org' })), ...SERVER_BANNED.map((steamId) => ({ steamId, banned: 'server' }))]
+    .map((b) => ({ ...b, name: PLAYERS.find((p) => p.steamId === b.steamId).name, aliases: [], firstSeen: iso(now()), lastSeen: iso(now()), minutes: 60, kills: 1, deaths: 1, online: false, lastServerId: 'srv-1', watched: false, steam: null }));
+  const offset = Number(q.get('offset') ?? 0);
+  return { ok: true, total: all.length, players: all.slice(offset, offset + Number(q.get('limit') ?? 50)) };
+}
+
 const routes = [
   [/^\/api\/servers$/, () => ({ ok: true, servers: SERVERS })],
   [/^\/api\/servers\/([^/]+)\/summary$/, (_, id) => {
@@ -152,7 +163,7 @@ const routes = [
       cash: [], maps: MAPS.map((map) => ({ map, minutes: 600, matches: 5 })), wins: { teams: FACTIONS.map((f, i) => ({ ...f, wins: 10 - i * 3 })), decided: 17, draws: 0, noResult: 1 },
       players: [], matches: [], hourly: [], combat: { kills: 4000, headshots: 800, teamKills: 20, suicides: 5, vehicleKills: 30, perBucket: [], causes: [], players: [], longest: [] } };
   }],
-  [/^\/api\/servers\/([^/]+)\/players\/seen$/, (q, id) => ({
+  [/^\/api\/servers\/([^/]+)\/players\/seen$/, (q, id) => q.get('flag') === 'banned' ? bannedList(q) : ({
     ok: true, total: PLAYERS.length,
     players: PLAYERS.slice(0, Number(q.get('limit') ?? 30)).map((p, i) => ({ ...p, aliases: [], firstSeen: iso(now() - 86_400_000), lastSeen: iso(now() - i * 90_000), sessions: 3, minutes: 300, kills: 40, deaths: 30, servers: 1, online: i < 5, lastServerId: id, lastServerName: id, banned: null, watched: i === 0, steam: null })),
   })],

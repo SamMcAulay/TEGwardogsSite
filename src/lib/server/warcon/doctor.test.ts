@@ -14,6 +14,7 @@ const api = (over: Record<string, unknown> = {}) =>
     kills: () => okCached({ ok: true, kills: [], total: 0 }),
     analytics: () => okCached({}),
     seen: () => okCached([]),
+    bannedPage: () => okCached({ players: [], total: 0 }),
     boardExportCsv: async () => 'rank,steam_id,name\n',
     dossier: () => okCached({}),
     career: () => okCached({}),
@@ -35,7 +36,7 @@ describe('runChecks', () => {
 
   test('each endpoint is checked per server', async () => {
     const r = await runChecks(api(), { ...env, serverIds: [] });
-    expect(r.filter((c) => c.name.endsWith('(s1)')).map((c) => c.name)).toEqual(['summary (s1)', 'leaderboard (s1)', 'matches (s1)', 'kills (s1)', 'analytics (s1)', 'players/seen (s1)']);
+    expect(r.filter((c) => c.name.endsWith('(s1)')).map((c) => c.name)).toEqual(['summary (s1)', 'leaderboard (s1)', 'matches (s1)', 'kills (s1)', 'analytics (s1)', 'players/seen (s1)', 'banned players (s1)']);
     expect(r.every((c) => c.ok)).toBe(true);
   });
 

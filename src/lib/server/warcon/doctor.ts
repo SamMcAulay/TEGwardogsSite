@@ -35,6 +35,8 @@ export async function runChecks(api: WarconApi, env: SiteEnv): Promise<Check[]> 
       ['kills', () => api.kills(id, { limit: 1 })],
       ['analytics', () => api.analytics(id, '24h')],
       ['players/seen', () => api.seen(id, { limit: 1 })],
+      // keeps org-banned players off the leaderboards; without it every board shows "unavailable"
+      ['banned players', () => api.bannedPage(id, 0)],
     ];
     for (const [name, run] of checks) {
       try {

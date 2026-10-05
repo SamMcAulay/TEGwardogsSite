@@ -67,3 +67,15 @@ describe('schemas are the privacy boundary', () => {
     expect(JSON.stringify(out)).not.toMatch(/banned|watched/);
   });
 });
+
+describe('banned-player list', () => {
+  test('keeps only steamId and banned; names, aliases and the rest are dropped', async () => {
+    const { bannedBody } = await import('./schemas');
+    const out = bannedBody.parse({
+      ok: true,
+      total: 1,
+      players: [{ steamId: '76561198000000001', name: 'A', aliases: ['B'], watched: true, minutes: 9, banned: 'org', steam: null }],
+    });
+    expect(out.players).toEqual([{ steamId: '76561198000000001', banned: 'org' }]);
+  });
+});
