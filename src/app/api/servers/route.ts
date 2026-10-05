@@ -4,7 +4,10 @@ export const dynamic = 'force-dynamic';
 
 /** Public live status for every server. No player list, no private fields. */
 export async function GET() {
-  const loaded = await getServers().catch(() => undefined);
+  const loaded = await getServers().catch((e) => {
+    console.error('[api] /api/servers failed:', e instanceof Error ? e.message : e);
+    return undefined;
+  });
   if (!loaded) return Response.json({ error: 'unavailable' }, { status: 503 });
   const servers = loaded.data.map((s) => ({
     id: s.id,

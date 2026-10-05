@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AreaChart } from '@/components/charts';
 import { AutoRefresh } from '@/components/client';
-import { FactionScores, MapBackdrop } from '@/components/game';
+import { FactionScores, MapBackdrop, statusLabel } from '@/components/game';
 import { Badge, Container, PageHeader, StatusDot } from '@/components/ui';
 import { ago, clock, int } from '@/lib/format';
 import { lightingName, mapName, REGION_NAMES } from '@/lib/game';
@@ -13,7 +13,8 @@ export const metadata: Metadata = { title: 'Servers' };
 
 export default async function ServersPage() {
   const servers = await safe(getServers());
-  const summaryLoaded = await safe(networkSummary(servers instanceof Error ? [] : servers.data));
+  // No server list means no summary: never claim zero players when we simply don't know.
+  const summaryLoaded = servers instanceof Error ? servers : await safe(networkSummary(servers.data));
   const summary = summaryLoaded instanceof Error ? null : summaryLoaded.data;
   // One chart per server, so each server's own population rather than the network total.
   const pops = new Map(
@@ -30,7 +31,7 @@ export default async function ServersPage() {
       <PageHeader
         eyebrow={
           <>
-            <StatusDot online={(summary?.serversOnline ?? 0) > 0} />{' '}
+            <StatusDot online={summary ? summary.serversOnline > 0 : null} />{' '}
             {summary ? `${summary.serversOnline} of ${summary.serversTotal} online` : 'Status unavailable'}
           </>
         }
@@ -39,8 +40,8 @@ export default async function ServersPage() {
         actions={
           <div className="text-right">
             <div className="display num text-4xl leading-none">
-              {int(summary?.playersOnline ?? 0)}
-              <span className="text-xl text-dim">/{int(summary?.capacity ?? 0)}</span>
+              {summary ? int(summary.playersOnline) : '—'}
+              <span className="text-xl text-dim">/{summary ? int(summary.capacity) : '—'}</span>
             </div>
             <div className="eyebrow mt-1">Players on the network</div>
           </div>
@@ -71,7 +72,7 @@ export default async function ServersPage() {
                               <div className="flex items-center gap-2">
                                 <StatusDot online={s.online} />
                                 <span className="eyebrow !text-[0.66rem] !text-text">
-                                  {s.online ? 'Online' : 'Offline'}
+                                  {statusLabel(s.online)}
                                 </span>
                               </div>
                               <div className="display mt-3 text-3xl leading-none text-text">{s.shortName}</div>
@@ -102,8 +103,14 @@ export default async function ServersPage() {
                               </>
                             ) : (
                               <div className="flex h-full flex-col items-start justify-center gap-2 text-sm text-muted">
-                                <Badge tone="bad">Unreachable</Badge>
-                                {s.updatedAt ? `Last seen ${ago(s.updatedAt)}` : 'No contact yet'}
+                                {s.online === null ? (
+                                  <Badge>Status unavailable</Badge>
+                                ) : (
+                                  <>
+                                    <Badge tone="bad">Unreachable</Badge>
+                                    {s.updatedAt ? `Last seen ${ago(s.updatedAt)}` : 'No contact yet'}
+                                  </>
+                                )}
                               </div>
                             )}
                           </div>

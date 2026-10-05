@@ -73,6 +73,9 @@ export function FactionScores({
   );
 }
 
+export const statusLabel = (online: boolean | null) =>
+  online === null ? 'Status unavailable' : online ? 'Online' : 'Offline';
+
 export function ServerCard({ server }: { server: ServerRow }) {
   const st = server.status;
   const pop = server.playerCount;
@@ -88,7 +91,7 @@ export function ServerCard({ server }: { server: ServerRow }) {
         <div className="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/40 to-transparent" />
         <div className="absolute top-3 left-4 flex items-center gap-2">
           <StatusDot online={server.online} />
-          <span className="eyebrow !text-[0.66rem] !text-text">{server.online ? 'Online' : 'Offline'}</span>
+          <span className="eyebrow !text-[0.66rem] !text-text">{statusLabel(server.online)}</span>
         </div>
         <div className="absolute top-3 right-4 eyebrow !text-[0.66rem]">
           {REGION_NAMES[server.region] ?? server.region}
@@ -122,7 +125,11 @@ export function ServerCard({ server }: { server: ServerRow }) {
           </>
         ) : (
           <div className="py-5 text-center text-sm text-muted">
-            {server.updatedAt ? `Last seen ${ago(server.updatedAt)}` : 'Waiting for first contact'}
+            {server.online === null
+              ? 'Status unavailable right now'
+              : server.updatedAt
+                ? `Last seen ${ago(server.updatedAt)}`
+                : 'Waiting for first contact'}
           </div>
         )}
       </div>

@@ -10,6 +10,9 @@ import { one, withParams } from '@/lib/url';
 export const metadata: Metadata = { title: 'Kill feed' };
 
 const LIMIT = 60;
+const MIN_DISTANCES = [100, 250, 400] as const;
+/** Weapon/cause ids are short identifiers; anything else is ignored rather than sent on. */
+const CAUSE = /^[A-Za-z0-9._-]{1,80}$/;
 
 export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
   const sp = await searchParams;
@@ -20,10 +23,10 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
   const kindParam = one(sp.kind);
   const kind =
     (['headshot', 'teamKill', 'suicide', 'vehicle', 'environment'] as const).find((k) => k === kindParam) ?? '';
-  const minM = Number(one(sp.minM)) || null;
-  const kills = await safe(
-    recentKills({ serverId, before, limit: LIMIT, kind, minM, cause: one(sp.cause) ?? undefined }),
-  );
+  const minM = MIN_DISTANCES.find((m) => m === Number(one(sp.minM))) ?? null;
+  const causeParam = one(sp.cause);
+  const cause = causeParam && CAUSE.test(causeParam) ? causeParam : undefined;
+  const kills = await safe(recentKills({ serverId, before, limit: LIMIT, kind, minM, cause }));
   const oldest = !(kills instanceof Error) && serverId ? kills.data[kills.data.length - 1]?.cursor : undefined;
 
   return (
@@ -76,7 +79,7 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
             active={String(minM ?? 'any')}
             items={[
               { key: 'any', label: 'Any', href: withParams('/feed', sp, { minM: null, before: null }) },
-              ...[100, 250, 400].map((m) => ({
+              ...MIN_DISTANCES.map((m) => ({
                 key: String(m),
                 label: `${m} m`,
                 href: withParams('/feed', sp, { minM: m, before: null }),

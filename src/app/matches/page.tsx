@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { Badge, Container, Empty, FactionTag, PageHeader, Pagination, Panel, Segmented } from '@/components/ui';
 import { dateTime, duration } from '@/lib/format';
 import { factionColor, lightingName, mapName } from '@/lib/game';
@@ -16,8 +17,12 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
   const servers = await safe(getServers());
   const serverList = servers instanceof Error ? [] : servers.data;
   const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
-  const page = pageParam(one(sp.page));
+  // Older pages only per server (spec §12.5): "All servers" is the newest 50 merged.
+  const page = serverId ? pageParam(one(sp.page)) : 1;
   const matches = await safe(listMatches({ serverId, page }));
+  if (!(matches instanceof Error) && !matches.missing.length && page > matches.data.pages) {
+    redirect(withParams('/matches', sp, { page: matches.data.pages > 1 ? matches.data.pages : null }));
+  }
   const now = nowSec();
 
   return (
@@ -100,7 +105,11 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                 ) : (
                   <Empty>No rounds recorded yet.</Empty>
                 )}
-                <Pagination page={page} pages={pages} href={(p) => withParams('/matches', sp, { page: p })} />
+                {serverId ? (
+                  <Pagination page={page} pages={pages} href={(p) => withParams('/matches', sp, { page: p })} />
+                ) : (
+                  <p className="border-t border-line px-4 py-3 text-sm text-muted">Pick a server to browse older matches.</p>
+                )}
               </>
             )}
           </Section>

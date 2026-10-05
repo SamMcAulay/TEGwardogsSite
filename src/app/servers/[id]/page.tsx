@@ -142,9 +142,11 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </span>
         }
         description={
-          server.online
-            ? `Up ${duration(server.startedAt ? now - server.startedAt : 0)} · last polled ${ago(server.updatedAt, now)}`
-            : `Offline${server.updatedAt ? ` · last seen ${ago(server.updatedAt, now)}` : ''}`
+          server.online === null
+            ? 'Status unavailable right now'
+            : server.online
+              ? `Up ${duration(server.startedAt ? now - server.startedAt : 0)} · last polled ${ago(server.updatedAt, now)}`
+              : `Offline${server.updatedAt ? ` · last seen ${ago(server.updatedAt, now)}` : ''}`
         }
         actions={
           server.joinCode && (
@@ -163,7 +165,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             label="Players"
             value={
               <>
-                {server.playerCount}
+                {server.online === null ? '—' : server.playerCount}
                 <span className="text-lg text-dim">/{st?.players.max ?? '—'}</span>
               </>
             }
@@ -208,7 +210,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                   <FactionScores scores={st.factionScores} cap={st.scoreCap} />
                 </>
               ) : (
-                <Empty>Server is offline.</Empty>
+                <Empty>{server.online === null ? 'Status unavailable right now.' : 'Server is offline.'}</Empty>
               )}
             </div>
           </Panel>
@@ -236,7 +238,10 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Panel>
         </div>
 
-        <Panel title="Live scoreboard" action={<span>{server.playerCount} connected</span>}>
+        <Panel
+          title="Live scoreboard"
+          action={<span>{server.online === null ? 'Status unavailable' : `${server.playerCount} connected`}</span>}
+        >
           {server.players.length ? (
             <div className="grid gap-3 lg:grid-cols-3">
               {factions.map((f) => (

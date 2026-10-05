@@ -51,13 +51,14 @@ async function OnlinePill() {
   const servers = loaded.data;
   const online = servers.reduce((a, s) => a + s.playerCount, 0);
   const up = servers.filter((s) => s.online).length;
+  const unknown = servers.filter((s) => s.online === null).length;
   return (
     <Link
       href="/servers"
       className="hidden items-center gap-2 border border-line-strong px-3 py-1.5 text-xs transition-colors hover:border-accent md:flex"
-      title={`${up}/${servers.length} servers online`}
+      title={`${up}/${servers.length} servers online${unknown ? ` · ${unknown} status unavailable` : ''}`}
     >
-      <StatusDot online={up > 0} />
+      <StatusDot online={up > 0 ? true : unknown ? null : false} />
       <span className="num font-semibold text-text">{int(online)}</span>
       <span className="text-muted">online</span>
     </Link>

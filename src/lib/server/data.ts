@@ -3,7 +3,7 @@
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
-import type { KillKind } from './warcon/api';
+import { TTL, type KillKind } from './warcon/api';
 import type { WKill, WLive, WMatchSummary } from './warcon/schemas';
 import type {
   KillRow, LeaderRow, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
@@ -36,7 +36,8 @@ async function visibleIds(serverId: string | null | undefined): Promise<string[]
   return ids.includes(serverId) ? [serverId] : [];
 }
 
-function serverRow(s: { id: string; name: string }, live: WLive | null): ServerRow {
+/** live: Warcon's answer (null = it has never observed the server); unknown = the call failed. */
+function serverRow(s: { id: string; name: string }, live: WLive | null, unknown = false): ServerRow {
   const st = live?.status ?? null;
   const shortName = shortNameOf(s.name);
   return {
@@ -44,7 +45,7 @@ function serverRow(s: { id: string; name: string }, live: WLive | null): ServerR
     name: s.name,
     shortName,
     region: regionOf(shortName),
-    online: !!live?.ok && !!st,
+    online: unknown ? null : !!live?.ok && !!st,
     updatedAt: sec(live?.observedAt),
     status: st && {
       serverName: st.serverName,
@@ -66,7 +67,7 @@ function serverRow(s: { id: string; name: string }, live: WLive | null): ServerR
 export async function getServers(): Promise<Loaded<ServerRow[]>> {
   const { list, stale } = await serverList();
   const r = await fanOut(list.map((s) => s.id), (id) => warcon().live(id));
-  const rows = list.map((s) => serverRow(s, r.ok.find((o) => o.id === s.id)?.value ?? null));
+  const rows = list.map((s) => serverRow(s, r.ok.find((o) => o.id === s.id)?.value ?? null, r.failed.includes(s.id)));
   return loaded(rows, stale || r.stale, r.failed);
 }
 
@@ -78,26 +79,29 @@ export async function getServer(id: string): Promise<Loaded<ServerRow> | null> {
     const live = await warcon().live(id);
     return loaded(serverRow(s, live.value), live.stale);
   } catch {
-    return loaded(serverRow(s, null), false, [id]);
+    return loaded(serverRow(s, null, true), false, [id]);
   }
 }
 
+/** Servers whose live status is unknown count toward serversTotal only, and are listed in missing. */
 export async function networkSummary(servers: ServerRow[]): Promise<Loaded<NetworkSummary>> {
   const r = await fanOut(servers.map((s) => s.id), (id) => warcon().analytics(id, '24h'));
   const sum = (f: (a: (typeof r.ok)[number]['value']) => number) => r.ok.reduce((n, o) => n + f(o.value), 0);
+  const known = servers.filter((s) => s.online !== null);
+  const unknown = servers.filter((s) => s.online === null).map((s) => s.id);
   return loaded(
     {
-      playersOnline: servers.reduce((n, s) => n + s.playerCount, 0),
-      capacity: servers.reduce((n, s) => n + (s.status?.players.max ?? 0), 0),
-      serversOnline: servers.filter((s) => s.online).length,
+      playersOnline: known.reduce((n, s) => n + s.playerCount, 0),
+      capacity: known.reduce((n, s) => n + (s.status?.players.max ?? 0), 0),
+      serversOnline: known.filter((s) => s.online).length,
       serversTotal: servers.length,
       killsToday: sum((a) => a.combat?.kills ?? 0),
       playersToday: sum((a) => a.summary.uniquePlayers),
       matchesToday: sum((a) => a.summary.matches),
-      peakToday: sum((a) => a.summary.peakPlayers),
+      peakToday: Math.max(0, ...r.ok.map((o) => o.value.summary.peakPlayers)),
     },
     r.stale,
-    r.failed,
+    [...new Set([...unknown, ...r.failed])],
   );
 }
 
@@ -210,6 +214,8 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
   const c = career.value;
   if (!d.summary.firstSeen && c.matches === 0) return null;
   const nameOf = new Map(list.map((s) => [s.id, s.name]));
+  // SERVER_IDS hides servers everywhere, including a player's history on them.
+  const shown = (serverId: string) => nameOf.has(serverId);
   const group = (g: { key: string; matches: number; wins: number; kills: number; deaths: number }) => ({ key: g.key, matches: g.matches, wins: g.wins, kills: g.kills, deaths: g.deaths });
   return loaded(
     {
@@ -226,19 +232,19 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       },
       rank: c.rank.org,
       streak: c.streak,
-      onlineOn: d.online,
+      onlineOn: d.online && shown(d.online.serverId) ? d.online : null,
       weapons: (d.combat?.causes ?? []).map((w) => ({ cause: w.cause, kills: w.kills })),
       victims: (d.combat?.victims ?? []).map((v) => ({ steamId: v.steamId, name: v.name, count: v.kills })),
       nemeses: (d.combat?.nemeses ?? []).map((v) => ({ steamId: v.steamId, name: v.name, count: v.deaths })),
-      servers: d.perServer.map((p) => ({ serverId: p.serverId, name: p.serverName, playtime: p.minutes * 60, kills: p.kills })),
-      matches: c.last.map((m) => ({
+      servers: d.perServer.filter((p) => shown(p.serverId)).map((p) => ({ serverId: p.serverId, name: p.serverName, playtime: p.minutes * 60, kills: p.kills })),
+      matches: c.last.filter((m) => shown(m.serverId)).map((m) => ({
         matchId: m.matchId, serverId: m.serverId, serverName: shortNameOf(nameOf.get(m.serverId) ?? m.serverName),
         map: m.map ?? '', startedAt: sec(m.startedAt)!, endedAt: sec(m.endedAt), faction: m.faction, result: m.result,
         kills: m.kills, deaths: m.deaths, timePlayed: m.seconds,
       })),
       maps: c.maps.map(group),
       factions: c.factions.map(group),
-      recentKills: (d.combat?.recent ?? []).map((k) => killRow(k, k.serverId, shortNameOf(k.serverName))),
+      recentKills: (d.combat?.recent ?? []).filter((k) => shown(k.serverId)).map((k) => killRow(k, k.serverId, shortNameOf(k.serverName))),
     },
     dossier.stale || career.stale,
   );
@@ -274,16 +280,19 @@ function matchRow(m: WMatchSummary, serverId: string, serverName: string, colour
   };
 }
 
+/** Pages only for one server: across all servers, the newest `limit` merged from each one's page 1
+ *  (merging deeper pages per server would skip or repeat matches). */
 export async function listMatches(q: { serverId?: string | null; limit?: number; page?: number } = {}) {
   const { list } = await serverList();
   const servers = q.serverId ? list.filter((s) => s.id === q.serverId) : list;
   const limit = q.limit ?? 50;
-  const r = await fanOut(servers.map((s) => s.id), (id) => warcon().matches(id, q.page ?? 1));
+  const page = q.serverId ? (q.page ?? 1) : 1;
+  const r = await fanOut(servers.map((s) => s.id), (id) => warcon().matches(id, page));
   const lists = r.ok.map(({ id, value }) => {
     const colours = new Map(value.live.map((f) => [f.name, f.colorHex]));
     return value.matches.map((m) => matchRow(m, id, shortNameOf(list.find((s) => s.id === id)!.name), colours));
   });
-  const pages = Math.max(1, ...r.ok.map((o) => o.value.pages));
+  const pages = q.serverId ? Math.max(1, ...r.ok.map((o) => o.value.pages)) : 1;
   return loaded({ rows: mergeNewest(lists, (m) => m.startedAt, limit), pages }, r.stale, r.failed);
 }
 
@@ -300,7 +309,14 @@ export async function getMatch(serverId: string, matchId: number) {
   }
   const v = view.value;
   const colours = new Map(v.factions.map((f) => [f.name, f.colorHex]));
-  const kills = await warcon().kills(serverId, { match: matchId, limit: 200 });
+  // The match is still worth showing without its kill feed.
+  let kills: { value: { kills: WKill[] }; stale: boolean };
+  try {
+    kills = await warcon().kills(serverId, { match: matchId, limit: 200 }, { ttl: v.match.endedAt ? TTL.endedMatch : TTL.stats });
+  } catch (e) {
+    console.error('[data] match kills failed:', e instanceof Error ? e.message : e);
+    kills = { value: { kills: [] }, stale: true };
+  }
   const killRows = kills.value.kills.map((k) => killRow(k, serverId, shortNameOf(server.name)));
   const weaponCounts = new Map<string, number>();
   for (const k of killRows) if (k.cause) weaponCounts.set(k.cause, (weaponCounts.get(k.cause) ?? 0) + 1);
@@ -343,7 +359,7 @@ export async function factionWins(serverId: string | null) {
 export async function headToHead(a: string, b: string) {
   const { list } = await serverList();
   const count = async (killer: string, victim: string) => {
-    const r = await fanOut(list.map((s) => s.id), (id) => warcon().kills(id, { killer, victim, limit: 1, count: true }));
+    const r = await fanOut(list.map((s) => s.id), (id) => warcon().kills(id, { killer, victim, limit: 1, count: true }, { ttl: TTL.stats }));
     return { n: r.ok.reduce((s, o) => s + (o.value.total ?? 0), 0), stale: r.stale, failed: r.failed };
   };
   const [ab, ba] = await Promise.all([count(a, b), count(b, a)]);

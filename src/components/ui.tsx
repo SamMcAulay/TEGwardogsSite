@@ -100,11 +100,16 @@ export function StatGrid({ children, className }: { children: ReactNode; classNa
   return <div className={cx('grid gap-px border border-line bg-line', className)}>{children}</div>;
 }
 
-export function StatusDot({ online, className }: { online: boolean; className?: string }) {
+/** online null: status unknown (Warcon didn't answer), drawn as a hollow ring. */
+export function StatusDot({ online, className }: { online: boolean | null; className?: string }) {
   return (
     <span
-      className={cx('inline-block size-2 shrink-0 rounded-full', online ? 'live-dot bg-good' : 'bg-dim', className)}
-      aria-label={online ? 'Online' : 'Offline'}
+      className={cx(
+        'inline-block size-2 shrink-0 rounded-full',
+        online === null ? 'border border-dim' : online ? 'live-dot bg-good' : 'bg-dim',
+        className,
+      )}
+      aria-label={online === null ? 'Status unavailable' : online ? 'Online' : 'Offline'}
     />
   );
 }

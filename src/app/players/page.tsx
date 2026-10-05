@@ -29,8 +29,9 @@ function PlayerTile({ p, meta }: { p: PlayerSearchRow; meta: React.ReactNode }) 
   );
 }
 
-function onlineCount(servers: Awaited<ReturnType<typeof getServers>> | Error): number {
-  return servers instanceof Error ? 0 : servers.data.reduce((n, s) => n + s.players.length, 0);
+/** null when the server list failed: the header then says "—" rather than claim nobody is on. */
+function onlineCount(servers: Awaited<ReturnType<typeof getServers>> | Error): number | null {
+  return servers instanceof Error ? null : servers.data.reduce((n, s) => n + s.players.length, 0);
 }
 
 export default async function PlayersPage({ searchParams }: PageProps<'/players'>) {
@@ -38,7 +39,11 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
   const q = (one(sp.q) ?? '').trim().slice(0, 64);
   const servers = await safe(getServers());
   const [results, recent] = await Promise.all([
-    q ? searchPlayers(q).catch(() => [] as const) : Promise.resolve(null),
+    q ? searchPlayers(q).catch((e) => {
+          console.error('[data] player search failed:', e instanceof Error ? e.message : e);
+          return 'unavailable' as const;
+        })
+      : Promise.resolve(null),
     safe(recentPlayers(30)),
   ]);
   // A single exact hit goes straight to the profile.
@@ -46,6 +51,7 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
     const only = results[0] as PlayerSearchRow;
     if (only.steamId === q || only.name.toLowerCase() === q.toLowerCase()) redirect(`/players/${only.steamId}`);
   }
+  const online = onlineCount(servers);
   const now = nowSec();
   const seen = (ts: number | null) => (ts ? `Seen ${ago(ts, now)}` : 'Seen —');
 
@@ -54,7 +60,7 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
       <PageHeader
         eyebrow="Profiles"
         title="Players"
-        description="Search by in-game name, a previous alias, or a 17-digit Steam ID."
+        description="Search by in-game name or a 17-digit Steam ID."
       >
         <div className="mt-8 max-w-2xl">
           <SearchBox defaultValue={q} autoFocus={!q} large />
@@ -69,6 +75,8 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
           >
             {results === 'warming' ? (
               <Empty>Search is warming up. Try again in a moment.</Empty>
+            ) : results === 'unavailable' ? (
+              <Empty>Search is temporarily unavailable. Try again in a minute.</Empty>
             ) : results && results.length ? (
               <div className="grid sm:grid-cols-2 lg:grid-cols-3">
                 {(results as readonly PlayerSearchRow[]).map((p) => (
@@ -99,23 +107,23 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
             <Panel
               title={
                 <span className="flex items-center gap-2">
-                  <StatusDot online={onlineCount(servers) > 0} /> Online now
+                  <StatusDot online={online === null ? null : online > 0} /> Online now
                 </span>
               }
-              action={`${int(onlineCount(servers))} players`}
+              action={online === null ? '—' : `${int(online)} players`}
               flush
               className="lg:col-span-1"
             >
               <Section loaded={servers}>
                 {(list) => {
-                  const online = list
+                  const playing = list
                     .flatMap((s) => s.players.map((p) => ({ ...p, server: s.shortName })))
                     .sort((a, b) => b.kills - a.kills);
                   return (
                     <div className="max-h-[640px] overflow-y-auto">
                       <table className="table">
                         <tbody>
-                          {online.map((p) => (
+                          {playing.map((p) => (
                             <tr key={p.steamId}>
                               <td className="max-w-40">
                                 <Link href={`/players/${p.steamId}`} className="link block truncate font-medium">
@@ -130,7 +138,7 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
                           ))}
                         </tbody>
                       </table>
-                      {!online.length && <Empty>Nobody is online.</Empty>}
+                      {!playing.length && <Empty>Nobody is online.</Empty>}
                     </div>
                   );
                 }}

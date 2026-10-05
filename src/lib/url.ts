@@ -14,9 +14,10 @@ export function withParams(
   return s ? `${path}?${s}` : path;
 }
 
+/** A page number from the query: floored, at least 1, at most 1000 (pages clamp further to their count). */
 export function pageParam(v: unknown): number {
-  const n = Number(v);
-  return Number.isInteger(n) && n > 0 ? Math.min(n, 1000) : 1;
+  const n = Math.floor(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 1000) : 1;
 }
 
 export function one(v: string | string[] | undefined): string | undefined {

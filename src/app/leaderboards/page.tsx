@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
 import { getServers, leaderboard } from '@/lib/server/data';
 import { METRIC_LABELS, METRICS, parseMetric, parsePeriod, PERIOD_LABELS, PERIODS, type LeaderRow, type Metric } from '@/lib/server/views';
-import { one, withParams } from '@/lib/url';
+import { one, pageParam, withParams } from '@/lib/url';
 
 export const metadata: Metadata = { title: 'Leaderboards' };
 
@@ -47,11 +48,15 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
   const sp = await searchParams;
   const metric = parseMetric(one(sp.metric));
   const period = parsePeriod(one(sp.period), '7d');
-  const page = Math.max(1, Number(one(sp.page)) || 1);
+  const page = pageParam(one(sp.page));
   const servers = await safe(getServers());
   const serverList = servers instanceof Error ? [] : servers.data;
   const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
   const board = await safe(leaderboard({ metric, period, serverId, page }));
+  if (!(board instanceof Error) && page > 1) {
+    const pages = Math.max(1, Math.ceil(board.data.total / board.data.pageSize));
+    if (page > pages) redirect(withParams('/leaderboards', sp, { page: pages > 1 ? pages : null }));
+  }
   const now = nowSec();
 
   return (

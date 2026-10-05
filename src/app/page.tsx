@@ -43,9 +43,9 @@ function MiniBoard({
 
 export default async function Home() {
   const servers = await safe(getServers());
-  const serverRows = servers instanceof Error ? [] : servers.data;
   const [summary, pop, kills, kdBoard, feed, wins] = await Promise.all([
-    safe(networkSummary(serverRows)),
+    // Without the server list there is no summary to give; never a row of zeros.
+    servers instanceof Error ? servers : safe(networkSummary(servers.data)),
     safe(population(null, '24h')),
     safe(leaderboard({ metric: 'kills', period: '7d' })),
     safe(leaderboard({ metric: 'kd', period: '7d' })),
@@ -102,8 +102,8 @@ export default async function Home() {
                     accent
                   />
                   <Stat label="Servers online" value={`${sm.serversOnline}/${sm.serversTotal}`} sub="TEG network" />
-                  <Stat label="Kills today" value={compact(sm.killsToday)} sub={`${int(sm.matchesToday)} matches`} />
-                  <Stat label="Players today" value={int(sm.playersToday)} sub="last 24 hours" />
+                  <Stat label="Kills · 24h" value={compact(sm.killsToday)} sub={`${int(sm.matchesToday)} matches`} />
+                  <Stat label="Players · 24h" value={int(sm.playersToday)} sub="per-server total" />
                 </>
               )}
             </Section>
@@ -132,7 +132,7 @@ export default async function Home() {
           <Panel
             title="Network population · 24h"
             action={
-              summary instanceof Error ? null : <span className="num">Peak today {int(summary.data.peakToday)}</span>
+              summary instanceof Error ? null : <span className="num">Peak on one server {int(summary.data.peakToday)}</span>
             }
             className="lg:col-span-2"
           >

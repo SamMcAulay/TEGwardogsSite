@@ -50,7 +50,8 @@ export interface ServerRow {
   shortName: string;
   /** the letters before "#": EU, NA, OCE */
   region: string;
-  online: boolean;
+  /** null: Warcon didn't answer for this server, so its status is unknown (not "offline") */
+  online: boolean | null;
   /** unix seconds of Warcon's last look */
   updatedAt: number | null;
   status: ServerStatus | null;
@@ -65,10 +66,12 @@ export interface NetworkSummary {
   capacity: number;
   serversOnline: number;
   serversTotal: number;
-  /** over the last 24 h, from analytics */
+  /** over the last 24 h, from analytics, summed per server */
   killsToday: number;
+  /** sum of each server's unique players: a player on two servers counts twice */
   playersToday: number;
   matchesToday: number;
+  /** the highest single-server peak (not a network-wide peak) */
   peakToday: number;
 }
 

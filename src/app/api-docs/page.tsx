@@ -7,7 +7,7 @@ const ENDPOINTS = [
   {
     path: '/api/servers',
     about:
-      'Live status of every server. Fields: id, name, shortName, region, online, map, players, maxPlayers, joinCode, updatedAt.',
+      'Live status of every server. Fields: id, name, shortName, region, online (true, false, or null when the status is unavailable), map, players, maxPlayers, joinCode, updatedAt.',
     example: '/api/servers',
   },
   {
