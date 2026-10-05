@@ -23,6 +23,12 @@ Copy the key; it is shown once.
 
 ## 3. Prepare the VPS
 
+The VPS user must be in the `docker` group (`sudo usermod -aG docker $USER`, then log in again) so it
+can run `docker compose` without sudo; the automatic deploy in step 7 relies on that. If the
+repository is private, the clone needs a deploy key: generate one on the VPS
+(`ssh-keygen -t ed25519 -f ~/.ssh/teg_site_deploy`), add the public half under the repo's Settings,
+Deploy keys (read-only), and clone with the SSH URL instead of the HTTPS one below.
+
 ```sh
 git clone https://github.com/SamMcAulay/TEGwardogsSite.git /home/debian/teg-wardogs-site
 cd /home/debian/teg-wardogs-site
@@ -62,6 +68,8 @@ Zero Trust, Networks, Tunnels, the tunnel serving `tegwardogs.fyi`, Public hostn
 - Subdomain `stats`, domain `tegwardogs.fyi`, type HTTP.
 - URL `teg-wardogs-site:3000` if the tunnel's `cloudflared` runs in Docker on `warcon_default`.
   Check with `docker ps --format '{{.Names}} {{.Networks}}' | grep cloudflared`.
+- If `cloudflared` runs in Docker but is not on `warcon_default`, connect it first:
+  `docker network connect warcon_default <cloudflared container>`, then use `teg-wardogs-site:3000`.
 - Otherwise (cloudflared runs on the host) use `127.0.0.1:3000`.
 
 ## 6. Check Access
@@ -71,8 +79,15 @@ curl -s -o /dev/null -w '%{http_code}\n' https://stats.tegwardogs.fyi/   # must 
 curl -s -o /dev/null -w '%{http_code}\n' https://tegwardogs.fyi/         # must still print 302
 ```
 
-If the site prints `302`, the panel's Access application uses a wildcard. Narrow it to
-`tegwardogs.fyi`, or add a Bypass application for `stats.tegwardogs.fyi`.
+If the site prints `302`, the Access application on the panel's hostname (`tegwardogs.fyi`) uses a
+wildcard. Narrow it to `tegwardogs.fyi`, or add a Bypass application for `stats.tegwardogs.fyi`.
+
+### Rate limiting
+
+Every public page and `/api/*` route reads Warcon (through a short cache). Before setting
+`ALLOW_INDEXING=true` or announcing the site, add a Cloudflare rate-limiting rule (Security, WAF,
+Rate limiting rules) on `stats.tegwardogs.fyi`, for example 60 requests per 10 seconds per IP,
+action Block or Managed Challenge, so a crawler or script can't spend Warcon's per-key limits.
 
 ## 7. Automatic deploys
 
@@ -85,7 +100,8 @@ Warcon, and only then `docker compose up -d site`. A failed doctor leaves the ol
 
 1. Add the domain to Cloudflare.
 2. Add it as a public hostname on the same tunnel (as in step 5).
-3. In `.env` set `SITE_URL=https://<domain>` and `ALLOW_INDEXING=true`.
+3. Add the rate-limiting rule from step 6 for the new domain, then in `.env` set
+   `SITE_URL=https://<domain>` and `ALLOW_INDEXING=true`.
 4. `docker compose up -d`
 5. Optionally add a Redirect Rule from `stats.tegwardogs.fyi/*` to the new domain.
 
