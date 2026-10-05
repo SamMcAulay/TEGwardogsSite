@@ -8,7 +8,8 @@ export async function GET() {
   try {
     siteEnv();
   } catch (e) {
-    return Response.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 503 });
+    console.error('[health] invalid configuration:', e instanceof Error ? e.message : String(e));
+    return Response.json({ ok: false, error: 'config' }, { status: 503 });
   }
   try {
     const { value } = await warcon().servers();
