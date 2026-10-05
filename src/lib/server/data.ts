@@ -141,6 +141,24 @@ function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes
 
 /** Warcon board pages scanned past the one asked for, to fill it after removing banned players. */
 const BOARD_SCAN_EXTRA = 10;
+/** Deepest board page served (the top 1,000), as Warcon's own public boards; each deeper page costs Warcon one more query. */
+export const MAX_BOARD_PAGE = 20;
+/** Warcon board pages fetched at once for one request. */
+const BOARD_FETCH_CONCURRENCY = 4;
+
+/** fn over items, at most `limit` at a time, results in order. */
+async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
 
 /**
  * A leaderboard page without org-banned players. Warcon serves 50 rows a page with its own ranks;
@@ -152,14 +170,14 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   const anchor = (await visibleIds(q.serverId))[0];
   if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: 50 });
   const banned = await orgBannedIds();
-  const page = q.page ?? 1;
+  const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
   const board = (p: number) =>
     warcon().board(anchor, { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric, page: p });
 
   const first = await board(1);
   const pageSize = first.value.pageSize;
   const want = page * pageSize;
-  const lastWarconPage = Math.max(1, Math.ceil(first.value.total / pageSize));
+  const lastWarconPage = Math.min(Math.max(1, Math.ceil(first.value.total / pageSize)), MAX_BOARD_PAGE + BOARD_SCAN_EXTRA);
   const kept: WBoardRow[] = [];
   let bannedSeen = 0;
   let stale = first.stale || banned.stale;
@@ -175,7 +193,7 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   take(first);
   scanned = 1;
   const upTo = Math.min(page, lastWarconPage);
-  const needed = await Promise.all(Array.from({ length: upTo - 1 }, (_, i) => board(i + 2)));
+  const needed = await mapLimited(Array.from({ length: upTo - 1 }, (_, i) => i + 2), BOARD_FETCH_CONCURRENCY, board);
   for (const cur of needed) take(cur);
   scanned = upTo;
   // Banned players removed leave the page short: top up from the following pages.
@@ -184,7 +202,8 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     scanned = p;
   }
   // Exact once every Warcon page was read; otherwise Warcon's total less the banned rows met so far.
-  const total = scanned >= lastWarconPage ? kept.length : Math.max(kept.length, first.value.total - bannedSeen);
+  const uncapped = scanned >= lastWarconPage ? kept.length : Math.max(kept.length, first.value.total - bannedSeen);
+  const total = Math.min(uncapped, MAX_BOARD_PAGE * pageSize);
 
   const start = (page - 1) * pageSize;
   const slice = kept.slice(start, start + pageSize);
