@@ -1,72 +1,84 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { BarChart } from '@/components/charts';
 import { CopyButton } from '@/components/client';
 import { KillList } from '@/components/game';
 import { Avatar, PlayerLink } from '@/components/player';
-import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot, cx } from '@/components/ui';
-import { ago, date, dateTime, duration, int, kd, metres, ordinal, pct } from '@/lib/format';
+import { safe } from '@/components/section';
+import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
+import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mapName } from '@/lib/game';
-import {
-  getPlayer,
-  playerDaily,
-  playerMatches,
-  playerRank,
-  playerRivals,
-  playerServers,
-  playerTotals,
-  playerWeapons,
-  recentKills,
-  type Metric,
-} from '@/lib/server/queries';
+import { getPlayer } from '@/lib/server/data';
+
+const nowSec = () => Math.floor(Date.now() / 1000);
 
 export async function generateMetadata({ params }: PageProps<'/players/[steamId]'>): Promise<Metadata> {
   const { steamId } = await params;
-  const p = /^\d{17}$/.test(steamId) ? getPlayer(steamId) : null;
-  if (!p) return { title: 'Player not found' };
+  if (!/^\d{17}$/.test(steamId)) return { title: 'Player not found' };
+  const loaded = await safe(getPlayer(steamId));
+  if (loaded === null) return { title: 'Player not found' };
+  if (loaded instanceof Error) return { title: 'Player' };
+  const p = loaded.data;
   return {
     title: p.name,
     description: `${p.name}: ${int(p.totals.kills)} kills, ${kd(p.totals.kills, p.totals.deaths)} K/D on TEG WARDOGS servers.`,
   };
 }
 
-const RANKED: { metric: Metric; label: string }[] = [
-  { metric: 'kills', label: 'Kills' },
-  { metric: 'kd', label: 'K/D' },
-  { metric: 'headshots', label: 'Headshots' },
-  { metric: 'playtime', label: 'Playtime' },
-];
+type Group = { key: string; matches: number; wins: number; kills: number; deaths: number };
 
-function Delta({ now, before, digits = 2 }: { now: number; before: number; digits?: number }) {
-  const d = now - before;
-  if (!Number.isFinite(d) || Math.abs(d) < Math.pow(10, -digits)) return null;
+function GroupTable({ title, rows, label }: { title: string; rows: Group[]; label: (key: string) => string }) {
   return (
-    <span className={cx('num', d > 0 ? 'text-good' : 'text-bad')}>
-      {d > 0 ? '▲' : '▼'} {Math.abs(d).toFixed(digits)}
-    </span>
+    <Panel title={title} flush>
+      {rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>{title.replace('By ', '')}</th>
+                <th className="r">Matches</th>
+                <th className="r">Wins</th>
+                <th className="r">K/D</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((g) => (
+                <tr key={g.key}>
+                  <td className="font-medium">{label(g.key)}</td>
+                  <td className="r text-muted">{int(g.matches)}</td>
+                  <td className="r text-muted">{int(g.wins)}</td>
+                  <td className="r font-semibold">{kd(g.kills, g.deaths)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <Empty>None yet.</Empty>
+      )}
+    </Panel>
   );
 }
 
 export default async function PlayerPage({ params }: PageProps<'/players/[steamId]'>) {
   const { steamId } = await params;
   if (!/^\d{17}$/.test(steamId)) notFound();
-  const player = getPlayer(steamId);
-  if (!player) notFound();
-
+  const loadedPlayer = await safe(getPlayer(steamId));
+  if (loadedPlayer === null) notFound();
+  if (loadedPlayer instanceof Error) {
+    return (
+      <Container className="mt-16">
+        <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
+      </Container>
+    );
+  }
+  const player = loadedPlayer.data;
   const t = player.totals;
-  const week = playerTotals(steamId, '7d');
-  const ranks = RANKED.map((r) => ({ ...r, rank: playerRank(steamId, r.metric, 'all') }));
-  const daily = playerDaily(steamId, 30);
-  const weapons = playerWeapons(steamId, 0, 15);
+  const weapons = player.weapons.slice(0, 15);
   const weaponKills = weapons.reduce((a, w) => a + w.kills, 0);
-  const rivals = playerRivals(steamId);
-  const servers = playerServers(steamId);
-  const matches = playerMatches(steamId, 12);
-  const kills = recentKills({ steamId, limit: 15 });
   const favourite = weapons[0];
-  const lifetimeKd = t.kills / Math.max(1, t.deaths);
-  const weekKd = week.kills / Math.max(1, week.deaths);
+  const servers = player.servers;
+  const now = nowSec();
 
   return (
     <>
@@ -96,12 +108,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                       </Badge>
                     </Link>
                   ) : (
-                    <Badge>Last seen {ago(player.lastSeen)}</Badge>
-                  )}
-                  {player.onlineOn && (
-                    <Badge>
-                      <FactionTag name={player.onlineOn.live.faction} />
-                    </Badge>
+                    <Badge>Last seen {player.lastSeen ? ago(player.lastSeen, now) : '—'}</Badge>
                   )}
                 </div>
                 <h1 className="display truncate text-4xl leading-none sm:text-5xl">{player.name}</h1>
@@ -116,26 +123,19 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                   >
                     Steam profile ↗
                   </a>
-                  <span className="text-xs">First seen {date(player.firstSeen)}</span>
+                  <span className="text-xs">First seen {player.firstSeen ? date(player.firstSeen) : '—'}</span>
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
-              {ranks.map((r) => (
-                <Link
-                  key={r.metric}
-                  href={`/leaderboards?metric=${r.metric}&period=all`}
-                  className="bg-surface px-4 py-3 transition-colors hover:bg-surface-2"
-                >
-                  <div className="eyebrow !text-[0.62rem]">{r.label} rank</div>
-                  <div className="display num mt-1 text-2xl leading-none">{r.rank ? ordinal(r.rank.rank) : '—'}</div>
-                  <div className="mt-1 text-[11px] text-dim">
-                    {r.rank
-                      ? `of ${int(r.rank.of)} · top ${Math.max(1, Math.ceil((r.rank.rank / r.rank.of) * 100))}%`
-                      : 'Unranked'}
-                  </div>
-                </Link>
-              ))}
+            <div className="space-y-1 text-sm lg:text-right">
+              <Link href="/leaderboards?metric=kills&period=all" className="link font-display text-lg font-semibold">
+                {player.rank ? `#${player.rank} on the all-time kills board` : 'Unranked'}
+              </Link>
+              {player.streak && (
+                <div className="text-muted">
+                  {player.streak.n} {player.streak.kind === 'win' ? 'wins' : 'losses'} in a row
+                </div>
+              )}
             </div>
           </div>
         </Container>
@@ -143,25 +143,13 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
 
       <Container className="mt-8 space-y-4">
         <StatGrid className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
-          <Stat label="Kills" value={int(t.kills)} sub={`${int(week.kills)} this week`} accent />
-          <Stat label="Deaths" value={int(t.deaths)} sub={`${int(week.deaths)} this week`} />
-          <Stat
-            label="K/D"
-            value={kd(t.kills, t.deaths)}
-            sub={
-              week.kills + week.deaths > 0 ? (
-                <>
-                  7d {weekKd.toFixed(2)} <Delta now={weekKd} before={lifetimeKd} />
-                </>
-              ) : (
-                'No games this week'
-              )
-            }
-          />
+          <Stat label="Kills" value={int(t.kills)} accent />
+          <Stat label="Deaths" value={int(t.deaths)} />
+          <Stat label="K/D" value={kd(t.kills, t.deaths)} />
           <Stat label="Headshot %" value={pct(t.headshots, t.kills)} sub={`${int(t.headshots)} headshots`} />
           <Stat label="Kills / hour" value={t.playtime ? ((t.kills * 3600) / t.playtime).toFixed(1) : '—'} />
           <Stat label="Longest kill" value={metres(t.longest)} />
-          <Stat label="Playtime" value={duration(t.playtime)} sub={`${duration(week.playtime)} this week`} />
+          <Stat label="Playtime" value={duration(t.playtime)} />
           <Stat
             label="Rounds"
             value={int(t.matches)}
@@ -170,16 +158,6 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
         </StatGrid>
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <Panel title="Activity · 30 days" className="lg:col-span-2">
-            <BarChart
-              bars={daily.map((d) => ({
-                label: d.day.slice(5).split('-').reverse().join('/'),
-                value: d.kills,
-                detail: `${int(d.kills)} kills · ${int(d.deaths)} deaths · ${duration(d.playtime)}`,
-              }))}
-              height={160}
-            />
-          </Panel>
           <Panel title="Servers played" flush>
             <ul className="divide-y divide-line">
               {servers.map((s) => (
@@ -198,6 +176,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
               {!servers.length && <Empty>No time recorded.</Empty>}
             </ul>
           </Panel>
+          <GroupTable title="By map" rows={player.maps} label={mapName} />
+          <GroupTable title="By faction" rows={player.factions} label={(k) => k} />
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
@@ -210,9 +190,6 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                       <th>Weapon</th>
                       <th className="hidden w-40 sm:table-cell">Share</th>
                       <th className="r">Kills</th>
-                      <th className="r">HS %</th>
-                      <th className="r hidden sm:table-cell">Avg dist.</th>
-                      <th className="r">Longest</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -235,9 +212,6 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                             </div>
                           </td>
                           <td className="r font-semibold">{int(w.kills)}</td>
-                          <td className="r text-muted">{pct(w.headshots, w.kills)}</td>
-                          <td className="r hidden text-muted sm:table-cell">{metres(w.avgDistance)}</td>
-                          <td className="r text-muted">{metres(w.longest)}</td>
                         </tr>
                       );
                     })}
@@ -251,8 +225,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
           <div className="grid gap-4">
             {(
               [
-                ['Favourite targets', rivals.victims, 'kills'],
-                ['Nemeses', rivals.nemeses, 'deaths'],
+                ['Favourite targets', player.victims, 'kills'],
+                ['Nemeses', player.nemeses, 'deaths'],
               ] as const
             ).map(([title, list, unit]) => (
               <Panel key={title} title={title} flush>
@@ -273,7 +247,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
         </div>
 
         <Panel title="Recent rounds" flush>
-          {matches.length ? (
+          {player.matches.length ? (
             <div className="overflow-x-auto">
               <table className="table">
                 <thead>
@@ -288,17 +262,17 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                   </tr>
                 </thead>
                 <tbody>
-                  {matches.map((m) => (
+                  {player.matches.map((m) => (
                     <tr key={m.matchId}>
                       <td>
-                        <Link href={`/matches/${m.matchId}`} className="link font-medium">
+                        <Link href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
                           {mapName(m.map)}
                         </Link>
                         <div className="text-xs text-dim">{dateTime(m.startedAt)}</div>
                       </td>
                       <td className="text-muted">{m.serverName}</td>
                       <td>
-                        <FactionTag name={m.faction} />
+                        {m.faction ? <FactionTag name={m.faction} /> : <span className="text-dim">—</span>}
                       </td>
                       <td className="r font-semibold">{m.kills}</td>
                       <td className="r text-muted">{m.deaths}</td>
@@ -306,12 +280,14 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                       <td>
                         {!m.endedAt ? (
                           <Badge tone="good">Live</Badge>
-                        ) : !m.winner ? (
-                          <span className="text-dim">—</span>
-                        ) : m.winner === m.faction ? (
+                        ) : m.result === 'win' ? (
                           <Badge tone="accent">Won</Badge>
-                        ) : (
+                        ) : m.result === 'loss' ? (
                           <Badge>Lost</Badge>
+                        ) : m.result === 'draw' ? (
+                          <Badge>Draw</Badge>
+                        ) : (
+                          <span className="text-dim">—</span>
                         )}
                       </td>
                     </tr>
@@ -326,14 +302,13 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Recent kills & deaths" flush className="lg:col-span-2">
-            {kills.length ? <KillList kills={kills} showServer /> : <Empty>Nothing yet.</Empty>}
+            {player.recentKills.length ? <KillList kills={player.recentKills} showServer /> : <Empty>Nothing yet.</Empty>}
           </Panel>
           <Panel title="Known names" flush>
             <ul className="divide-y divide-line">
               {player.aliases.map((a) => (
-                <li key={a.name} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                  <span className="truncate">{a.name}</span>
-                  <span className="shrink-0 text-xs text-dim">{ago(a.lastSeen)}</span>
+                <li key={a} className="px-4 py-2.5 text-sm">
+                  <span className="block truncate">{a}</span>
                 </li>
               ))}
             </ul>
