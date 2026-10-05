@@ -5,6 +5,8 @@ export interface SearchHit {
   steamId: string;
   name: string;
   minutes: number;
+  /** all-time kills, for correcting a profile's rank once banned players are left out */
+  kills: number;
   lastSeen: string | null;
 }
 
@@ -36,14 +38,14 @@ export function parseBoardCsv(csv: string): SearchHit[] {
   const [head = '', ...lines] = csv.split(/\r?\n/).filter(Boolean);
   const cols = cells(head);
   const at = (name: string) => cols.indexOf(name);
-  const [id, name, minutes, lastSeen] = [at('steam_id'), at('name'), at('playtime_min'), at('last_seen')];
+  const [id, name, minutes, kills, lastSeen] = [at('steam_id'), at('name'), at('playtime_min'), at('kills'), at('last_seen')];
   for (const [col, i] of [['steam_id', id], ['name', name]] as const) {
     if (i < 0) throw new Error(`board export has no ${col} column`);
   }
   return lines
     .map((line) => {
       const c = cells(line);
-      return { steamId: c[id] ?? '', name: c[name] ?? '', minutes: Number(c[minutes]) || 0, lastSeen: c[lastSeen] || null };
+      return { steamId: c[id] ?? '', name: c[name] ?? '', minutes: Number(c[minutes]) || 0, kills: Number(c[kills]) || 0, lastSeen: c[lastSeen] || null };
     })
     .filter((h) => /^\d{17}$/.test(h.steamId));
 }
@@ -82,13 +84,23 @@ export class SearchIndex {
       .finally(() => (this.loading = null)));
   }
 
-  async search(q: string, limit = 25): Promise<SearchHit[] | 'warming'> {
+  private async current(): Promise<SearchHit[] | null> {
     const due = !this.hits || this.now() - this.loadedAt > this.refreshMs;
     if (due && this.now() - this.failedAt >= this.retryMs) await this.refresh();
-    if (!this.hits) return 'warming';
+    return this.hits;
+  }
+
+  /** Every player in the export, or 'warming' before it has loaded. */
+  async snapshot(): Promise<SearchHit[] | 'warming'> {
+    return (await this.current()) ?? 'warming';
+  }
+
+  async search(q: string, limit = 25): Promise<SearchHit[] | 'warming'> {
+    const hits = await this.current();
+    if (!hits) return 'warming';
     const query = q.trim().toLowerCase();
     if (query.length < 2) return [];
-    if (/^\d{17}$/.test(query)) return this.hits.filter((h) => h.steamId === query);
-    return this.hits.filter((h) => h.name.toLowerCase().includes(query)).slice(0, limit);
+    if (/^\d{17}$/.test(query)) return hits.filter((h) => h.steamId === query);
+    return hits.filter((h) => h.name.toLowerCase().includes(query)).slice(0, limit);
   }
 }

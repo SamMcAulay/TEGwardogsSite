@@ -121,7 +121,8 @@ export interface PlayerProfile {
   lastSeen: number | null;
   aliases: string[];
   totals: { kills: number; deaths: number; headshots: number; suicides: number; teamkills: number; playtime: number; longest: number; matches: number; wins: number; losses: number; draws: number };
-  rank: number | null;
+  /** all-time kills rank without org-banned players; 'unavailable' when it can't be worked out */
+  rank: number | null | 'unavailable';
   streak: { kind: 'win' | 'loss'; n: number } | null;
   onlineOn: { serverId: string; serverName: string } | null;
   weapons: WeaponUse[];

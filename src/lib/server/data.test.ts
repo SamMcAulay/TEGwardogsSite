@@ -13,13 +13,14 @@ const api = {
   seen: vi.fn(),
   steamProfiles: vi.fn(async () => ({})),
 };
-vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => ({ search: async () => [] }) }));
+const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []) };
+vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => index }));
 const bans = { orgBannedIds: vi.fn() };
 vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { getMatch, getPlayer, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, regionOf, shortNameOf } from './data';
+import { adjustedRank, getMatch, getPlayer, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, regionOf, shortNameOf } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -255,5 +256,39 @@ describe('headToHead', () => {
     const r = await headToHead('76561198000000001', '76561198000000002');
     expect(r.data).toEqual({ aKills: 4, bKills: 4 });
     for (const c of api.kills.mock.calls) expect(c[2]).toEqual({ ttl: TTL.stats });
+  });
+});
+
+describe('profile rank without org-banned players', () => {
+  const sid = (n: number) => `7656119800000000${n}`;
+  const hit = (n: number, kills: number, minutes = 120) => ({ steamId: sid(n), name: `P${n}`, minutes, kills, lastSeen: null });
+  const banned = (...ns: number[]) => bans.orgBannedIds.mockResolvedValue({ ids: new Set(ns.map(sid)), stale: false });
+
+  test('subtracts banned players with more kills (and at least an hour on)', async () => {
+    index.snapshot.mockResolvedValue([hit(1, 90), hit(2, 80), hit(3, 70, 30), hit(4, 60), hit(5, 50), hit(6, 10)]);
+    banned(2, 3, 6); // 2 counts; 3 is under the hour floor; 6 has fewer kills
+    expect(await adjustedRank(5, sid(5))).toBe(4);
+  });
+
+  test('a banned player has no rank', async () => {
+    index.snapshot.mockResolvedValue([hit(1, 90)]);
+    banned(1);
+    expect(await adjustedRank(1, sid(1))).toBeNull();
+  });
+
+  test('a player Warcon does not rank stays unranked', async () => {
+    banned();
+    expect(await adjustedRank(null, sid(1))).toBeNull();
+  });
+
+  test('unavailable when the ban list, the export, or the player in it is missing', async () => {
+    index.snapshot.mockResolvedValue([hit(1, 90)]);
+    bans.orgBannedIds.mockRejectedValue(new Error('down'));
+    expect(await adjustedRank(3, sid(1))).toBe('unavailable');
+    banned();
+    index.snapshot.mockResolvedValue('warming');
+    expect(await adjustedRank(3, sid(1))).toBe('unavailable');
+    index.snapshot.mockResolvedValue([hit(2, 90)]);
+    expect(await adjustedRank(3, sid(1))).toBe('unavailable');
   });
 });

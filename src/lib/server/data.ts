@@ -197,6 +197,32 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   return loaded({ rows, total, pageSize }, stale);
 }
 
+/** Warcon's floor for the career rank: players with less time on are not ranked. */
+const RANK_FLOOR_MINUTES = 60;
+
+/**
+ * Warcon's all-time kills rank with org-banned players left out, so it agrees with the boards.
+ * Warcon ranks a player 1 + the players (an hour or more on) with more kills; this subtracts the
+ * banned ones among them, read from the board export the search index already holds. A banned
+ * player is unranked. 'unavailable' when the ban list or the export can't be read.
+ */
+export async function adjustedRank(warconRank: number | null, steamId: string): Promise<number | null | 'unavailable'> {
+  if (warconRank === null) return null;
+  let banned;
+  try {
+    banned = await orgBannedIds();
+  } catch {
+    return 'unavailable';
+  }
+  if (banned.ids.has(steamId)) return null;
+  const all = await searchIndex(async () => (await serverList()).list[0].id).snapshot();
+  if (all === 'warming') return 'unavailable';
+  const me = all.find((h) => h.steamId === steamId);
+  if (!me) return 'unavailable';
+  const bannedAbove = all.filter((h) => banned.ids.has(h.steamId) && h.minutes >= RANK_FLOOR_MINUTES && h.kills > me.kills).length;
+  return Math.max(1, warconRank - bannedAbove);
+}
+
 export async function searchPlayers(q: string): Promise<PlayerSearchRow[] | 'warming'> {
   const idx = searchIndex(async () => (await serverList()).list[0].id);
   const hits = await idx.search(q);
@@ -266,7 +292,7 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
         teamkills: d.combat?.teamKills ?? 0, playtime: c.minutes * 60, longest: c.longestM ?? 0,
         matches: c.matches, wins: c.wins, losses: c.losses, draws: c.draws,
       },
-      rank: c.rank.org,
+      rank: await adjustedRank(c.rank.org, steamId),
       streak: c.streak,
       onlineOn: d.online && shown(d.online.serverId) ? d.online : null,
       weapons: (d.combat?.causes ?? []).map((w) => ({ cause: w.cause, kills: w.kills })),

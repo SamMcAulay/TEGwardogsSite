@@ -11,7 +11,7 @@ const CSV = [
 describe('parseBoardCsv', () => {
   test('reads quoted names, commas and doubled quotes', () => {
     expect(parseBoardCsv(CSV).map((h) => h.name)).toEqual(['Night, Owl', 'owlbear', 'Say "hi"']);
-    expect(parseBoardCsv(CSV)[1]).toEqual({ steamId: '76561198000000002', name: 'owlbear', minutes: 300, lastSeen: null });
+    expect(parseBoardCsv(CSV)[1]).toEqual({ steamId: '76561198000000002', name: 'owlbear', minutes: 300, kills: 1, lastSeen: null });
   });
 
   test('CSV with extra columns removes private data', () => {
@@ -23,7 +23,7 @@ describe('parseBoardCsv', () => {
     const result = parseBoardCsv(csvWithExtra);
     expect(result).toHaveLength(1);
     const hit = result[0];
-    expect(Object.keys(hit).sort()).toEqual(['lastSeen', 'minutes', 'name', 'steamId']);
+    expect(Object.keys(hit).sort()).toEqual(['kills', 'lastSeen', 'minutes', 'name', 'steamId']);
     const serialized = JSON.stringify(hit);
     expect(serialized).not.toContain('PRIVATE-NOTE');
     expect(serialized).not.toContain('watched');
@@ -103,5 +103,23 @@ describe('SearchIndex', () => {
   test('a query under two characters returns nothing', async () => {
     const { idx } = index();
     expect(await idx.search('o')).toEqual([]);
+  });
+});
+
+describe('snapshot', () => {
+  test('returns every player with kills, loading the export when needed', async () => {
+    const idx = new SearchIndex({ load: async () => CSV });
+    const all = await idx.snapshot();
+    expect(all !== 'warming' && all.map((h) => [h.steamId, h.kills])).toEqual([
+      ['76561198000000001', 1],
+      ['76561198000000002', 1],
+      ['76561198000000003', 1],
+    ]);
+  });
+
+  test('says warming before the first export has loaded', async () => {
+    const idx = new SearchIndex({ load: async () => Promise.reject(new Error('down')) });
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await idx.snapshot()).toBe('warming');
   });
 });
