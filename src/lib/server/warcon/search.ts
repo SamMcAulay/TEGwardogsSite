@@ -11,7 +11,7 @@ export interface SearchHit {
 }
 
 /** One CSV line into cells: quoted cells may hold commas and doubled quotes. */
-function cells(line: string): string[] {
+export function cells(line: string): string[] {
   const out: string[] = [];
   let cur = '';
   let quoted = false;

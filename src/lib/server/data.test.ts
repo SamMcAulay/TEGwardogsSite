@@ -4,6 +4,7 @@ const api = {
   servers: vi.fn(),
   live: vi.fn(),
   board: vi.fn(),
+  boardExport: vi.fn(),
   career: vi.fn(),
   dossier: vi.fn(),
   matches: vi.fn(),
@@ -34,6 +35,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.servers.mockResolvedValue(fresh(SERVERS));
   bans.orgBannedIds.mockResolvedValue({ ids: new Set<string>(), stale: false });
+  // The export path is covered in its own tests; elsewhere it fails, exercising the page fallback.
+  api.boardExport.mockRejectedValue(new Error('export unavailable'));
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('labels', () => {
@@ -184,6 +188,46 @@ describe('leaderboard without org-banned players', () => {
     boardPages([[1]], 50);
     bans.orgBannedIds.mockResolvedValue({ ids: new Set<string>(), stale: true });
     expect((await leaderboard({ metric: 'kills', period: '7d' })).stale).toBe(true);
+  });
+});
+
+describe('leaderboard from the whole-board export', () => {
+  const row = (n: number) => ({ rank: n, steamId: `7656119800000${String(n).padStart(4, '0')}`, name: `P${n}`, minutes: 60, kills: 1000 - n, deaths: 1, headshots: 0, matches: 1, wins: 1, losses: 0, draws: 0, cash: 0, lastSeen: null });
+  const exportOf = (n: number) => api.boardExport.mockResolvedValue(fresh(Array.from({ length: n }, (_, i) => row(i + 1))));
+
+  test('a deep page comes straight from the export, with no board page requests', async () => {
+    exportOf(500);
+    const r = await leaderboard({ metric: 'kills', period: '30d', page: 5 });
+    expect(api.boardExport).toHaveBeenCalledWith('s1', { scope: 'org', range: '30d', sort: 'kills' });
+    expect(api.board).not.toHaveBeenCalled();
+    expect(r.data.rows[0]).toMatchObject({ rank: 201, name: 'P201' });
+    expect(r.data.rows).toHaveLength(50);
+    expect(r.data.total).toBe(500);
+  });
+
+  test('banned players are removed from the whole board, so ranks and totals are exact', async () => {
+    exportOf(100);
+    bans.orgBannedIds.mockResolvedValue({ ids: new Set([row(1).steamId, row(60).steamId]), stale: false });
+    const p1 = await leaderboard({ metric: 'kills', period: '30d' });
+    expect(p1.data.rows[0]).toMatchObject({ rank: 1, name: 'P2' });
+    const p2 = await leaderboard({ metric: 'kills', period: '30d', page: 2 });
+    expect(p2.data.rows.map((x) => x.name)).not.toContain('P60');
+    expect(p2.data.rows[0]).toMatchObject({ rank: 51, name: 'P52' });
+    expect(p2.data.total).toBe(98);
+  });
+
+  test('boards stop at page 20 (the top 1,000)', async () => {
+    exportOf(3000);
+    const r = await leaderboard({ metric: 'kills', period: 'all', page: 999 });
+    expect(r.data.rows[0]).toMatchObject({ rank: 951 });
+    expect(r.data.total).toBe(1000);
+  });
+
+  test('when the export fails, the board falls back to Warcon pages', async () => {
+    api.board.mockResolvedValue(fresh({ ok: true, total: 1, pageSize: 50, rows: [row(1)] }));
+    const r = await leaderboard({ metric: 'kills', period: '30d' });
+    expect(api.board).toHaveBeenCalled();
+    expect(r.data.rows[0]).toMatchObject({ rank: 1, name: 'P1' });
   });
 });
 

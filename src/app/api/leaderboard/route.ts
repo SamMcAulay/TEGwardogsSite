@@ -1,4 +1,4 @@
-import { leaderboard } from '@/lib/server/data';
+import { leaderboard, MAX_BOARD_PAGE } from '@/lib/server/data';
 import { parseMetric, parsePeriod } from '@/lib/server/views';
 import { pageParam } from '@/lib/url';
 
@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
   const metric = parseMetric(q.get('metric'));
   const period = parsePeriod(q.get('period'));
-  const page = pageParam(q.get('page'));
+  const page = Math.min(pageParam(q.get('page')), MAX_BOARD_PAGE);
   const loaded = await leaderboard({ metric, period, serverId: q.get('server'), page }).catch((e) => {
     console.error('[api] /api/leaderboard failed:', e instanceof Error ? e.message : e);
     return undefined;

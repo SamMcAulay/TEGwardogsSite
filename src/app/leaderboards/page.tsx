@@ -4,7 +4,7 @@ import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
-import { getServers, leaderboard } from '@/lib/server/data';
+import { getServers, leaderboard, MAX_BOARD_PAGE } from '@/lib/server/data';
 import { METRIC_LABELS, METRICS, parseMetric, parsePeriod, PERIOD_LABELS, PERIODS, type LeaderRow, type Metric } from '@/lib/server/views';
 import { one, pageParam, withParams } from '@/lib/url';
 
@@ -48,7 +48,10 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
   const sp = await searchParams;
   const metric = parseMetric(one(sp.metric));
   const period = parsePeriod(one(sp.period), '7d');
-  const page = pageParam(one(sp.page));
+  const asked = pageParam(one(sp.page));
+  // Boards stop at MAX_BOARD_PAGE: send deeper requests there before loading anything.
+  if (asked > MAX_BOARD_PAGE) redirect(withParams('/leaderboards', sp, { page: MAX_BOARD_PAGE }));
+  const page = asked;
   const servers = await safe(getServers());
   const serverList = servers instanceof Error ? [] : servers.data;
   const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;

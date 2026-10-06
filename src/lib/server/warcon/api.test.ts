@@ -87,3 +87,23 @@ describe('bannedPage', () => {
     expect(TTL.bans).toBe(600_000);
   });
 });
+
+describe('boardExport', () => {
+  const CSV = [
+    'rank,steam_id,name,playtime_min,seeded_min,kills,deaths,kd,kills_per_hour,headshots,team_kills,suicides,vehicle_kills,kill_streak,death_streak,matches,wins,losses,draws,win_pct,cash,last_seen',
+    '1,76561198000000001,A,60,0,5,1,5,5,0,0,0,0,0,0,1,1,0,0,100,0,',
+  ].join('\n');
+
+  test('fetches the whole board once and keeps it in its own small cache', async () => {
+    const text = vi.fn<(path: string) => Promise<string>>(async () => CSV);
+    const client = { json: vi.fn(), text } as unknown as Warcon;
+    const exportCache = new TtlCache({ maxEntries: 40 });
+    const api = createApi(client, new TtlCache(), undefined, exportCache);
+    const first = await api.boardExport('s1', { scope: 'org', range: '30d', sort: 'wins' });
+    await api.boardExport('s1', { scope: 'org', range: '30d', sort: 'wins' });
+    expect(text).toHaveBeenCalledTimes(1);
+    expect(text.mock.calls[0][0]).toBe('/api/servers/s1/leaderboard/export?scope=org&range=30d&sort=wins&dir=desc&minMinutes=60');
+    expect(first.value.map((r) => r.steamId)).toEqual(['76561198000000001']);
+    expect(exportCache.size).toBe(1);
+  });
+});

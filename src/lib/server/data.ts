@@ -166,44 +166,78 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
  * renumbered so the board reads 1, 2, 3 with no gaps. Throws if the ban list has never loaded, so
  * the page shows "unavailable" rather than banned players.
  */
-export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number }) {
-  const anchor = (await visibleIds(q.serverId))[0];
-  if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: 50 });
-  const banned = await orgBannedIds();
-  const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
-  const board = (p: number) =>
-    warcon().board(anchor, { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric, page: p });
+/** Rows a board page shows; the same as Warcon's own page size. */
+const BOARD_PAGE_SIZE = 50;
 
+type BoardQuery = { scope: 'server' | 'org'; range: Period; sort: Metric };
+interface Kept {
+  kept: WBoardRow[];
+  total: number;
+  pageSize: number;
+  stale: boolean;
+}
+
+/** The whole board from one export, banned players removed: every page and the total are exact. */
+async function keptFromExport(anchor: string, query: BoardQuery, banned: ReadonlySet<string>): Promise<Kept> {
+  const ex = await warcon().boardExport(anchor, query);
+  const kept = ex.value.filter((r) => !banned.has(r.steamId));
+  return { kept, total: kept.length, pageSize: BOARD_PAGE_SIZE, stale: ex.stale };
+}
+
+/** The fallback when the export fails (e.g. its 10-a-minute limit): Warcon pages up to `page`, topped up. */
+async function keptFromPages(anchor: string, query: BoardQuery, banned: ReadonlySet<string>, page: number): Promise<Kept> {
+  const board = (p: number) => warcon().board(anchor, { ...query, page: p });
   const first = await board(1);
   const pageSize = first.value.pageSize;
   const want = page * pageSize;
   const lastWarconPage = Math.min(Math.max(1, Math.ceil(first.value.total / pageSize)), MAX_BOARD_PAGE + BOARD_SCAN_EXTRA);
   const kept: WBoardRow[] = [];
   let bannedSeen = 0;
-  let stale = first.stale || banned.stale;
-  let scanned: number;
+  let stale = first.stale;
   const take = (cur: Awaited<ReturnType<typeof board>>) => {
     stale ||= cur.stale;
     for (const r of cur.value.rows) {
-      if (banned.ids.has(r.steamId)) bannedSeen++;
+      if (banned.has(r.steamId)) bannedSeen++;
       else kept.push(r);
     }
   };
-  // Every Warcon page up to the one asked for is needed anyway: fetch them together, in order.
   take(first);
-  scanned = 1;
   const upTo = Math.min(page, lastWarconPage);
   const needed = await mapLimited(Array.from({ length: upTo - 1 }, (_, i) => i + 2), BOARD_FETCH_CONCURRENCY, board);
   for (const cur of needed) take(cur);
-  scanned = upTo;
+  let scanned = upTo;
   // Banned players removed leave the page short: top up from the following pages.
   for (let p = upTo + 1; p <= lastWarconPage && p <= page + BOARD_SCAN_EXTRA && kept.length < want; p++) {
     take(await board(p));
     scanned = p;
   }
   // Exact once every Warcon page was read; otherwise Warcon's total less the banned rows met so far.
-  const uncapped = scanned >= lastWarconPage ? kept.length : Math.max(kept.length, first.value.total - bannedSeen);
-  const total = Math.min(uncapped, MAX_BOARD_PAGE * pageSize);
+  const total = scanned >= lastWarconPage ? kept.length : Math.max(kept.length, first.value.total - bannedSeen);
+  return { kept, total, pageSize, stale };
+}
+
+/**
+ * A leaderboard page without org-banned players, ranked 1, 2, 3 with no gaps. Built from the whole
+ * board (one Warcon export, cached), so every page costs the same; falls back to Warcon's pages
+ * when the export fails. Throws if the ban list has never loaded, so the page shows "unavailable"
+ * rather than banned players. Boards stop at page MAX_BOARD_PAGE.
+ */
+export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number }) {
+  const anchor = (await visibleIds(q.serverId))[0];
+  if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE });
+  const banned = await orgBannedIds();
+  const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
+  const query: BoardQuery = { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric };
+
+  let board: Kept;
+  try {
+    board = await keptFromExport(anchor, query, banned.ids);
+  } catch (e) {
+    console.error('[board] export failed, reading pages instead:', e instanceof Error ? e.message : e);
+    board = await keptFromPages(anchor, query, banned.ids, page);
+  }
+  const { kept, pageSize } = board;
+  const total = Math.min(board.total, MAX_BOARD_PAGE * pageSize);
 
   const start = (page - 1) * pageSize;
   const slice = kept.slice(start, start + pageSize);
@@ -223,7 +257,7 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     value: metricValue(q.metric, r),
     lastSeen: sec(r.lastSeen),
   }));
-  return loaded({ rows, total, pageSize }, stale);
+  return loaded({ rows, total, pageSize }, board.stale || banned.stale);
 }
 
 /** Warcon's floor for the career rank: players with less time on are not ranked. */
