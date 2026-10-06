@@ -212,10 +212,15 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 /** A thin proportional bar, for share-of-total columns. */
+/** Bar width in %: at least a sliver, never wider than the track. */
+export function meterWidth(value: number, max: number): number {
+  return max > 0 ? Math.min(100, Math.max(1.5, (value / max) * 100)) : 0;
+}
+
 export function Meter({ value, max, color }: { value: number; max: number; color?: string }) {
-  const w = max > 0 ? Math.max(1.5, (value / max) * 100) : 0;
+  const w = meterWidth(value, max);
   return (
-    <div className="h-1 w-full bg-surface-3">
+    <div className="h-1 w-full overflow-hidden bg-surface-3">
       <div className="h-full" style={{ width: `${w}%`, background: color ?? 'var(--accent)' }} />
     </div>
   );

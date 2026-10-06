@@ -77,7 +77,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
   const weapons = player.weapons.slice(0, 15);
   const weaponKills = weapons.reduce((a, w) => a + w.kills, 0);
   const favourite = weapons[0];
-  const servers = player.servers;
+  const servers = [...player.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
 
   return (
