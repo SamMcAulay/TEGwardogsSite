@@ -2,10 +2,11 @@
 // spec §5.1; everything else about caching is TtlCache's.
 import { TtlCache, type Cached } from './cache';
 import type { Warcon } from './http';
+import { parseBoardExport } from './board-csv';
 import {
   analyticsBody, bannedBody, boardBody, careerBody, dossierBody, killsBody, liveBody, matchBody, matchListBody,
   seenBody, serversBody, steamProfilesBody,
-  type WAnalytics, type WBannedPage, type WBoard, type WCareer, type WDossier, type WKills, type WLive, type WMatchList,
+  type WAnalytics, type WBannedPage, type WBoard, type WBoardRow, type WCareer, type WDossier, type WKills, type WLive, type WMatchList,
   type WMatchView, type WSeenPlayer, type WServer, type WSteamProfiles,
 } from './schemas';
 
@@ -51,7 +52,15 @@ const qs = (params: Record<string, string | number | null | undefined>) => {
 };
 
 /** steamCache holds one entry per Steam ID, apart from the main cache so avatars don't evict it. */
-export function createApi(client: Warcon, cache: TtlCache, steamCache = new TtlCache({ maxEntries: 5000 })) {
+/** Whole boards are up to 10,000 rows each: keep only this many (least recently used dropped). */
+export const EXPORT_CACHE_ENTRIES = 40;
+
+export function createApi(
+  client: Warcon,
+  cache: TtlCache,
+  steamCache = new TtlCache({ maxEntries: 5000 }),
+  exportCache = new TtlCache({ maxEntries: EXPORT_CACHE_ENTRIES }),
+) {
   const serveStaleFor = (ttl: number) =>
     ttl === TTL.live || ttl === TTL.kills ? SERVE_STALE.live : ttl === TTL.bans ? SERVE_STALE.bans : ttl === TTL.stats ? SERVE_STALE.stats : 0;
   const cached = <T>(path: string, ttl: number, load: () => Promise<T>): Promise<Cached<T>> =>
@@ -75,6 +84,16 @@ export function createApi(client: Warcon, cache: TtlCache, steamCache = new TtlC
         scope: q.scope, range: q.range, sort: q.sort, dir: q.dir ?? 'desc', page: q.page ?? 1, minMinutes: q.minMinutes ?? 60,
       })}`;
       return cached(path, TTL.stats, () => client.json(path, boardBody));
+    },
+
+    /**
+     * The whole board (up to 10,000 rows, Warcon's export) for one scope, period and sort: about the
+     * cost of a single 50-row page, and every page then comes from it. Warcon allows 10 exports a
+     * minute per key; callers fall back to board pages when this fails.
+     */
+    boardExport(serverId: string, q: { scope: 'server' | 'org'; range: Range; sort: Sort }): Promise<Cached<WBoardRow[]>> {
+      const path = `/api/servers/${enc(serverId)}/leaderboard/export${qs({ scope: q.scope, range: q.range, sort: q.sort, dir: 'desc', minMinutes: 60 })}`;
+      return exportCache.get(path, TTL.stats, async () => parseBoardExport(await client.text(path)), { serveStaleMs: SERVE_STALE.stats });
     },
 
     career(serverId: string, steamId: string): Promise<Cached<WCareer>> {
