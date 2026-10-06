@@ -46,6 +46,21 @@ describe('createWarcon', () => {
     expect(err).toMatchObject({ kind: 'timeout' });
   });
 
+  test('a per-call time limit replaces the default for that call only', async () => {
+    // answers after `ms`, unless the request's signal aborts first (as real fetch does)
+    const after = (ms: number): typeof fetch => (_u, init) =>
+      new Promise((resolve, reject) => {
+        const t = setTimeout(() => resolve(res(200, { ok: true, n: 1 })), ms);
+        init?.signal?.addEventListener('abort', () => {
+          clearTimeout(t);
+          reject(new DOMException('x', 'TimeoutError'));
+        });
+      });
+    // default 50 ms (see client()); 80 ms is too slow by default but fine with 200 ms allowed
+    await expect(client(after(80)).json('/api/x', okSchema)).rejects.toMatchObject({ kind: 'timeout' });
+    await expect(client(after(80)).json('/api/x', okSchema, { timeoutMs: 200 })).resolves.toEqual({ ok: true, n: 1 });
+  });
+
   test('a Cloudflare login page (HTML 200) is rejected, not parsed', async () => {
     const err = await client(async () => res(200, '<html>', 'text/html')).json('/api/x', okSchema).catch((e) => e);
     expect(err).toMatchObject({ kind: 'http' });

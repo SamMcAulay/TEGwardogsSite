@@ -70,7 +70,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                         {rows.map((m) => (
                           <tr key={`${m.serverId}-${m.id}`}>
                             <td>
-                              <Link href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
+                              <Link prefetch={false} href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
                                 {mapName(m.map)}
                               </Link>
                               <div className="text-xs text-dim">{lightingName(m.lighting)}</div>

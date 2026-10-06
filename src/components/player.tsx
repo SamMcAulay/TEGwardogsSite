@@ -70,7 +70,7 @@ export function PlayerLink({
 }) {
   if (!steamId || !name) return <span className="text-muted">{name ?? 'Unknown'}</span>;
   return (
-    <Link href={`/players/${steamId}`} className={cx('link inline-flex min-w-0 items-center gap-2.5', className)}>
+    <Link prefetch={false} href={`/players/${steamId}`} className={cx('link inline-flex min-w-0 items-center gap-2.5', className)}>
       {avatar && <Avatar name={name} steamId={steamId} url={avatarUrl} size={24} />}
       <span className="truncate font-medium">{name}</span>
     </Link>

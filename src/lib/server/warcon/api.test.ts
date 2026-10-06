@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
-import { createApi, TTL } from './api';
+import { createApi, PLAYER_TIMEOUT_MS, TTL } from './api';
 import { TtlCache } from './cache';
 import type { Warcon } from './http';
 
 const fake = (body: unknown) => {
-  const json = vi.fn(async (_path: string, schema: { parse(v: unknown): unknown }) => schema.parse(body));
+  const json = vi.fn<(path: string, schema: { parse(v: unknown): unknown }, opts?: { timeoutMs?: number }) => Promise<unknown>>(async (_path, schema) => schema.parse(body));
   return { client: { json, text: vi.fn() } as unknown as Warcon, json };
 };
 
@@ -105,5 +105,20 @@ describe('boardExport', () => {
     expect(text.mock.calls[0][0]).toBe('/api/servers/s1/leaderboard/export?scope=org&range=30d&sort=wins&dir=desc&minMinutes=60');
     expect(first.value.map((r) => r.steamId)).toEqual(['76561198000000001']);
     expect(exportCache.size).toBe(1);
+  });
+});
+
+describe('slow player lookups', () => {
+  test('the player record and career get 20 s; other endpoints keep the default', async () => {
+    const { client, json } = fake({ ok: true, dossier: {}, career: {} });
+    const api = createApi(client, new TtlCache());
+    await api.dossier('s1', '76561198000000001').catch(() => {});
+    await api.career('s1', '76561198000000001').catch(() => {});
+    expect(json.mock.calls[0][2]).toEqual({ timeoutMs: PLAYER_TIMEOUT_MS });
+    expect(json.mock.calls[1][2]).toEqual({ timeoutMs: PLAYER_TIMEOUT_MS });
+    expect(PLAYER_TIMEOUT_MS).toBe(20_000);
+    const other = fake({ ok: true, servers: [] });
+    await createApi(other.client, new TtlCache()).servers();
+    expect(other.json.mock.calls[0][2]).toBeUndefined();
   });
 });

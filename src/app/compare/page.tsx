@@ -117,7 +117,7 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
           <div className="space-y-4">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 panel p-5">
               {[a.data, b.data].map((p, i) => (
-                <Link
+                <Link prefetch={false}
                   key={p.steamId}
                   href={`/players/${p.steamId}`}
                   className={cx(

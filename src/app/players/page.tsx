@@ -16,7 +16,7 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 
 function PlayerTile({ p, meta }: { p: PlayerSearchRow; meta: React.ReactNode }) {
   return (
-    <Link
+    <Link prefetch={false}
       href={`/players/${p.steamId}`}
       className="flex items-center gap-3 border-b border-line px-4 py-3 transition-colors hover:bg-surface-2 sm:border-r"
     >
@@ -94,7 +94,7 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
               </div>
             ) : /^\d{17}$/.test(q) ? (
               <Empty>
-                <Link href={`/players/${q}`} className="link">
+                <Link prefetch={false} href={`/players/${q}`} className="link">
                   Open profile for {q}
                 </Link>
               </Empty>
@@ -126,7 +126,7 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
                           {playing.map((p) => (
                             <tr key={p.steamId}>
                               <td className="max-w-40">
-                                <Link href={`/players/${p.steamId}`} className="link block truncate font-medium">
+                                <Link prefetch={false} href={`/players/${p.steamId}`} className="link block truncate font-medium">
                                   {p.name}
                                 </Link>
                               </td>
