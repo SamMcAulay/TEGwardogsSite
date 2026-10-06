@@ -265,7 +265,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                   {player.matches.map((m) => (
                     <tr key={m.matchId}>
                       <td>
-                        <Link href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
+                        <Link prefetch={false} href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
                           {mapName(m.map)}
                         </Link>
                         <div className="text-xs text-dim">{dateTime(m.startedAt)}</div>

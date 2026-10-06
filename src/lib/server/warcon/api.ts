@@ -52,6 +52,12 @@ const qs = (params: Record<string, string | number | null | undefined>) => {
 };
 
 /** steamCache holds one entry per Steam ID, apart from the main cache so avatars don't evict it. */
+/**
+ * A player's record and career are Warcon's slowest answers (~5 s even when quiet), so they get
+ * longer than the client's default 8 s before the page gives up on them.
+ */
+export const PLAYER_TIMEOUT_MS = 20_000;
+
 /** Whole boards are up to 10,000 rows each: keep only this many (least recently used dropped). */
 export const EXPORT_CACHE_ENTRIES = 40;
 
@@ -98,12 +104,12 @@ export function createApi(
 
     career(serverId: string, steamId: string): Promise<Cached<WCareer>> {
       const path = `/api/servers/${enc(serverId)}/players/${enc(steamId)}/career`;
-      return cached(path, TTL.stats, async () => (await client.json(path, careerBody)).career);
+      return cached(path, TTL.stats, async () => (await client.json(path, careerBody, { timeoutMs: PLAYER_TIMEOUT_MS })).career);
     },
 
     dossier(serverId: string, steamId: string): Promise<Cached<WDossier>> {
       const path = `/api/servers/${enc(serverId)}/players/${enc(steamId)}`;
-      return cached(path, TTL.stats, async () => (await client.json(path, dossierBody)).dossier);
+      return cached(path, TTL.stats, async () => (await client.json(path, dossierBody, { timeoutMs: PLAYER_TIMEOUT_MS })).dossier);
     },
 
     matches(serverId: string, page = 1): Promise<Cached<WMatchList>> {

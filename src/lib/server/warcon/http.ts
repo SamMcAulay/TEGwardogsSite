@@ -17,7 +17,8 @@ export class WarconError extends Error {
 }
 
 export interface Warcon {
-  json<T>(path: string, schema: z.ZodType<T>): Promise<T>;
+  /** opts.timeoutMs replaces the client's default limit for this call only. */
+  json<T>(path: string, schema: z.ZodType<T>, opts?: { timeoutMs?: number }): Promise<T>;
   text(path: string): Promise<string>;
 }
 
@@ -25,9 +26,9 @@ const KIND_OF: Record<number, WarconErrorKind> = { 401: 'rejected', 403: 'forbid
 
 export function createWarcon(opts: { baseUrl: string; token: string; timeoutMs?: number; fetch?: typeof fetch }): Warcon {
   const doFetch = opts.fetch ?? fetch;
-  const timeoutMs = opts.timeoutMs ?? 8000;
+  const defaultTimeoutMs = opts.timeoutMs ?? 8000;
 
-  async function request(path: string, accept: string): Promise<Response> {
+  async function request(path: string, accept: string, timeoutMs: number): Promise<Response> {
     let res: Response;
     try {
       res = await doFetch(`${opts.baseUrl}${path}`, {
@@ -45,7 +46,7 @@ export function createWarcon(opts: { baseUrl: string; token: string; timeoutMs?:
     return res;
   }
 
-  async function readBody<T>(res: Response, path: string, reader: () => Promise<T>): Promise<T> {
+  async function readBody<T>(res: Response, path: string, timeoutMs: number, reader: () => Promise<T>): Promise<T> {
     try {
       return await reader();
     } catch (e) {
@@ -61,12 +62,13 @@ export function createWarcon(opts: { baseUrl: string; token: string; timeoutMs?:
   }
 
   return {
-    async json(path, schema) {
-      const res = await request(path, 'application/json');
+    async json(path, schema, callOpts) {
+      const timeoutMs = callOpts?.timeoutMs ?? defaultTimeoutMs;
+      const res = await request(path, 'application/json', timeoutMs);
       if (!(res.headers.get('content-type') ?? '').includes('application/json')) {
         throw new WarconError(`${path}: expected JSON, got ${res.headers.get('content-type') ?? 'nothing'}`, 'http', res.status, path);
       }
-      const body = await readBody(res, path, () => res.json());
+      const body = await readBody(res, path, timeoutMs, () => res.json());
       const parsed = schema.safeParse(body);
       if (!parsed.success) {
         const where = parsed.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ');
@@ -75,8 +77,8 @@ export function createWarcon(opts: { baseUrl: string; token: string; timeoutMs?:
       return parsed.data;
     },
     async text(path) {
-      const res = await request(path, 'text/csv');
-      return readBody(res, path, () => res.text());
+      const res = await request(path, 'text/csv', defaultTimeoutMs);
+      return readBody(res, path, defaultTimeoutMs, () => res.text());
     },
   };
 }

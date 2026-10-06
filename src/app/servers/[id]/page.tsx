@@ -284,7 +284,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                       {rows.map((m) => (
                         <tr key={m.id}>
                           <td>
-                            <Link href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
+                            <Link prefetch={false} href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
                               {mapName(m.map)}
                             </Link>
                             {!m.endedAt && (

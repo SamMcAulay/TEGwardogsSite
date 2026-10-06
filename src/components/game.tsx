@@ -172,7 +172,7 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
   const weapon = causeInfo(k.cause);
   const who = (id: string | null, name: string | null, cls?: string) =>
     id && name ? (
-      <Link href={`/players/${id}`} className={cx('link truncate font-medium', cls)}>
+      <Link prefetch={false} href={`/players/${id}`} className={cx('link truncate font-medium', cls)}>
         {name}
       </Link>
     ) : (
