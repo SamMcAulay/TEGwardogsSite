@@ -66,9 +66,14 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
   const loadedPlayer = await safe(getPlayer(steamId));
   if (loadedPlayer === null) notFound();
   if (loadedPlayer instanceof Error) {
+    const busy = (loadedPlayer as { kind?: string }).kind === 'busy';
     return (
       <Container className="mt-16">
-        <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
+        <Empty>
+          {busy
+            ? 'Lots of people are looking up stats right now. Try again in a minute.'
+            : 'Stats are temporarily unavailable. Try again in a minute.'}
+        </Empty>
       </Container>
     );
   }
