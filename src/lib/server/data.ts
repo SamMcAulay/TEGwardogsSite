@@ -294,6 +294,17 @@ export async function searchPlayers(q: string): Promise<PlayerSearchRow[] | 'war
   return hits.map((h) => ({ steamId: h.steamId, name: h.name, avatarUrl: avatars[h.steamId]?.avatar || null, lastSeen: sec(h.lastSeen), matchedAlias: null }));
 }
 
+/**
+ * Fills in Steam pictures. Warcon's player list always says steam: null, so rows built from it
+ * ask the Steam profile lookup (cached per player for a day; never throws).
+ */
+async function withAvatars<T extends { steamId: string; avatarUrl?: string | null }>(rows: T[]): Promise<T[]> {
+  const missing = rows.filter((r) => !r.avatarUrl).map((r) => r.steamId);
+  if (!missing.length) return rows;
+  const pics = await warcon().steamProfiles(missing);
+  return rows.map((r) => (r.avatarUrl ? r : { ...r, avatarUrl: pics[r.steamId]?.avatar || null }));
+}
+
 export async function recentPlayers(limit = 30): Promise<Loaded<PlayerSearchRow[]>> {
   const { list } = await serverList();
   const r = await fanOut(list.map((s) => s.id), (id) => warcon().seen(id, { limit }));
@@ -301,7 +312,7 @@ export async function recentPlayers(limit = 30): Promise<Loaded<PlayerSearchRow[
   for (const p of mergeNewest(r.ok.map((o) => o.value), (p) => Date.parse(p.lastSeen), limit * list.length)) {
     if (!seen.has(p.steamId)) seen.set(p.steamId, { steamId: p.steamId, name: p.name, avatarUrl: p.steam?.avatar || null, lastSeen: sec(p.lastSeen), matchedAlias: null });
   }
-  return loaded([...seen.values()].slice(0, limit), r.stale, r.failed);
+  return loaded(await withAvatars([...seen.values()].slice(0, limit)), r.stale, r.failed);
 }
 
 /** At most this many pages (100 players each) of the watchlist per server. */
@@ -342,7 +353,7 @@ export async function watchlist(): Promise<Loaded<WatchRow[]>> {
     });
   }
   const data = [...rows.values()].sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
-  return loaded(data, r.stale, r.failed);
+  return loaded(await withAvatars(data), r.stale, r.failed);
 }
 
 function killRow(k: WKill, serverId: string, serverName: string): KillRow {
@@ -378,6 +389,10 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
   }
   const d = dossier.value;
   const c = career.value;
+  const [victims, nemeses] = await Promise.all([
+    withAvatars((d.combat?.victims ?? []).map((v) => ({ steamId: v.steamId, name: v.name, avatarUrl: null, count: v.kills }))),
+    withAvatars((d.combat?.nemeses ?? []).map((v) => ({ steamId: v.steamId, name: v.name, avatarUrl: null, count: v.deaths }))),
+  ]);
   if (!d.summary.firstSeen && c.matches === 0) return null;
   const nameOf = new Map(list.map((s) => [s.id, s.name]));
   // SERVER_IDS hides servers everywhere, including a player's history on them.
@@ -400,8 +415,8 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       streak: c.streak,
       onlineOn: d.online && shown(d.online.serverId) ? d.online : null,
       weapons: (d.combat?.causes ?? []).map((w) => ({ cause: w.cause, kills: w.kills })),
-      victims: (d.combat?.victims ?? []).map((v) => ({ steamId: v.steamId, name: v.name, count: v.kills })),
-      nemeses: (d.combat?.nemeses ?? []).map((v) => ({ steamId: v.steamId, name: v.name, count: v.deaths })),
+      victims,
+      nemeses,
       servers: d.perServer.filter((p) => shown(p.serverId)).map((p) => ({ serverId: p.serverId, name: p.serverName, playtime: p.minutes * 60, kills: p.kills })),
       matches: c.last.filter((m) => shown(m.serverId)).map((m) => ({
         matchId: m.matchId, serverId: m.serverId, serverName: shortNameOf(nameOf.get(m.serverId) ?? m.serverName),

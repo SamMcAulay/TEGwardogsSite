@@ -22,7 +22,7 @@ vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, regionOf, shortNameOf, watchlist } from './data';
+import { adjustedRank, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, shortNameOf, watchlist } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -425,5 +425,50 @@ describe('watchlist', () => {
     expect(r.missing).toEqual(['s2']);
     api.watchedPage.mockRejectedValue(new Error('down'));
     await expect(watchlist()).rejects.toThrow();
+  });
+});
+
+describe('Steam avatars on player lists', () => {
+  // Warcon's player list always says steam: null; the pictures come from its Steam profile lookup.
+  const A = '76561198000000001';
+  const B = '76561198000000002';
+  const pics = { [A]: { name: 'a', avatar: 'https://a/1.jpg' }, [B]: null };
+
+  test('the watchlist gets its pictures from the Steam lookup', async () => {
+    api.steamProfiles.mockResolvedValue(pics);
+    api.watchedPage.mockResolvedValue(fresh({
+      players: [
+        { steamId: A, name: 'A', lastSeen: '2026-10-06T10:00:00Z', lastServerId: 's1', banned: null, steam: null },
+        { steamId: B, name: 'B', lastSeen: '2026-10-05T10:00:00Z', lastServerId: 's1', banned: null, steam: null },
+      ],
+      total: 2,
+    }));
+    const r = await watchlist();
+    expect(r.data.map((p) => p.avatarUrl)).toEqual(['https://a/1.jpg', null]);
+    expect(api.steamProfiles).toHaveBeenCalledWith([A, B]);
+  });
+
+  test('recently active players get their pictures from the Steam lookup', async () => {
+    api.steamProfiles.mockResolvedValue(pics);
+    const seen = (steamId: string, lastSeen: string) => ({ steamId, name: steamId, aliases: [], firstSeen: lastSeen, lastSeen, minutes: 1, kills: 0, deaths: 0, online: false, lastServerId: 's1', steam: null });
+    api.seen.mockResolvedValue(fresh([seen(A, '2026-10-06T10:00:00Z'), seen(B, '2026-10-05T10:00:00Z')]));
+    const r = await recentPlayers(2);
+    expect(r.data.map((p) => p.avatarUrl)).toEqual(['https://a/1.jpg', null]);
+  });
+
+  test('favourite targets and nemeses on a profile get pictures', async () => {
+    api.steamProfiles.mockResolvedValue(pics);
+    api.live.mockResolvedValue(fresh(null));
+    index.snapshot.mockResolvedValue([]);
+    api.dossier.mockResolvedValue(fresh({
+      steamId: '76561198000000009', name: 'Me', names: [], online: null, steam: null,
+      summary: { sessions: 3, minutes: 90, kills: 5, deaths: 2, firstSeen: '2026-10-01T10:00:00Z', lastSeen: '2026-10-06T10:00:00Z' },
+      combat: { suicides: 0, teamKills: 0, causes: [], victims: [{ steamId: A, name: 'A', kills: 3 }], nemeses: [{ steamId: B, name: 'B', deaths: 2 }] },
+      perServer: [],
+    }));
+    api.career.mockResolvedValue(fresh({ rank: { server: null, org: null }, streak: null, matches: 1, wins: 1, losses: 0, draws: 0, kills: 5, deaths: 2, minutes: 90, headshots: 0, longestM: null, killStreak: 0, maps: [], factions: [], last: [] }));
+    const p = await getPlayer('76561198000000009');
+    expect(p?.data.victims[0].avatarUrl).toBe('https://a/1.jpg');
+    expect(p?.data.nemeses[0].avatarUrl).toBeNull();
   });
 });

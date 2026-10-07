@@ -233,7 +233,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                 <ul className="divide-y divide-line">
                   {list.map((r) => (
                     <li key={r.steamId} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                      <PlayerLink steamId={r.steamId} name={r.name} className="text-sm" />
+                      <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} className="text-sm" />
                       <span className="num shrink-0 text-sm">
                         <span className="font-semibold">{r.count}</span> <span className="text-muted">{unit}</span>
                       </span>
