@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/client';
@@ -8,6 +8,7 @@ import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mapName } from '@/lib/game';
+import { playerMetadata } from '@/lib/server/card';
 import { getPlayer } from '@/lib/server/data';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -18,12 +19,11 @@ export async function generateMetadata({ params }: PageProps<'/players/[steamId]
   const loaded = await safe(getPlayer(steamId));
   if (loaded === null) return { title: 'Player not found' };
   if (loaded instanceof Error) return { title: 'Player' };
-  const p = loaded.data;
-  return {
-    title: p.name,
-    description: `${p.name}: ${int(p.totals.kills)} kills, ${kd(p.totals.kills, p.totals.deaths)} K/D on TEG WARDOGS servers.`,
-  };
+  return playerMetadata(loaded.data);
 }
+
+/** Discord colours a link preview's side bar with the page's theme colour: the site's orange. */
+export const viewport: Viewport = { themeColor: '#f2b33d' };
 
 type Group = { key: string; matches: number; wins: number; kills: number; deaths: number };
 
