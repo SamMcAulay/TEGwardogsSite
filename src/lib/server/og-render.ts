@@ -38,17 +38,19 @@ export async function renderPng(element: ReactElement): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
-const AVATAR_HOST = /(^|\.)(steamstatic\.com|steamcommunity\.com|akamaihd\.net)$/;
+/** Steam's avatar CDNs: any *.steamstatic.com, and its one legacy Akamai host (not all of akamaihd.net). */
+const AVATAR_HOST = /^([a-z0-9-]+\.)+steamstatic\.com$|^steamcdn-a\.akamaihd\.net$/;
 
 /**
  * A Steam avatar as a data URI, or null (the card then shows initials). Only Steam's image hosts
- * are fetched, with a short timeout, so a slow CDN never holds up the card.
+ * are fetched, redirects are refused (so an allowed host can't point the request anywhere else),
+ * and a short timeout keeps a slow CDN from holding up the card.
  */
 export async function fetchAvatar(url: string): Promise<string | null> {
   try {
     const u = new URL(url);
     if (u.protocol !== 'https:' || !AVATAR_HOST.test(u.hostname)) return null;
-    const res = await fetch(u, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(u, { redirect: 'error', signal: AbortSignal.timeout(3000) });
     const type = res.headers.get('content-type') ?? '';
     if (!res.ok || !/^image\/(jpeg|png)/.test(type)) return null;
     const body = Buffer.from(await res.arrayBuffer());
