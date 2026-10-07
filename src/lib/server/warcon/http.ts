@@ -2,7 +2,7 @@
 // also drops every field the schema does not name: that is the site's privacy boundary.
 import type { z } from 'zod';
 
-export type WarconErrorKind = 'unreachable' | 'timeout' | 'rejected' | 'forbidden' | 'not_found' | 'http' | 'schema';
+export type WarconErrorKind = 'unreachable' | 'timeout' | 'rejected' | 'forbidden' | 'not_found' | 'http' | 'schema' | 'busy';
 
 export class WarconError extends Error {
   constructor(
