@@ -3,6 +3,7 @@
 import { TtlCache, type Cached } from './cache';
 import type { Warcon } from './http';
 import { parseBoardExport } from './board-csv';
+import { Limiter } from './limit';
 import {
   analyticsBody, bannedBody, boardBody, careerBody, dossierBody, killsBody, liveBody, matchBody, matchListBody,
   seenBody, serversBody, steamProfilesBody, watchedBody,
@@ -58,6 +59,13 @@ const qs = (params: Record<string, string | number | null | undefined>) => {
  */
 export const PLAYER_TIMEOUT_MS = 20_000;
 
+/**
+ * Record and career lookups each scan every player's sessions in Warcon's database, which has two
+ * cores. At most `max` run at once; the rest queue, and give up as "busy" after maxWaitMs (or at
+ * once when maxQueue are already waiting). A cached profile never queues.
+ */
+export const PLAYER_LOOKUPS = { max: 3, maxWaitMs: 30_000, maxQueue: 60 } as const;
+
 /** Whole boards are up to 10,000 rows each: keep only this many (least recently used dropped). */
 export const EXPORT_CACHE_ENTRIES = 40;
 
@@ -71,6 +79,7 @@ export function createApi(
     ttl === TTL.live || ttl === TTL.kills ? SERVE_STALE.live : ttl === TTL.bans ? SERVE_STALE.bans : ttl === TTL.stats ? SERVE_STALE.stats : 0;
   const cached = <T>(path: string, ttl: number, load: () => Promise<T>): Promise<Cached<T>> =>
     cache.get<T>(path, ttl, load, { serveStaleMs: serveStaleFor(ttl) });
+  const players = new Limiter(PLAYER_LOOKUPS);
   // After a failed profiles call (often: no Steam key on the panel) skip asking for a while.
   let steamFailedAt = -Infinity;
 
@@ -104,12 +113,12 @@ export function createApi(
 
     career(serverId: string, steamId: string): Promise<Cached<WCareer>> {
       const path = `/api/servers/${enc(serverId)}/players/${enc(steamId)}/career`;
-      return cached(path, TTL.stats, async () => (await client.json(path, careerBody, { timeoutMs: PLAYER_TIMEOUT_MS })).career);
+      return cached(path, TTL.stats, () => players.run(async () => (await client.json(path, careerBody, { timeoutMs: PLAYER_TIMEOUT_MS })).career));
     },
 
     dossier(serverId: string, steamId: string): Promise<Cached<WDossier>> {
       const path = `/api/servers/${enc(serverId)}/players/${enc(steamId)}`;
-      return cached(path, TTL.stats, async () => (await client.json(path, dossierBody, { timeoutMs: PLAYER_TIMEOUT_MS })).dossier);
+      return cached(path, TTL.stats, () => players.run(async () => (await client.json(path, dossierBody, { timeoutMs: PLAYER_TIMEOUT_MS })).dossier));
     },
 
     matches(serverId: string, page = 1): Promise<Cached<WMatchList>> {

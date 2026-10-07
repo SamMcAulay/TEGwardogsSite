@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { createApi, PLAYER_TIMEOUT_MS, TTL } from './api';
+import { createApi, PLAYER_LOOKUPS, PLAYER_TIMEOUT_MS, TTL } from './api';
 import { TtlCache } from './cache';
 import type { Warcon } from './http';
 
@@ -73,6 +73,21 @@ describe('createApi', () => {
     t = TTL.stats + 1;
     await api.kills('s1', { killer: '1', victim: '2', limit: 1, count: true });
     expect(json).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('player lookups', () => {
+  test('only a few run in Warcon at once; the rest queue, and cache hits never wait', async () => {
+    const json = vi.fn<(path: string) => Promise<unknown>>(() => new Promise(() => {}));
+    const api = createApi({ json, text: vi.fn() } as unknown as Warcon, new TtlCache());
+    const id = (n: number) => String(76561198000000000n + BigInt(n));
+    for (let n = 0; n < PLAYER_LOOKUPS.max + 3; n++) {
+      void api.dossier('s1', id(n));
+      void api.career('s1', id(n));
+    }
+    await Promise.resolve();
+    expect(json).toHaveBeenCalledTimes(PLAYER_LOOKUPS.max);
+    expect(PLAYER_LOOKUPS).toMatchObject({ max: 3, maxWaitMs: 30_000 });
   });
 });
 
