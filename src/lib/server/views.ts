@@ -100,7 +100,7 @@ export interface PlayerSearchRow { steamId: string; name: string; avatarUrl: str
 export interface WatchRow { steamId: string; name: string; avatarUrl: string | null; lastSeen: number | null; serverId: string | null; serverName: string | null }
 
 export interface WeaponUse { cause: string; kills: number }
-export interface Rival { steamId: string; name: string; count: number }
+export interface Rival { steamId: string; name: string; avatarUrl: string | null; count: number }
 
 export interface PlayerMatchRow {
   matchId: number;
