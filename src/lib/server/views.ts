@@ -96,6 +96,9 @@ export interface LeaderRow {
 
 export interface PlayerSearchRow { steamId: string; name: string; avatarUrl: string | null; lastSeen: number | null; matchedAlias: string | null }
 
+/** A player on the org's watchlist. Why they're watched is never shown. */
+export interface WatchRow { steamId: string; name: string; avatarUrl: string | null; lastSeen: number | null; serverId: string | null; serverName: string | null }
+
 export interface WeaponUse { cause: string; kills: number }
 export interface Rival { steamId: string; name: string; count: number }
 

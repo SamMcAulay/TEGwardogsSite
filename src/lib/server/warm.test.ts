@@ -8,6 +8,7 @@ const data = {
   recentKills: vi.fn(),
   factionWins: vi.fn(),
   searchPlayers: vi.fn(),
+  watchlist: vi.fn(),
 };
 vi.mock('./data', () => ({
   getServers: () => data.getServers(),
@@ -17,6 +18,7 @@ vi.mock('./data', () => ({
   recentKills: (q: unknown) => data.recentKills(q),
   factionWins: (id: unknown) => data.factionWins(id),
   searchPlayers: (q: unknown) => data.searchPlayers(q),
+  watchlist: () => data.watchlist(),
 }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
@@ -41,6 +43,7 @@ describe('warmCommonPages', () => {
     expect(data.leaderboard).toHaveBeenCalledWith({ metric: 'kd', period: '7d' });
     expect(data.recentKills).toHaveBeenCalledWith({ limit: 12 });
     expect(data.factionWins).toHaveBeenCalledWith(null);
+    expect(data.watchlist).toHaveBeenCalled();
   });
 
   test('a failure in one part never throws and the rest still run', async () => {

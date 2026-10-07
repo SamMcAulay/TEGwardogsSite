@@ -1,14 +1,14 @@
 // Keeps the most visited pages' data warm so the first visitor after a refresh never waits on
 // Warcon. Each touch is a cache hit until the data expires; then it starts the background refresh
 // (TtlCache serve-stale), so the cost to Warcon is one load per refresh interval, not per minute.
-import { factionWins, getServers, leaderboard, networkSummary, population, recentKills } from './data';
+import { factionWins, getServers, leaderboard, networkSummary, population, recentKills, watchlist } from './data';
 
 const quietly = (p: Promise<unknown>) => p.then(
   () => undefined,
   () => undefined,
 );
 
-/** What the home page, the servers page and the default leaderboard tab read. Never throws. */
+/** What the home page, the servers page, the default leaderboard tab and the watchlist read. Never throws. */
 export async function warmCommonPages(): Promise<void> {
   await Promise.all([
     quietly(
@@ -24,6 +24,7 @@ export async function warmCommonPages(): Promise<void> {
     quietly(leaderboard({ metric: 'kd', period: '7d' })),
     quietly(recentKills({ limit: 12 })),
     quietly(factionWins(null)),
+    quietly(watchlist()),
   ]);
 }
 

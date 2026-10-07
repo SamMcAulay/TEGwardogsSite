@@ -79,3 +79,23 @@ describe('banned-player list', () => {
     expect(out.players).toEqual([{ steamId: '76561198000000001', banned: 'org' }]);
   });
 });
+
+describe('watched-player list', () => {
+  test('keeps who, when and where last seen, and the ban flag used to filter; nothing else', async () => {
+    const { watchedBody } = await import('./schemas');
+    const out = watchedBody.parse({
+      ok: true,
+      total: 1,
+      players: [{
+        steamId: '76561198000000001', name: 'A', aliases: ['B'], firstSeen: 'x', lastSeen: '2026-10-06T10:00:00Z',
+        minutes: 9, kills: 1, deaths: 2, online: false, lastServerId: 's1', lastServerName: 'EU#1', banned: null,
+        watched: true, reason: 'secret', note: 'secret', steam: { persona: 'P', avatar: 'https://a/x.jpg' },
+      }],
+    });
+    expect(out.players).toEqual([{
+      steamId: '76561198000000001', name: 'A', lastSeen: '2026-10-06T10:00:00Z', lastServerId: 's1', banned: null,
+      steam: { avatar: 'https://a/x.jpg' },
+    }]);
+    expect(JSON.stringify(out)).not.toMatch(/secret|persona/);
+  });
+});

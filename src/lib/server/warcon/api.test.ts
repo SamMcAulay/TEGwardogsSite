@@ -88,6 +88,17 @@ describe('bannedPage', () => {
   });
 });
 
+describe('watchedPage', () => {
+  test('asks for watched players 100 at a time from an offset, cached like the ban list', async () => {
+    const { client, json } = fake({ ok: true, players: [], total: 0 });
+    const cache = new TtlCache();
+    const get = vi.spyOn(cache, 'get');
+    await createApi(client, cache).watchedPage('s1', 100);
+    expect(json.mock.calls[0][0]).toBe('/api/servers/s1/players/seen?flag=watched&sort=lastSeen&dir=desc&limit=100&offset=100');
+    expect(get.mock.calls[0][1]).toBe(TTL.bans);
+  });
+});
+
 describe('boardExport', () => {
   const CSV = [
     'rank,steam_id,name,playtime_min,seeded_min,kills,deaths,kd,kills_per_hour,headshots,team_kills,suicides,vehicle_kills,kill_streak,death_streak,matches,wins,losses,draws,win_pct,cash,last_seen',
