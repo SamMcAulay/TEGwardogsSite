@@ -40,6 +40,7 @@ const NAV = [
   { href: '/players', label: 'Players' },
   { href: '/matches', label: 'Matches' },
   { href: '/feed', label: 'Kill Feed' },
+  { href: '/watchlist', label: 'Watchlist' },
 ];
 
 export function NavLinks() {

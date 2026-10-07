@@ -246,5 +246,23 @@ export const bannedBody = z.object({
 });
 export type WBannedPage = Omit<z.infer<typeof bannedBody>, 'ok'>;
 
+/** The watched-player list (players/seen?flag=watched): who, when and where last seen, and the ban
+ *  flag (only used to leave org-banned players off). Reasons and notes are never read. */
+export const watchedBody = z.object({
+  ok: z.literal(true),
+  players: z.array(
+    z.object({
+      steamId: z.string(),
+      name: z.string(),
+      lastSeen: iso,
+      lastServerId: z.string(),
+      banned: z.enum(['org', 'server']).nullable(),
+      steam: z.object({ avatar: z.string() }).nullable(),
+    }),
+  ),
+  total: z.number(),
+});
+export type WWatchedPage = Omit<z.infer<typeof watchedBody>, 'ok'>;
+
 export const steamProfilesBody = z.record(z.string(), z.object({ name: z.string(), avatar: z.string() }).nullable());
 export type WSteamProfiles = z.infer<typeof steamProfilesBody>;

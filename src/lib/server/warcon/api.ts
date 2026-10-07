@@ -5,9 +5,9 @@ import type { Warcon } from './http';
 import { parseBoardExport } from './board-csv';
 import {
   analyticsBody, bannedBody, boardBody, careerBody, dossierBody, killsBody, liveBody, matchBody, matchListBody,
-  seenBody, serversBody, steamProfilesBody,
+  seenBody, serversBody, steamProfilesBody, watchedBody,
   type WAnalytics, type WBannedPage, type WBoard, type WBoardRow, type WCareer, type WDossier, type WKills, type WLive, type WMatchList,
-  type WMatchView, type WSeenPlayer, type WServer, type WSteamProfiles,
+  type WMatchView, type WSeenPlayer, type WServer, type WSteamProfiles, type WWatchedPage,
 } from './schemas';
 
 export const TTL = { live: 10_000, kills: 10_000, stats: 300_000, endedMatch: 3_600_000, steam: 86_400_000, bans: 600_000 } as const;
@@ -156,6 +156,15 @@ export function createApi(
       const path = `/api/servers/${enc(serverId)}/players/seen${qs({ flag: 'banned', sort: 'lastSeen', dir: 'desc', limit: 100, offset })}`;
       return cached(path, TTL.bans, async () => {
         const { players, total } = await client.json(path, bannedBody);
+        return { players, total };
+      });
+    },
+
+    /** One page (100) of the players on the org's watchlist, newest seen first. */
+    watchedPage(serverId: string, offset: number): Promise<Cached<WWatchedPage>> {
+      const path = `/api/servers/${enc(serverId)}/players/seen${qs({ flag: 'watched', sort: 'lastSeen', dir: 'desc', limit: 100, offset })}`;
+      return cached(path, TTL.bans, async () => {
+        const { players, total } = await client.json(path, watchedBody);
         return { players, total };
       });
     },

@@ -4,11 +4,11 @@ import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
 import { TTL, type KillKind } from './warcon/api';
-import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
+import type { WBoardRow, WKill, WLive, WMatchSummary, WWatchedPage } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import type {
   KillRow, LeaderRow, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
-  PlayerProfile, PlayerSearchRow, PopulationPoint, ServerRow,
+  PlayerProfile, PlayerSearchRow, PopulationPoint, ServerRow, WatchRow,
 } from './views';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
@@ -302,6 +302,47 @@ export async function recentPlayers(limit = 30): Promise<Loaded<PlayerSearchRow[
     if (!seen.has(p.steamId)) seen.set(p.steamId, { steamId: p.steamId, name: p.name, avatarUrl: p.steam?.avatar || null, lastSeen: sec(p.lastSeen), matchedAlias: null });
   }
   return loaded([...seen.values()].slice(0, limit), r.stale, r.failed);
+}
+
+/** At most this many pages (100 players each) of the watchlist per server. */
+const MAX_WATCH_PAGES = 20;
+
+async function watchedOn(serverId: string) {
+  const players: WWatchedPage['players'] = [];
+  let stale = false;
+  for (let p = 0; p < MAX_WATCH_PAGES; p++) {
+    const { value, stale: s } = await warcon().watchedPage(serverId, p * 100);
+    stale ||= s;
+    players.push(...value.players);
+    if ((p + 1) * 100 >= value.total || value.players.length === 0) break;
+  }
+  return { value: players, stale };
+}
+
+/** The org's watchlist, newest seen first. Org-banned players are left off; reasons are never read. */
+export async function watchlist(): Promise<Loaded<WatchRow[]>> {
+  const { list } = await serverList();
+  const r = await fanOut(list.map((s) => s.id), watchedOn);
+  if (list.length && !r.ok.length) throw new Error('watchlist unavailable');
+  const names = new Map(list.map((s) => [s.id, shortNameOf(s.name)]));
+  const rows = new Map<string, WatchRow>();
+  for (const p of r.ok.flatMap((o) => o.value)) {
+    if (p.banned === 'org') continue;
+    const lastSeen = sec(p.lastSeen);
+    const had = rows.get(p.steamId);
+    if (had && (had.lastSeen ?? 0) >= (lastSeen ?? 0)) continue;
+    const serverName = names.get(p.lastServerId) ?? null;
+    rows.set(p.steamId, {
+      steamId: p.steamId,
+      name: p.name,
+      avatarUrl: p.steam?.avatar || null,
+      lastSeen,
+      serverId: serverName ? p.lastServerId : null,
+      serverName,
+    });
+  }
+  const data = [...rows.values()].sort((a, b) => (b.lastSeen ?? 0) - (a.lastSeen ?? 0));
+  return loaded(data, r.stale, r.failed);
 }
 
 function killRow(k: WKill, serverId: string, serverName: string): KillRow {

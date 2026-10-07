@@ -117,6 +117,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link className="link text-muted" href="/feed">
                 Kill feed
               </Link>
+              <Link className="link text-muted" href="/watchlist">
+                Watchlist
+              </Link>
               <Link className="link text-muted" href="/api-docs">
                 Public API
               </Link>

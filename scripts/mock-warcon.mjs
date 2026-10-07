@@ -84,6 +84,15 @@ function board(params) {
 // one more player is banned on a single server only, which the site must ignore.
 const ORG_BANNED = board(new URLSearchParams('sort=kills')).slice(0, 3).map((r) => r.steamId);
 const SERVER_BANNED = [PLAYERS[PLAYERS.length - 1].steamId];
+// Watched: two ordinary players, plus one who is also org-banned (the site must leave them off).
+function watchedList(id) {
+  const players = [PLAYERS[5], PLAYERS[9], { ...PLAYERS[0], steamId: ORG_BANNED[0] }].map((p, i) => ({
+    ...p, aliases: [], firstSeen: iso(now() - 86_400_000), lastSeen: iso(now() - i * 3_600_000), minutes: 120, kills: 10, deaths: 8,
+    online: false, lastServerId: id, lastServerName: id, banned: i === 2 ? 'org' : null, watched: true, reason: 'mock reason', steam: null,
+  }));
+  return { ok: true, players, total: players.length };
+}
+
 function bannedList(q) {
   const all = [...ORG_BANNED.map((steamId) => ({ steamId, banned: 'org' })), ...SERVER_BANNED.map((steamId) => ({ steamId, banned: 'server' }))]
     .map((b) => ({ ...b, name: PLAYERS.find((p) => p.steamId === b.steamId).name, aliases: [], firstSeen: iso(now()), lastSeen: iso(now()), minutes: 60, kills: 1, deaths: 1, online: false, lastServerId: 'srv-1', watched: false, steam: null }));
@@ -163,7 +172,7 @@ const routes = [
       cash: [], maps: MAPS.map((map) => ({ map, minutes: 600, matches: 5 })), wins: { teams: FACTIONS.map((f, i) => ({ ...f, wins: 10 - i * 3 })), decided: 17, draws: 0, noResult: 1 },
       players: [], matches: [], hourly: [], combat: { kills: 4000, headshots: 800, teamKills: 20, suicides: 5, vehicleKills: 30, perBucket: [], causes: [], players: [], longest: [] } };
   }],
-  [/^\/api\/servers\/([^/]+)\/players\/seen$/, (q, id) => q.get('flag') === 'banned' ? bannedList(q) : ({
+  [/^\/api\/servers\/([^/]+)\/players\/seen$/, (q, id) => q.get('flag') === 'banned' ? bannedList(q) : q.get('flag') === 'watched' ? watchedList(id) : ({
     ok: true, total: PLAYERS.length,
     players: PLAYERS.slice(0, Number(q.get('limit') ?? 30)).map((p, i) => ({ ...p, aliases: [], firstSeen: iso(now() - 86_400_000), lastSeen: iso(now() - i * 90_000), sessions: 3, minutes: 300, kills: 40, deaths: 30, servers: 1, online: i < 5, lastServerId: id, lastServerName: id, banned: null, watched: i === 0, steam: null })),
   })],
