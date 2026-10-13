@@ -12,11 +12,11 @@ export async function register() {
   try {
     const a = accounts();
     if (a) startTierSync(a.env, a.store);
-    if (a?.env.roundsWebhookUrl) {
-      const { startRoundAnnouncer, webhookPoster } = await import('./lib/server/rounds');
+    if (a?.env.roundsChannelId) {
+      const { startRoundAnnouncer, botPoster } = await import('./lib/server/rounds');
       const { endedRounds, roundDetail } = await import('./lib/server/data');
       const { siteEnv } = await import('./lib/server/warcon/env');
-      startRoundAnnouncer({ store: a.store, siteUrl: siteEnv().siteUrl, ended: endedRounds, detail: roundDetail, post: webhookPoster(a.env.roundsWebhookUrl) });
+      startRoundAnnouncer({ store: a.store, siteUrl: siteEnv().siteUrl, ended: endedRounds, detail: roundDetail, post: botPoster(a.env) });
     }
     if (a?.env.discordPublicKey) {
       const { registerCommands } = await import('./lib/server/accounts/interactions');

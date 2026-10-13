@@ -43,11 +43,10 @@ describe('loadAccountsEnv', () => {
     expect(() => loadAccountsEnv({ ...base, DISCORD_PUBLIC_KEY: 'not-a-key' })).toThrow(/DISCORD_PUBLIC_KEY/);
   });
 
-  test('DISCORD_ROUNDS_WEBHOOK_URL is optional, and must be a Discord webhook', () => {
-    expect(loadAccountsEnv(base)!.roundsWebhookUrl).toBe('');
-    const url = 'https://discord.com/api/webhooks/123456789/abc-DEF_123';
-    expect(loadAccountsEnv({ ...base, DISCORD_ROUNDS_WEBHOOK_URL: url })!.roundsWebhookUrl).toBe(url);
-    expect(() => loadAccountsEnv({ ...base, DISCORD_ROUNDS_WEBHOOK_URL: 'https://evil.example/hook' })).toThrow(/DISCORD_ROUNDS_WEBHOOK_URL/);
+  test('DISCORD_ROUNDS_CHANNEL_ID is optional, and must be a channel id', () => {
+    expect(loadAccountsEnv(base)!.roundsChannelId).toBe('');
+    expect(loadAccountsEnv({ ...base, DISCORD_ROUNDS_CHANNEL_ID: ' 123456789012345678 ' })!.roundsChannelId).toBe('123456789012345678');
+    expect(() => loadAccountsEnv({ ...base, DISCORD_ROUNDS_CHANNEL_ID: '#rounds' })).toThrow(/DISCORD_ROUNDS_CHANNEL_ID/);
   });
 
   test('rejects a short session secret', () => {

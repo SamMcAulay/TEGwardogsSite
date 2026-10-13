@@ -17,8 +17,8 @@ export interface AccountsEnv {
   discordPublicKey: string;
   /** Where accounts.db lives (a Docker volume in production) */
   dataDir: string;
-  /** A Discord channel webhook for round results; blank: no round posts */
-  roundsWebhookUrl: string;
+  /** The channel the bot posts round results in; blank: no round posts */
+  roundsChannelId: string;
 }
 
 const REQUIRED = [
@@ -31,10 +31,8 @@ const REQUIRED = [
 
 const ids = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
-function webhook(v: string): string {
-  if (v && !/^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(v)) {
-    throw new Error('DISCORD_ROUNDS_WEBHOOK_URL must be a Discord channel webhook URL (https://discord.com/api/webhooks/…)');
-  }
+function channelId(v: string): string {
+  if (v && !/^\d{17,20}$/.test(v)) throw new Error('DISCORD_ROUNDS_CHANNEL_ID must be a channel id (right-click the channel, Copy Channel ID)');
   return v;
 }
 
@@ -69,7 +67,7 @@ export function loadAccountsEnv(src: Record<string, string | undefined> = proces
     priorityApiKey: val('PRIORITY_API_KEY'),
     discordPublicKey: publicKey(val('DISCORD_PUBLIC_KEY')),
     dataDir: val('DATA_DIR') || './data',
-    roundsWebhookUrl: webhook(val('DISCORD_ROUNDS_WEBHOOK_URL')),
+    roundsChannelId: channelId(val('DISCORD_ROUNDS_CHANNEL_ID')),
   };
 }
 

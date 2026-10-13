@@ -1,6 +1,6 @@
 // Round results to a Discord channel: every couple of minutes, rounds that have just ended are
-// posted through a channel webhook (no bot permissions), once each. The first run on a server
-// records what has already ended without posting, so switching it on doesn't flood the channel.
+// posted by the bot (over REST, no gateway), once each. The first run on a server records what has
+// already ended without posting, so switching it on doesn't flood the channel.
 import { mapName } from '@/lib/game';
 import { plainName } from './accounts/interactions';
 import type { Store } from './accounts/store';
@@ -95,11 +95,21 @@ export async function announceRounds(deps: AnnounceDeps): Promise<{ posted: numb
   return { posted, skipped };
 }
 
-/** Posts a message to a channel webhook. */
-export function webhookPoster(url: string, f: typeof fetch = fetch) {
+const API = (process.env.NODE_ENV !== 'production' && process.env.DISCORD_API_BASE) || 'https://discord.com/api/v10';
+
+/** Posts a message as the bot in one channel. It needs View Channel, Send Messages and Embed Links there. */
+export function botPoster(env: { discordBotToken: string; roundsChannelId: string }, f: typeof fetch = fetch) {
   return async (body: object) => {
-    const res = await f(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) throw new Error(`webhook post failed (${res.status})`);
+    const res = await f(`${API}/channels/${env.roundsChannelId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bot ${env.discordBotToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (res.status === 403 || res.status === 404) {
+      throw new Error(`bot can't post in channel ${env.roundsChannelId} (${res.status}): allow it View Channel, Send Messages and Embed Links there`);
+    }
+    if (!res.ok) throw new Error(`posting the round failed (${res.status})`);
   };
 }
 
