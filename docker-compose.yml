@@ -1,10 +1,18 @@
-# docker compose up -d --build            the site, on 127.0.0.1:3000 and the warcon_default network
-# docker compose run --rm doctor          checks the Warcon key and every endpoint (deploy gate)
+# Nothing is built on the VPS: a Next.js build needs ~2 GB and starves Warcon and cloudflared on the
+# 4 GB box. CI builds the image and pushes it to ghcr.io; scripts/deploy.sh pulls it, runs the doctor
+# in it, and tags it teg-wardogs-site:current, which is what runs here.
+#
+#   docker compose up -d                    (re)start whatever was last deployed
+#   docker compose run --rm doctor          checks the Warcon key and every endpoint, in that image
+#   sh scripts/deploy.sh <commit sha>       deploy or roll back to that commit's image
+#
+# Build locally instead (not on the VPS): docker build -t teg-wardogs-site:current .
 
 services:
   site:
-    build: .
-    image: teg-wardogs-site:latest
+    image: teg-wardogs-site:current
+    # Never pull or build on `up`: only deploy.sh changes what :current points at.
+    pull_policy: never
     container_name: teg-wardogs-site
     restart: unless-stopped
     env_file: .env
@@ -20,12 +28,13 @@ services:
       options: { max-size: 10m, max-file: '3' }
 
   doctor:
-    build: { context: ., target: build }
+    # deploy.sh points this at the image it is about to deploy, to check it before the swap.
+    image: ${DOCTOR_IMAGE:-teg-wardogs-site:current}
+    pull_policy: never
     profiles: [tools]
     env_file: .env
-    environment: { HOME: /tmp }
     networks: [warcon]
-    command: ['node_modules/.bin/tsx', 'scripts/doctor.ts']
+    command: ['node', 'doctor.mjs']
 
 networks:
   warcon:

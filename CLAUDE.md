@@ -11,4 +11,5 @@
 - Colours live only in the `:root` tokens in `src/app/globals.css`.
 - Local run: `npm run dev:mock` (mock Warcon on :4100 plus next dev). Checks: `npm test`, `npm run lint`,
   `npm run typecheck`.
-- Deployment: `docs/DEPLOYMENT.md`. `docker compose run --rm doctor` checks the key and every endpoint.
+- Deployment: `docs/DEPLOYMENT.md`. CI builds the image and pushes it to ghcr.io; the VPS (4 GB, shared
+  with Warcon and cloudflared) must never build: `scripts/deploy.sh <sha>` pulls, runs the doctor in it, swaps.
