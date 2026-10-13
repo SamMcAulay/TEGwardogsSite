@@ -68,6 +68,26 @@ describe('accounts store', () => {
     expect(s.tiered()).toEqual([{ steamId: S1, tier: 3, linkedAt: 1000 }]);
   });
 
+  test('recent lists newest links first; counts tally each tier', () => {
+    const s = openStore(':memory:');
+    at(1000);
+    s.link(D1, S1);
+    at(2000);
+    s.link(D2, S2);
+    s.setTier(D2, 1);
+    expect(s.recent(10).map((l) => l.discordId)).toEqual([D2, D1]);
+    expect(s.recent(1, 1).map((l) => l.discordId)).toEqual([D1]);
+    expect(s.counts()).toEqual({ total: 2, 1: 1, 2: 0, 3: 0, none: 1 });
+  });
+
+  test('the audit log lists newest actions first', () => {
+    const s = openStore(':memory:');
+    s.log({ adminDiscordId: D1, action: 'recheck', targetDiscordId: D2, targetSteamId: S2 }, 100);
+    s.log({ adminDiscordId: D1, action: 'unlink', targetDiscordId: D2, targetSteamId: S2 }, 200);
+    expect(s.auditLog(10).map((e) => [e.at, e.action])).toEqual([[200, 'unlink'], [100, 'recheck']]);
+    expect(s.auditLog(1)).toHaveLength(1);
+  });
+
   test('re-linking the same Steam account keeps the original link date; switching accounts resets it', () => {
     const s = openStore(':memory:');
     at(1000);
@@ -100,15 +120,15 @@ describe('accounts.db on disk', () => {
     const v1 = openStore(file);
     v1.link(D1, S1);
     v1.close();
-    const v2 = [...MIGRATIONS, 'ALTER TABLE links ADD COLUMN queue_note TEXT'];
-    const s = openStore(file, v2);
+    const next = [...MIGRATIONS, 'ALTER TABLE links ADD COLUMN queue_note TEXT'];
+    const s = openStore(file, next);
     expect(s.byDiscord(D1)?.steamId).toBe(S1);
     s.close();
     const raw = new DatabaseSync(file);
-    expect(raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    expect(raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: next.length });
     expect(raw.prepare('SELECT queue_note FROM links').get()).toEqual({ queue_note: null });
     raw.close();
-    const snap = new DatabaseSync(`${file}.pre-v2`);
+    const snap = new DatabaseSync(`${file}.pre-v${next.length}`);
     expect(snap.prepare('SELECT steam_id FROM links').get()).toEqual({ steam_id: S1 });
     snap.close();
   });
@@ -118,7 +138,7 @@ describe('accounts.db on disk', () => {
     openStore(file).link(D1, S1);
     expect(() => openStore(file, [...MIGRATIONS, 'ALTER TABLE links ADD COLUMN x TEXT', 'NOT SQL'])).toThrow();
     const raw = new DatabaseSync(file);
-    expect(raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: 1 });
+    expect(raw.prepare('PRAGMA user_version').get()).toEqual({ user_version: MIGRATIONS.length });
     expect(raw.prepare('SELECT count(*) AS n FROM pragma_table_info(?) WHERE name = ?').get('links', 'x')).toEqual({ n: 0 });
     raw.close();
   });
@@ -132,6 +152,21 @@ describe('accounts.db on disk', () => {
   test('a brand-new file is not snapshotted', () => {
     const file = join(fresh(), 'accounts.db');
     openStore(file).close();
-    expect(existsSync(`${file}.pre-v1`)).toBe(false);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(false);
+  });
+
+  test('upgrading the live v1 database keeps its links and adds the admin log', () => {
+    const file = join(fresh(), 'accounts.db');
+    // what the deployed v1 build wrote
+    const v1 = new DatabaseSync(file);
+    v1.exec(`${MIGRATIONS[0]}; PRAGMA user_version = 1;`);
+    v1.prepare('INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at) VALUES (?, ?, 1, 50, 40)').run(D1, S1);
+    v1.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 1, checkedAt: 50, linkedAt: 40 });
+    expect(s.byDiscord(D1)?.steamId).toBe(S1);
+    s.log({ adminDiscordId: D2, action: 'unlink', targetDiscordId: D1, targetSteamId: S1 }, 100);
+    expect(s.auditLog(5)).toEqual([{ at: 100, adminDiscordId: D2, action: 'unlink', targetDiscordId: D1, targetSteamId: S1 }]);
+    expect(existsSync(`${file}.pre-v2`)).toBe(true);
   });
 });

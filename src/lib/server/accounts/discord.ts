@@ -1,7 +1,8 @@
 // Discord: OAuth2 sign-in (scope identify) and reading a member's roles with the bot token.
 import type { AccountsEnv } from './env';
 
-const API = 'https://discord.com/api/v10';
+// DISCORD_API_BASE points the site at a fake Discord for local testing; production ignores it.
+const API = (process.env.NODE_ENV !== 'production' && process.env.DISCORD_API_BASE) || 'https://discord.com/api/v10';
 type Fetch = typeof fetch;
 
 export class DiscordError extends Error {
@@ -55,13 +56,27 @@ export async function signedInUser(env: AccountsEnv, code: string, redirectUri: 
   return { id: me.id, name: me.global_name || me.username || 'Discord user' };
 }
 
-/** The member's role ids in the TEG guild; null when they are not in it. Throws when Discord can't say. */
-export async function memberRoles(env: AccountsEnv, discordId: string, f: Fetch = fetch): Promise<string[] | null> {
+export interface Member {
+  roles: string[];
+  /** server nickname, else display name, else username; for staff on /admin only, never stored */
+  name: string;
+}
+
+/** The member in the TEG guild; null when they are not in it. Throws when Discord can't say. */
+export async function member(env: AccountsEnv, discordId: string, f: Fetch = fetch): Promise<Member | null> {
   const res = await call(f, `${API}/guilds/${env.discordGuildId}/members/${discordId}`, {
     headers: { Authorization: `Bot ${env.discordBotToken}` },
   }, 'member lookup');
   if (res.status === 404) return null; // Unknown Member: left or never joined
   if (!res.ok) throw new DiscordError(`member lookup failed (${res.status})`, res.status);
-  const m = (await res.json()) as { roles?: unknown };
-  return Array.isArray(m.roles) ? m.roles.filter((r): r is string => typeof r === 'string') : [];
+  const m = (await res.json()) as { roles?: unknown; nick?: string | null; user?: { username?: string; global_name?: string | null } };
+  return {
+    roles: Array.isArray(m.roles) ? m.roles.filter((r): r is string => typeof r === 'string') : [],
+    name: m.nick || m.user?.global_name || m.user?.username || discordId,
+  };
+}
+
+/** The member's role ids in the TEG guild; null when they are not in it. Throws when Discord can't say. */
+export async function memberRoles(env: AccountsEnv, discordId: string, f: Fetch = fetch): Promise<string[] | null> {
+  return (await member(env, discordId, f))?.roles ?? null;
 }

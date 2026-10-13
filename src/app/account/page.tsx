@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { NameTag, TierBadge } from '@/components/tier';
-import { Container, Empty, PageHeader, Panel } from '@/components/ui';
+import { buttonClass, Container, Empty, PageHeader, Panel } from '@/components/ui';
 import { safe } from '@/components/section';
 import { accounts, currentSession } from '@/lib/server/accounts';
 import type { AuthError } from '@/lib/server/accounts/routes';
@@ -21,9 +21,8 @@ const ERRORS: Record<AuthError, string> = {
   taken: 'That Steam account is already linked to a different Discord account. Unlink it there first, or ask a moderator.',
 };
 
-const button = 'inline-flex items-center gap-2 px-4 py-2 font-display text-sm font-semibold uppercase tracking-[0.1em] transition-colors';
-const primary = `${button} bg-accent text-accent-ink hover:brightness-110`;
-const secondary = `${button} border border-line-strong text-muted hover:border-accent hover:text-text`;
+const primary = buttonClass('primary');
+const secondary = buttonClass('secondary');
 
 function Step({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
   return (
