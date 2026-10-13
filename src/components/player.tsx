@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { CSSProperties } from 'react';
 import { cx } from './ui';
 
 /** Stable hue from a string, so a player's badge keeps its colour everywhere. */
@@ -18,23 +19,40 @@ function initials(name: string): string {
   return letters.toUpperCase();
 }
 
+/**
+ * Border in the player's main faction colour, or the accent when they have none (or it isn't known).
+ * Thick on the big profile avatar, faint on the small ones in lists.
+ */
+function ringStyle(faction: string | null | undefined, size: number): CSSProperties {
+  const color = faction ? `var(--${faction.toLowerCase()})` : 'var(--accent)';
+  return {
+    borderStyle: 'solid',
+    borderWidth: size >= 80 ? 3 : size >= 48 ? 2 : 1,
+    borderColor: size >= 48 ? color : `color-mix(in srgb, ${color} 60%, transparent)`,
+  };
+}
+
 export function Avatar({
   name,
   steamId,
   url,
   size = 28,
+  faction,
   className,
 }: {
   name: string;
   steamId: string;
   url?: string | null;
   size?: number;
+  /** A main faction from `mainFaction()`; colours the border. */
+  faction?: string | null;
   className?: string;
 }) {
+  const ring = ringStyle(faction, size);
   if (url) {
     // Steam CDN avatars; plain img keeps next/image remote config out of self-hosted setups.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" width={size} height={size} className={cx('shrink-0 bg-surface-3', className)} />;
+    return <img src={url} alt="" width={size} height={size} className={cx('shrink-0 bg-surface-3', className)} style={ring} />;
   }
   const h = hue(steamId);
   return (
@@ -47,7 +65,7 @@ export function Avatar({
         fontSize: size * 0.4,
         background: `hsl(${h} 28% 18%)`,
         color: `hsl(${h} 55% 72%)`,
-        boxShadow: `inset 0 0 0 1px hsl(${h} 30% 28%)`,
+        ...ring,
       }}
     >
       {initials(name)}

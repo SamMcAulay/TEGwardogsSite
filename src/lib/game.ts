@@ -23,6 +23,17 @@ export function factionColor(name: string | null | undefined, fallback = '#8b93a
   return (name && FACTIONS[name]?.color) || fallback;
 }
 
+/**
+ * The faction a player is loyal to: one known faction holding at least `threshold` of their rounds.
+ * Warcon only splits a career by rounds, not seconds, so round share stands in for play time.
+ */
+export function mainFaction(factions: { key: string; matches: number }[], threshold = 0.65): string | null {
+  const total = factions.reduce((a, f) => a + f.matches, 0);
+  if (!total) return null;
+  const top = factions.reduce((a, b) => (b.matches > a.matches ? b : a));
+  return FACTIONS[top.key] && top.matches / total >= threshold ? top.key : null;
+}
+
 export function experienceName(id: string): string {
   if (/KOTH_Hardcore/i.test(id)) return 'Hardcore';
   if (/KOTH_InfantryOnly/i.test(id)) return 'Infantry only';

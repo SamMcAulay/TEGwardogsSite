@@ -7,7 +7,7 @@ import { Avatar, PlayerLink } from '@/components/player';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
-import { causeInfo, mapName } from '@/lib/game';
+import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { playerMetadata } from '@/lib/server/card';
 import { getPlayer } from '@/lib/server/data';
 
@@ -102,7 +102,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                 steamId={steamId}
                 url={player.avatarUrl}
                 size={84}
-                className="border border-line-strong"
+                faction={mainFaction(player.factions)}
               />
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
