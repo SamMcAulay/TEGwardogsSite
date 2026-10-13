@@ -286,6 +286,11 @@ export async function adjustedRank(warconRank: number | null, steamId: string): 
   return Math.max(1, warconRank - bannedAbove);
 }
 
+/** Loads or refreshes the search index in the background, so no visitor or /lookup waits on it. */
+export async function warmSearchIndex(): Promise<void> {
+  await searchIndex(async () => (await serverList()).list[0].id).snapshot();
+}
+
 /**
  * A player's name from the in-memory search index: no Warcon player lookup, so pages that only
  * need a name (/account, /admin) cost Warcon nothing during a rush. Null outside the top 10,000.

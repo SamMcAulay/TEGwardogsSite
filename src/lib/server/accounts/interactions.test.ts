@@ -95,6 +95,25 @@ describe('/lookup', () => {
   });
 });
 
+describe('/lookup when the player list is slow', () => {
+  test('replies in time without the name rather than miss Discord\'s 3 seconds', async () => {
+    const store = openStore(':memory:');
+    store.link(TARGET, STEAM);
+    const slow = () => new Promise<string | null>((done) => setTimeout(() => done('RedOwl57'), 5_000));
+    const started = Date.now();
+    const r = await handleInteraction(lookup([STAFF]), { ...deps(store), playerName: slow, nameBudgetMs: 50 });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(text(r).content).toBe(`**Night Owl**: ${SITE}/players/${STEAM}`);
+  });
+
+  test('a failing lookup also just drops the name', async () => {
+    const store = openStore(':memory:');
+    store.link(TARGET, STEAM);
+    const r = await handleInteraction(lookup([STAFF]), { ...deps(store), playerName: async () => Promise.reject(new Error('down')) });
+    expect(text(r).content).toBe(`**Night Owl**: ${SITE}/players/${STEAM}`);
+  });
+});
+
 describe('registerCommands', () => {
   test('overwrites the guild commands with the bot token', async () => {
     const f = vi.fn(async () => Response.json([])) as unknown as typeof fetch;
