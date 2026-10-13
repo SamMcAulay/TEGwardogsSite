@@ -6,6 +6,16 @@ export function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
+const BUTTON = 'inline-flex items-center gap-2 px-4 py-2 font-display text-sm font-semibold uppercase tracking-[0.1em] transition-colors';
+const BUTTONS = {
+  primary: `${BUTTON} bg-accent text-accent-ink hover:brightness-110`,
+  secondary: `${BUTTON} border border-line-strong text-muted hover:border-accent hover:text-text`,
+  danger: `${BUTTON} border border-bad/50 text-bad hover:bg-bad/10`,
+};
+
+/** Classes for a button-styled <button> or <a>. */
+export const buttonClass = (kind: keyof typeof BUTTONS = 'secondary') => BUTTONS[kind];
+
 export function Container({ children, className }: { children: ReactNode; className?: string }) {
   return <div className={cx('mx-auto w-full max-w-[1280px] px-4 sm:px-6', className)}>{children}</div>;
 }

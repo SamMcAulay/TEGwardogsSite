@@ -1,5 +1,6 @@
-// Linked accounts: one Discord account to one Steam account, and the tier its roles last granted.
-// Node's built-in SQLite, one file in DATA_DIR. Role ids and Discord names are never stored.
+// Linked accounts: one Discord account to one Steam account, and the tier its roles last granted,
+// plus a log of what staff did to them on /admin. Node's built-in SQLite, one file in DATA_DIR.
+// Role ids and Discord names are never stored.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -32,6 +33,16 @@ const toLink = (r: Row): Link => ({
 
 const now = () => Math.floor(Date.now() / 1000);
 
+export type AdminAction = 'unlink' | 'recheck';
+
+export interface AdminLogEntry {
+  at: number;
+  adminDiscordId: string;
+  action: AdminAction;
+  targetDiscordId: string;
+  targetSteamId: string | null;
+}
+
 export class SteamTakenError extends Error {
   constructor() {
     super('That Steam account is already linked to another Discord account.');
@@ -50,6 +61,15 @@ export const MIGRATIONS: string[] = [
      tier       INTEGER CHECK (tier IN (1, 2, 3)),
      checked_at INTEGER,
      linked_at  INTEGER NOT NULL
+   )`,
+  // v2: what staff did on /admin, and who did it
+  `CREATE TABLE admin_log (
+     id                INTEGER PRIMARY KEY,
+     at                INTEGER NOT NULL,
+     admin_discord_id  TEXT NOT NULL,
+     action            TEXT NOT NULL,
+     target_discord_id TEXT NOT NULL,
+     target_steam_id   TEXT
    )`,
 ];
 
@@ -90,6 +110,10 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     setTier: db.prepare('UPDATE links SET tier = ?, checked_at = ? WHERE discord_id = ?'),
     due: db.prepare('SELECT * FROM links WHERE checked_at IS NULL OR checked_at < ? ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?'),
     tiered: db.prepare('SELECT steam_id, tier, linked_at FROM links WHERE tier IS NOT NULL ORDER BY tier, linked_at, steam_id'),
+    recent: db.prepare('SELECT * FROM links ORDER BY linked_at DESC, discord_id LIMIT ? OFFSET ?'),
+    counts: db.prepare('SELECT tier, count(*) AS n FROM links GROUP BY tier'),
+    log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id) VALUES (?, ?, ?, ?, ?)'),
+    auditLog: db.prepare('SELECT * FROM admin_log ORDER BY at DESC, id DESC LIMIT ?'),
   };
   const one = (r: unknown) => (r ? toLink(r as Row) : null);
 
@@ -113,6 +137,30 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         steamId: r.steam_id,
         tier: r.tier,
         linkedAt: r.linked_at,
+      })),
+    /** Newest links first. */
+    recent: (limit: number, offset = 0) => (q.recent.all(limit, offset) as unknown as Row[]).map(toLink),
+    /** How many links hold each tier; `none` counts linked accounts with no tier. */
+    counts() {
+      const out = { total: 0, 1: 0, 2: 0, 3: 0, none: 0 };
+      for (const r of q.counts.all() as unknown as { tier: Tier | null; n: number }[]) {
+        out.total += r.n;
+        if (r.tier) out[r.tier] = r.n;
+        else out.none = r.n;
+      }
+      return out;
+    },
+    log(e: Omit<AdminLogEntry, 'at'>, at = now()) {
+      q.log.run(at, e.adminDiscordId, e.action, e.targetDiscordId, e.targetSteamId);
+    },
+    /** Newest admin actions first. */
+    auditLog: (limit: number) =>
+      (q.auditLog.all(limit) as unknown as { at: number; admin_discord_id: string; action: AdminAction; target_discord_id: string; target_steam_id: string | null }[]).map((r) => ({
+        at: r.at,
+        adminDiscordId: r.admin_discord_id,
+        action: r.action,
+        targetDiscordId: r.target_discord_id,
+        targetSteamId: r.target_steam_id,
       })),
     close: () => db.close(),
   };
