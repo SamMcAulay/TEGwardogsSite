@@ -433,6 +433,7 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
         kills: c.kills, deaths: c.deaths, headshots: c.headshots, suicides: d.combat?.suicides ?? 0,
         teamkills: d.combat?.teamKills ?? 0, playtime: c.minutes * 60, longest: c.longestM ?? 0,
         matches: c.matches, wins: c.wins, losses: c.losses, draws: c.draws,
+        vehicleKills: c.vehicleKills ?? 0, killStreak: c.killStreak ?? 0,
       },
       rank: await adjustedRank(c.rank.org, steamId),
       streak: c.streak,

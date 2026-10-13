@@ -10,6 +10,7 @@ import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
+import { classKills } from '@/lib/weapon-classes';
 import { playerMetadata } from '@/lib/server/card';
 import { tierOfSteam } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
@@ -171,7 +172,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
           />
         </StatGrid>
 
-        <Milestones totals={t} />
+        <Milestones totals={{ ...t, classKills: classKills(player.weapons) }} />
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Servers played" flush>
