@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, test, vi } from 'vitest';
 import type { AccountsEnv } from './env';
-import { COMMANDS, handleInteraction, registerCommands, verifyDiscordRequest } from './interactions';
+import { COMMANDS, handleInteraction, plainName, registerCommands, verifyDiscordRequest } from './interactions';
 import { openStore } from './store';
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -91,7 +91,7 @@ describe('/lookup', () => {
     const i = lookup([STAFF]);
     i.data.resolved.members[TARGET].nick = 'Owl [TEG]' as unknown as null;
     const r = await handleInteraction(i, { ...deps(store), playerName: async () => null });
-    expect(text(r).content).toBe(`**Owl [TEG]**: ${SITE}/players/${STEAM}`);
+    expect(text(r).content).toBe(`**Owl \\[TEG\\]**: ${SITE}/players/${STEAM}`);
   });
 });
 
@@ -111,6 +111,35 @@ describe('/lookup when the player list is slow', () => {
     store.link(TARGET, STEAM);
     const r = await handleInteraction(lookup([STAFF]), { ...deps(store), playerName: async () => Promise.reject(new Error('down')) });
     expect(text(r).content).toBe(`**Night Owl**: ${SITE}/players/${STEAM}`);
+  });
+});
+
+describe('plainName', () => {
+  test('a disguised link, raw link, or formatting is shown as text', () => {
+    expect(plainName('[Free Nitro](https://evil.example)')).toBe('\\[Free Nitro\\]\\(https:/\u200b/evil.example\\)');
+    expect(plainName('https://evil.example')).toBe('https:/\u200b/evil.example');
+    expect(plainName('**bold** __u__ ~~s~~ `c` ||spoiler|| > quote # head <@1>')).not.toMatch(/(?<!\\)[*_~`|>#<]/);
+  });
+
+  test('one line, at most 64 characters, ordinary names unchanged', () => {
+    expect(plainName('Night\nOwl\r\n\u2028x')).toBe('Night Owl x');
+    expect([...plainName('a'.repeat(100))]).toHaveLength(64);
+    expect(plainName('RedOwl57')).toBe('RedOwl57');
+    expect(plainName('Owl [TEG]')).toBe('Owl \\[TEG\\]');
+  });
+});
+
+describe('/lookup with hostile names', () => {
+  test('a nickname or player name cannot post a link or formatting', async () => {
+    const store = openStore(':memory:');
+    store.link(TARGET, STEAM);
+    const i = lookup([STAFF]);
+    i.data.resolved.members[TARGET].nick = '[Free Nitro](https://evil.example)' as unknown as null;
+    const r = await handleInteraction(i, { ...deps(store), playerName: async () => '**x**\n# https://evil.example' });
+    const content = text(r).content;
+    expect(content).not.toMatch(/\]\(|https:\/\/evil/);
+    expect(content).toContain(`${SITE}/players/${STEAM}`); // the real link still works
+    expect(content.split('\n')).toHaveLength(1);
   });
 });
 

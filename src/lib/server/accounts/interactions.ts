@@ -61,6 +61,18 @@ interface Interaction {
   };
 }
 
+/**
+ * A member-chosen name (Discord nickname, Steam name) as plain text in a bot message: Discord
+ * renders bot messages as markdown, so a name like `[Free Nitro](https://…)` would otherwise post
+ * a disguised link under the bot's name. One line, at most 64 characters, formatting escaped,
+ * and any `://` broken with a zero-width space so it can't become a link.
+ */
+export function plainName(name: string): string {
+  const oneLine = name.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').trim();
+  const short = [...oneLine].length > 64 ? `${[...oneLine].slice(0, 63).join('')}…` : oneLine;
+  return short.replace(/[\\*_~`|>[\]()#<]/g, (c) => `\\${c}`).replace(/:\/\//g, ':/\u200b/');
+}
+
 /** A reply in the channel, or `privately` only to whoever ran the command. Never pings anyone. */
 const say = (content: string, privately = false) => ({
   type: 4,
@@ -82,9 +94,10 @@ export async function handleInteraction(
   const id = String(i.data.options?.find((o) => o.name === 'member')?.value ?? '');
   if (!/^\d{17,20}$/.test(id)) return say('Pick a member to look up.', true);
   const user = i.data.resolved?.users?.[id];
-  const who = i.data.resolved?.members?.[id]?.nick || user?.global_name || user?.username || 'That member';
+  const who = plainName(i.data.resolved?.members?.[id]?.nick || user?.global_name || user?.username || 'That member');
   const link = store.byDiscord(id);
   if (!link) return say(`**${who}** hasn't linked their Steam account. They can link it at <${siteUrl}/account>: sign in with Discord, then Steam.`);
-  const name = await within(deps.playerName(link.steamId), deps.nameBudgetMs ?? NAME_BUDGET_MS, null);
+  const found = await within(deps.playerName(link.steamId), deps.nameBudgetMs ?? NAME_BUDGET_MS, null);
+  const name = found && plainName(found);
   return say(`**${who}**${name ? ` plays as **${name}**` : ''}: ${siteUrl}/players/${link.steamId}`);
 }
