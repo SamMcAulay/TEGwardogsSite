@@ -1,6 +1,6 @@
 // Discord slash commands over HTTP: Discord POSTs each use of a command to
 // /api/discord/interactions and shows our JSON reply. No gateway connection, no bot process.
-// Only one command: /lookup, for staff, giving a member's linked stats profile.
+// Only one command: /lookup, for staff, posting a member's linked stats profile in the channel.
 import { createPublicKey, verify } from 'node:crypto';
 import type { AccountsEnv } from './env';
 import type { Store } from './store';
@@ -61,7 +61,11 @@ interface Interaction {
   };
 }
 
-const say = (content: string) => ({ type: 4, data: { content, flags: EPHEMERAL, allowed_mentions: { parse: [] } } });
+/** A reply in the channel, or `privately` only to whoever ran the command. Never pings anyone. */
+const say = (content: string, privately = false) => ({
+  type: 4,
+  data: { content, ...(privately ? { flags: EPHEMERAL } : {}), allowed_mentions: { parse: [] } },
+});
 
 /** The reply to one verified interaction. */
 export async function handleInteraction(
@@ -69,14 +73,14 @@ export async function handleInteraction(
   deps: { env: AccountsEnv; store: Store; siteUrl: string; playerName: (steamId: string) => Promise<string | null>; nameBudgetMs?: number },
 ): Promise<object> {
   if (i.type === 1) return { type: 1 }; // PING: Discord checking the endpoint
-  if (i.type !== 2 || i.data?.name !== 'lookup') return say('Unknown command.');
+  if (i.type !== 2 || i.data?.name !== 'lookup') return say('Unknown command.', true);
   const { env, store, siteUrl } = deps;
   const roles = i.member?.roles ?? [];
   if (i.guild_id !== env.discordGuildId || !env.roles.staff.some((r) => roles.includes(r))) {
-    return say('This command is for TEG staff only.');
+    return say('This command is for TEG staff only.', true);
   }
   const id = String(i.data.options?.find((o) => o.name === 'member')?.value ?? '');
-  if (!/^\d{17,20}$/.test(id)) return say('Pick a member to look up.');
+  if (!/^\d{17,20}$/.test(id)) return say('Pick a member to look up.', true);
   const user = i.data.resolved?.users?.[id];
   const who = i.data.resolved?.members?.[id]?.nick || user?.global_name || user?.username || 'That member';
   const link = store.byDiscord(id);

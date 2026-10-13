@@ -33,7 +33,7 @@ const lookup = (roles: string[], over: object = {}) => ({
 });
 
 const deps = (store = openStore(':memory:')) => ({ env, store, siteUrl: SITE, playerName: vi.fn(async () => 'RedOwl57') });
-const text = (r: object) => (r as { data: { content: string; flags: number } }).data;
+const text = (r: object) => (r as { data: { content: string; flags?: number } }).data;
 
 describe('verifyDiscordRequest', () => {
   const now = 1_700_000_000;
@@ -60,13 +60,12 @@ describe('/lookup', () => {
     expect(await handleInteraction({ type: 1 }, deps())).toEqual({ type: 1 });
   });
 
-  test('staff get the linked member\'s profile link, privately, with no pings', async () => {
+  test('staff get the linked member\'s profile link in the channel, with no pings', async () => {
     const store = openStore(':memory:');
     store.link(TARGET, STEAM);
     const r = await handleInteraction(lookup(['42', STAFF]), deps(store));
     expect(text(r)).toEqual({
       content: `**Night Owl** plays as **RedOwl57**: ${SITE}/players/${STEAM}`,
-      flags: 64,
       allowed_mentions: { parse: [] },
     });
   });
@@ -74,13 +73,14 @@ describe('/lookup', () => {
   test('not linked: one short line on how to link', async () => {
     const r = await handleInteraction(lookup([STAFF]), deps());
     expect(text(r).content).toBe(`**Night Owl** hasn't linked their Steam account. They can link it at <${SITE}/account>: sign in with Discord, then Steam.`);
+    expect(text(r).flags).toBeUndefined();
   });
 
   test('everyone else, or another server, is turned away without a lookup', async () => {
     const store = openStore(':memory:');
     store.link(TARGET, STEAM);
     const d = deps(store);
-    expect(text(await handleInteraction(lookup(['200000000000000000']), d)).content).toMatch(/staff only/);
+    expect(text(await handleInteraction(lookup(['200000000000000000']), d))).toMatchObject({ content: expect.stringMatching(/staff only/), flags: 64 });
     expect(text(await handleInteraction(lookup([STAFF], { guild_id: '888888888888888888' }), d)).content).toMatch(/staff only/);
     expect(d.playerName).not.toHaveBeenCalled();
   });

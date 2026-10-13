@@ -166,10 +166,10 @@ refuses to open a newer database, so roll back by restoring that copy.
 
 ### Staff `/lookup` command (optional)
 
-`/lookup member:@someone` in the TEG server replies, only to the staff member who ran it, with that
-member's stats profile link (Discord shows the player card under it), or a one-line "how to link"
-when they haven't. Only members with a `DISCORD_STAFF_ROLE_IDS` role can use it; others are told
-it's staff-only. There is no bot process: Discord sends each use to the site, signed with the
+`/lookup member:@someone` in the TEG server replies in the channel with that member's stats profile
+link (Discord shows the player card under it), or a one-line "how to link" when they haven't. It
+never pings anyone. Only members with a `DISCORD_STAFF_ROLE_IDS` role can use it; others are told,
+privately, that it's staff-only. There is no bot process: Discord sends each use to the site, signed with the
 application's key.
 
 1. Developer Portal, General Information: copy the **Public Key** into `.env` as
