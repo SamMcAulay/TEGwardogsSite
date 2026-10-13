@@ -94,6 +94,7 @@ export const careerBody = z.object({
     deaths: z.number(),
     minutes: z.number(),
     headshots: z.number(),
+    vehicleKills: z.number(),
     longestM: z.number().nullable(),
     killStreak: z.number(),
     maps: z.array(careerGroup),

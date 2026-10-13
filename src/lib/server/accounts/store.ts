@@ -122,6 +122,7 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     due: db.prepare('SELECT * FROM links WHERE checked_at IS NULL OR checked_at < ? ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?'),
     tiered: db.prepare('SELECT steam_id, tier, linked_at FROM links WHERE tier IS NOT NULL ORDER BY tier, linked_at, steam_id'),
     recent: db.prepare('SELECT * FROM links ORDER BY linked_at DESC, discord_id LIMIT ? OFFSET ?'),
+    steamIds: db.prepare('SELECT steam_id FROM links'),
     counts: db.prepare('SELECT tier, count(*) AS n FROM links GROUP BY tier'),
     log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name) VALUES (?, ?, ?, ?, ?, ?, ?)'),
     byName: db.prepare("SELECT * FROM links WHERE discord_name LIKE ? ESCAPE '\\' ORDER BY discord_name LIMIT ?"),
@@ -151,6 +152,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         tier: r.tier,
         linkedAt: r.linked_at,
       })),
+    /** Every linked Steam account. */
+    linkedSteamIds: () => new Set((q.steamIds.all() as unknown as { steam_id: string }[]).map((r) => r.steam_id)),
     /** Newest links first. */
     recent: (limit: number, offset = 0) => (q.recent.all(limit, offset) as unknown as Row[]).map(toLink),
     /** How many links hold each tier; `none` counts linked accounts with no tier. */

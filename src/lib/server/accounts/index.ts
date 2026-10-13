@@ -31,5 +31,15 @@ export function tierOfSteam(steamId: string): Tier | null {
   }
 }
 
+/** Every linked Steam account; null when linking isn't configured or the store can't be read. */
+export function linkedSteamIds(): Set<string> | null {
+  try {
+    return accounts()?.store.linkedSteamIds() ?? null;
+  } catch (e) {
+    console.error('[accounts] linked list failed:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export const secureCookies = () => siteEnv().siteUrl.startsWith('https://');
 export const callbackUrl = (provider: 'discord' | 'steam') => `${siteEnv().siteUrl}/auth/${provider}/callback`;

@@ -123,7 +123,13 @@ export interface PlayerProfile {
   firstSeen: number | null;
   lastSeen: number | null;
   aliases: string[];
-  totals: { kills: number; deaths: number; headshots: number; suicides: number; teamkills: number; playtime: number; longest: number; matches: number; wins: number; losses: number; draws: number };
+  totals: {
+    kills: number; deaths: number; headshots: number; suicides: number; teamkills: number; playtime: number; longest: number;
+    matches: number; wins: number; losses: number; draws: number;
+    vehicleKills: number;
+    /** most kills in one life, all time */
+    killStreak: number;
+  };
   /** all-time kills rank without org-banned players; 'unavailable' when it can't be worked out */
   rank: number | null | 'unavailable';
   streak: { kind: 'win' | 'loss'; n: number } | null;

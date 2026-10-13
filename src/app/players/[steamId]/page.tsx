@@ -3,12 +3,14 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/client';
 import { KillList } from '@/components/game';
+import { Milestones } from '@/components/milestones';
 import { Avatar, PlayerLink } from '@/components/player';
 import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
+import { classKills } from '@/lib/weapon-classes';
 import { playerMetadata } from '@/lib/server/card';
 import { tierOfSteam } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
@@ -169,6 +171,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
             sub={favourite ? `Main: ${causeInfo(favourite.cause).label}` : undefined}
           />
         </StatGrid>
+
+        <Milestones totals={{ ...t, classKills: classKills(player.weapons) }} />
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Servers played" flush>

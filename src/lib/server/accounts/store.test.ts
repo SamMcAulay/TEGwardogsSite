@@ -80,6 +80,14 @@ describe('accounts store', () => {
     expect(s.counts()).toEqual({ total: 2, 1: 1, 2: 0, 3: 0, none: 1 });
   });
 
+  test('linkedSteamIds lists every linked Steam account', () => {
+    const s = openStore(':memory:');
+    expect(s.linkedSteamIds()).toEqual(new Set());
+    s.link(D1, S1);
+    s.link(D2, S2);
+    expect(s.linkedSteamIds()).toEqual(new Set([S1, S2]));
+  });
+
   test('the audit log lists newest actions first', () => {
     const s = openStore(':memory:');
     s.log({ adminDiscordId: D1, adminName: 'Jan', action: 'recheck', targetDiscordId: D2, targetName: 'Owl', targetSteamId: S2 }, 100);

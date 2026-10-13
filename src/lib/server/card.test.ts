@@ -19,7 +19,7 @@ const ID = '76561198180146179';
 const profile = (over: Partial<PlayerProfile> = {}): PlayerProfile => ({
   steamId: ID, name: '[TEG] s k r u b', avatarUrl: 'https://avatars.steamstatic.com/x_medium.jpg',
   firstSeen: 1_000, lastSeen: 1_000_000 - 3 * 3600, aliases: [],
-  totals: { kills: 102, deaths: 122, headshots: 0, suicides: 0, teamkills: 0, playtime: 51_480, longest: 0, matches: 14, wins: 6, losses: 8, draws: 0 },
+  totals: { kills: 102, deaths: 122, headshots: 0, suicides: 0, teamkills: 0, playtime: 51_480, longest: 0, matches: 14, wins: 6, losses: 8, draws: 0, vehicleKills: 0, killStreak: 0 },
   rank: 1580, streak: null, onlineOn: null, weapons: [], victims: [], nemeses: [],
   servers: [
     { serverId: 's3', name: 'EU#3 - TEG.gg', playtime: 7_380, kills: 24 },

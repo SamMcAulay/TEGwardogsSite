@@ -58,7 +58,7 @@ export async function signedInUser(env: AccountsEnv, code: string, redirectUri: 
 
 export interface Member {
   roles: string[];
-  /** server nickname, else display name, else username; for staff on /admin only, never stored */
+  /** server nickname, else display name, else username; shown to staff on /admin only */
   name: string;
 }
 
