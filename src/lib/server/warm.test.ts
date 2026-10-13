@@ -8,7 +8,6 @@ const data = {
   recentKills: vi.fn(),
   factionWins: vi.fn(),
   searchPlayers: vi.fn(),
-  watchlist: vi.fn(),
   warmSearchIndex: vi.fn(),
 };
 vi.mock('./data', () => ({
@@ -19,7 +18,6 @@ vi.mock('./data', () => ({
   recentKills: (q: unknown) => data.recentKills(q),
   factionWins: (id: unknown) => data.factionWins(id),
   searchPlayers: (q: unknown) => data.searchPlayers(q),
-  watchlist: () => data.watchlist(),
   warmSearchIndex: () => data.warmSearchIndex(),
 }));
 
@@ -45,7 +43,6 @@ describe('warmCommonPages', () => {
     expect(data.leaderboard).toHaveBeenCalledWith({ metric: 'kd', period: '7d' });
     expect(data.recentKills).toHaveBeenCalledWith({ limit: 12 });
     expect(data.factionWins).toHaveBeenCalledWith(null);
-    expect(data.watchlist).toHaveBeenCalled();
     expect(data.warmSearchIndex).toHaveBeenCalled();
   });
 
