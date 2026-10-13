@@ -4,6 +4,7 @@ import { ago, clock, metres } from '@/lib/format';
 import { causeInfo, factionColor, mapName, REGION_NAMES } from '@/lib/game';
 import type { FactionScore, KillRow, ServerRow } from '@/lib/server/views';
 
+import { PlayerName } from './tier';
 import { cx, StatusDot } from './ui';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -173,7 +174,8 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
   const who = (id: string | null, name: string | null, cls?: string) =>
     id && name ? (
       <Link prefetch={false} href={`/players/${id}`} className={cx('link truncate font-medium', cls)}>
-        {name}
+        {/* A teamkiller's name stays red. */}
+        {cls ? name : <PlayerName steamId={id} name={name} tag={false} />}
       </Link>
     ) : (
       <span className="truncate text-muted">{name ?? 'World'}</span>

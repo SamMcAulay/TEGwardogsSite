@@ -15,7 +15,8 @@ visitors ──https──▶ Cloudflare ──existing tunnel──▶ teg-ward
 
 The site reaches Warcon over Docker, not through Cloudflare, so no Access bypass is needed for that
 traffic. The container publishes `127.0.0.1:3100` only (Warcon already holds 3000; change it with
-`SITE_HOST_PORT` in `.env`) and has no volumes: nothing to back up.
+`SITE_HOST_PORT` in `.env`). Its one volume, `site-data`, holds linked Discord/Steam accounts
+(`accounts.db`, see step 9); without account linking it stays empty.
 
 ## 2. Create the Warcon key
 
@@ -119,7 +120,55 @@ with the memory to spare.
 4. `docker compose up -d` (restarts the deployed image with the new `.env`; builds nothing)
 5. Optionally add a Redirect Rule from `stats.tegwardogs.fyi/*` to the new domain.
 
-## 9. Troubleshooting
+## 9. Account linking (optional)
+
+Members sign in with Discord on `/account`, then through Steam. Their profile then shows a tag
+from their Discord roles, and `/api/priority` lists linked SteamIDs with a queue tier:
+
+| Tier | Roles (any one of) | On the profile |
+| --- | --- | --- |
+| 1 | `DISCORD_STAFF_ROLE_IDS` | Admin tag |
+| 2 | `DISCORD_PREMIUM_ROLE_IDS` | Premium tag, gold name |
+| 3 | `DISCORD_VERIFIED_ROLE_IDS` | Verified tag, pearl-blue name |
+
+1. Discord Developer Portal: use an application (JanGuard's is fine) or make one. Under OAuth2 add the
+   redirect `https://stats.tegwardogs.fyi/auth/discord/callback` (your `SITE_URL` plus that path);
+   copy the client id and secret. Under Bot, copy the token. No privileged intents are needed: the
+   site only reads one member at a time over REST.
+2. The bot must be in the TEG server. If it isn't, invite it with
+   `https://discord.com/oauth2/authorize?client_id=<client id>&scope=bot&permissions=0`.
+3. Role ids: Discord settings, Advanced, Developer Mode on; then right-click a role, Copy Role ID.
+   Each `*_ROLE_IDS` takes any number of ids, comma separated.
+4. Fill the account block of `.env` (see `.env.example`), including
+   `SESSION_SECRET=$(openssl rand -base64 48)` and, when Bulkhead are ready for it, `PRIORITY_API_KEY`.
+5. `docker compose run --rm doctor` now also checks the bot token, the guild, and that every
+   configured role id is a role there. Then `docker compose up -d`.
+
+Tiers follow roles: every linked member is re-checked within about ten minutes, so a lapsed
+Premium or a departed moderator loses their tag and priority without anyone acting. Unlinking on
+`/account` deletes the row.
+
+```sh
+curl -s -H "Authorization: Bearer $PRIORITY_API_KEY" https://stats.tegwardogs.fyi/api/priority
+# {"generatedAt":"…","players":[{"steamId":"7656…","tier":1,"linkedAt":"2026-10-13T…Z"}, …]}
+```
+
+Links made before the queue exists are kept and their tiers kept current, so on the day it goes
+live this list already holds everyone (best tier first, then earliest linked). `linkedAt` only
+changes when someone switches to a different Steam account.
+
+The schema is versioned (`MIGRATIONS` in `src/lib/server/accounts/store.ts`, append-only). When a
+deploy brings a new migration, the site first copies the database to `accounts.db.pre-v<n>` beside
+it, then upgrades it in one transaction; a failed upgrade leaves it untouched. An older build
+refuses to open a newer database, so roll back by restoring that copy.
+
+**Never run `docker compose down -v`**: `-v` deletes the `site-data` volume and every link with it.
+
+Back up `accounts.db`:
+`docker run --rm -v teg-wardogs-site_site-data:/d -v "$PWD":/b debian:bookworm-slim cp /d/accounts.db /b/`
+(stop the site first, or the copy may miss writes still in `accounts.db-wal`).
+
+## 10. Troubleshooting
 
 | Symptom | Cause |
 | --- | --- |
@@ -130,3 +179,6 @@ with the memory to spare.
 | Health shows `key_rejected` | `WARCON_TOKEN` is wrong or the key was revoked. |
 | Health shows `key_lacks_view` | The key was created without the View capability. |
 | Health shows `unreachable` | The site is not on `warcon_default`, or Warcon is down. |
+| `/account` says linking is not switched on | The account block of `.env` is empty. |
+| Discord says `Invalid OAuth2 redirect_uri` | The redirect in step 9.1 doesn't match `SITE_URL` exactly. |
+| Profiles never get a tag | Check the doctor's role lines, and the site log for `tier sync stopped`. |

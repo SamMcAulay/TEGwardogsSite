@@ -117,21 +117,27 @@ export function StatusDot({ online, className }: { online: boolean | null; class
 export function Badge({
   children,
   tone = 'default',
+  className,
 }: {
   children: ReactNode;
-  tone?: 'default' | 'accent' | 'good' | 'bad';
+  className?: string;
+  tone?: 'default' | 'accent' | 'good' | 'bad' | 'admin' | 'premium' | 'verified';
 }) {
   const tones = {
     default: 'border-line-strong text-muted',
     accent: 'border-accent/40 bg-accent-soft text-accent',
     good: 'border-good/40 bg-good/10 text-good',
     bad: 'border-bad/40 bg-bad/10 text-bad',
+    admin: 'border-text/50 bg-text/10 text-text',
+    premium: 'border-premium/50 bg-premium/10 text-premium',
+    verified: 'border-verified/50 bg-verified/10 text-verified',
   };
   return (
     <span
       className={cx(
         'inline-flex items-center gap-1.5 border px-1.5 py-0.5 font-display text-[11px] font-semibold uppercase tracking-[0.1em]',
         tones[tone],
+        className,
       )}
     >
       {children}

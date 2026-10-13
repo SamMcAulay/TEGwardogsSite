@@ -5,6 +5,7 @@ import { NavLinks, SearchBox } from '@/components/client';
 import { Container, StatusDot } from '@/components/ui';
 import { int } from '@/lib/format';
 import { safe } from '@/components/section';
+import { accountsEnv } from '@/lib/server/accounts/env';
 import { getServers } from '@/lib/server/data';
 import './globals.css';
 
@@ -65,6 +66,15 @@ async function OnlinePill() {
   );
 }
 
+/** Account linking is optional; its links only show once it's configured. */
+function linkingOn(): boolean {
+  try {
+    return accountsEnv() !== null;
+  } catch {
+    return true; // misconfigured: /account explains
+  }
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
@@ -84,6 +94,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <SearchBox />
               </div>
               <OnlinePill />
+              {linkingOn() && (
+                <Link
+                  href="/account"
+                  className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-accent hover:text-text"
+                >
+                  Account
+                </Link>
+              )}
             </div>
           </Container>
         </header>
@@ -123,6 +141,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link className="link text-muted" href="/api-docs">
                 Public API
               </Link>
+              {linkingOn() && (
+                <Link className="link text-muted" href="/account">
+                  Link Discord &amp; Steam
+                </Link>
+              )}
             </div>
           </Container>
         </footer>

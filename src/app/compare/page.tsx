@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Avatar } from '@/components/player';
+import { PlayerName } from '@/components/tier';
 import { Container, Empty, PageHeader, Panel, cx } from '@/components/ui';
 import { duration, int, kd, metres, pct } from '@/lib/format';
 import { causeLabel, mainFaction } from '@/lib/game';
@@ -127,7 +128,9 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
                 >
                   <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={56} faction={mainFaction(p.factions)} />
                   <div className="min-w-0">
-                    <div className="display truncate text-2xl leading-none">{p.name}</div>
+                    <div className={cx('flex min-w-0 items-center gap-2', i === 1 && 'flex-row-reverse')}>
+                      <PlayerName steamId={p.steamId} name={p.name} className="display text-2xl leading-none" />
+                    </div>
                     <div className="mt-1 text-xs text-muted">Main: {causeLabel(p.weapons[0]?.cause)}</div>
                   </div>
                 </Link>

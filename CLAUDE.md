@@ -2,8 +2,9 @@
 
 # Project notes
 
-- Stats site for TEG's WARDOGS servers. All data comes from Warcon's keyed API (`src/lib/server/warcon/`),
-  cached in memory; there is no database.
+- Stats site for TEG's WARDOGS servers. All stats come from Warcon's keyed API (`src/lib/server/warcon/`),
+  cached in memory. The only stored state is linked Discord/Steam accounts and their priority tier
+  (`src/lib/server/accounts/`, node:sqlite in `DATA_DIR`); it is optional and off when unconfigured.
 - Pages are async server components calling `src/lib/server/data.ts`; each section wraps its data in
   `<Section>` (src/components/section.tsx) so a Warcon failure degrades one panel, not the page.
 - The zod schemas in `src/lib/server/warcon/schemas.ts` are the privacy boundary: never make them loose,

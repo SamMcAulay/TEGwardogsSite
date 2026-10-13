@@ -23,6 +23,8 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 RUN useradd --system --uid 1001 teg
+# accounts.db lives here, on the site-data volume (docker-compose.yml); a fresh volume copies this owner.
+RUN mkdir /app/data && chown teg /app/data
 COPY --from=build --chown=teg /app/.next/standalone ./
 COPY --from=build --chown=teg /app/.next/static ./.next/static
 COPY --from=build --chown=teg /app/public ./public
