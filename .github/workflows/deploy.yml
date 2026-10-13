@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full commit sha to deploy (its CI run must have passed). Blank deploys the head of main.
+        description: Full sha of a commit on main to deploy (its CI run must have passed). Blank deploys the head of main.
         required: false
 
 concurrency:
@@ -43,8 +43,10 @@ jobs:
         id: commit
         env:
           SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+          ACTOR: ${{ github.actor }}
         run: |
           echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "not a full commit sha: $SHA"; exit 1; }
+          echo "$ACTOR" | grep -Eq '^[A-Za-z0-9-]+(\[bot\])?$' || { echo "unexpected actor: $ACTOR"; exit 1; }
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
       - name: SSH key
         env:
@@ -71,7 +73,11 @@ jobs:
           # A read-only login for the pull, valid for this job only and removed afterwards.
           printf '%s' "$TOKEN" | vps "docker login ghcr.io -u '$ACTOR' --password-stdin" >/dev/null
           set +e
-          vps "cd /home/debian/teg-wardogs-site && git fetch --quiet origin && git reset --quiet --hard '$SHA' && sh scripts/deploy.sh '$SHA'"
+          # Only commits already on main: the reset swaps in that commit's deploy.sh and runs it, so a
+          # commit from any other branch would be unreviewed code running on the VPS.
+          vps "cd /home/debian/teg-wardogs-site && git fetch --quiet origin main &&
+               { git merge-base --is-ancestor '$SHA' origin/main || { echo 'refusing: $SHA is not on main'; exit 1; }; } &&
+               git reset --quiet --hard '$SHA' && sh scripts/deploy.sh '$SHA'"
           status=$?
           vps "docker logout ghcr.io" >/dev/null
           exit $status
