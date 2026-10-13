@@ -533,6 +533,12 @@ export async function headToHead(a: string, b: string) {
 
 /** Shots at least this long are searched for the longest-shot records. */
 const RECORD_MIN_M = 500;
+/**
+ * Longer "shots" are the game logging a wrong distance, not shots: on TEG's servers (Oct 2026)
+ * 1,267 rifle kills fell between 500 and 1,000 m, none between 1,000 and 1,500, then 18 scattered
+ * from 1.5 to 3.9 km (a Galil at 3.96 km). Their tags don't set them apart, so distance has to.
+ */
+const RECORD_MAX_M = 1200;
 /** Records move slowly: each search is cached this long. */
 const RECORDS_TTL = 30 * 60_000;
 const RECORD_ROWS = 10;
@@ -569,7 +575,10 @@ export async function records(): Promise<Loaded<Records>> {
       const key = `${serverId}:${k.eventId}`;
       if (seen.has(key)) return false;
       seen.add(key);
-      return k.killer && !k.teamKill && !k.suicide && (k.distanceM ?? 0) >= RECORD_MIN_M && !banned.ids.has(k.killer.steamId);
+      const m = k.distanceM ?? 0;
+      // An exploding vehicle took the victim, not the bullet.
+      const blast = k.tags.some((t) => /vehicleexplosion$/i.test(t));
+      return k.killer && !k.teamKill && !k.suicide && !blast && m >= RECORD_MIN_M && m <= RECORD_MAX_M && !banned.ids.has(k.killer.steamId);
     })
     .sort((a, b) => b.k.distanceM! - a.k.distanceM!)
     .slice(0, RECORD_ROWS)

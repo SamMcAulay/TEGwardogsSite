@@ -43,7 +43,7 @@ export default async function RecordsPage() {
         description="The best of everything ever done on TEG WARDOGS servers. Banned players don't hold records."
       />
       <Container className="mt-8 space-y-4">
-        <Panel title="Longest shots" action="Rifles and machine guns · all time" flush>
+        <Panel title="Longest shots" action="Rifles and machine guns · all time · up to 1.2 km" flush>
           <Section loaded={data}>
             {({ longestShots }) =>
               longestShots.length ? (
