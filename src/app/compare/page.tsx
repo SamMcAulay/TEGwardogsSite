@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Avatar } from '@/components/player';
 import { Container, Empty, PageHeader, Panel, cx } from '@/components/ui';
 import { duration, int, kd, metres, pct } from '@/lib/format';
-import { causeLabel } from '@/lib/game';
+import { causeLabel, mainFaction } from '@/lib/game';
 import { safe } from '@/components/section';
 import { getPlayer, headToHead, searchPlayers } from '@/lib/server/data';
 import type { Loaded, PlayerProfile } from '@/lib/server/views';
@@ -125,7 +125,7 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
                     i === 1 && 'col-start-3 flex-row-reverse text-right',
                   )}
                 >
-                  <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={56} />
+                  <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={56} faction={mainFaction(p.factions)} />
                   <div className="min-w-0">
                     <div className="display truncate text-2xl leading-none">{p.name}</div>
                     <div className="mt-1 text-xs text-muted">Main: {causeLabel(p.weapons[0]?.cause)}</div>
