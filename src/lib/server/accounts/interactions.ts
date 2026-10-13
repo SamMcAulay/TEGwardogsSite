@@ -9,6 +9,11 @@ const API = (process.env.NODE_ENV !== 'production' && process.env.DISCORD_API_BA
 /** Discord's calls older than this are refused, so a captured one can't be replayed later. */
 const MAX_AGE_S = 5 * 60;
 const EPHEMERAL = 64;
+/** Discord gives up after 3 s; a player name that takes longer than this is left out of the reply. */
+export const NAME_BUDGET_MS = 1500;
+
+const within = <T>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([p.catch(() => fallback), new Promise<T>((done) => setTimeout(() => done(fallback), ms).unref?.())]);
 
 /** True when Discord signed `timestamp + body` with the application's key, recently. */
 export function verifyDiscordRequest(publicKeyHex: string, signatureHex: string | null, timestamp: string | null, body: string, nowSec = Math.floor(Date.now() / 1000)): boolean {
@@ -61,7 +66,7 @@ const say = (content: string) => ({ type: 4, data: { content, flags: EPHEMERAL, 
 /** The reply to one verified interaction. */
 export async function handleInteraction(
   i: Interaction,
-  deps: { env: AccountsEnv; store: Store; siteUrl: string; playerName: (steamId: string) => Promise<string | null> },
+  deps: { env: AccountsEnv; store: Store; siteUrl: string; playerName: (steamId: string) => Promise<string | null>; nameBudgetMs?: number },
 ): Promise<object> {
   if (i.type === 1) return { type: 1 }; // PING: Discord checking the endpoint
   if (i.type !== 2 || i.data?.name !== 'lookup') return say('Unknown command.');
@@ -76,6 +81,6 @@ export async function handleInteraction(
   const who = i.data.resolved?.members?.[id]?.nick || user?.global_name || user?.username || 'That member';
   const link = store.byDiscord(id);
   if (!link) return say(`**${who}** hasn't linked their Steam account. They can link it at <${siteUrl}/account>: sign in with Discord, then Steam.`);
-  const name = await deps.playerName(link.steamId);
+  const name = await within(deps.playerName(link.steamId), deps.nameBudgetMs ?? NAME_BUDGET_MS, null);
   return say(`**${who}**${name ? ` plays as **${name}**` : ''}: ${siteUrl}/players/${link.steamId}`);
 }
