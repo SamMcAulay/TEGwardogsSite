@@ -12,7 +12,6 @@ const api = {
   kills: vi.fn(),
   analytics: vi.fn(),
   seen: vi.fn(),
-  watchedPage: vi.fn(),
   steamProfiles: vi.fn(async () => ({})),
 };
 const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []) };
@@ -22,7 +21,7 @@ vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, shortNameOf, watchlist } from './data';
+import { adjustedRank, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, shortNameOf } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -387,81 +386,12 @@ describe('profile rank without org-banned players', () => {
   });
 });
 
-describe('watchlist', () => {
-  const id = (n: number) => String(76561198000000000n + BigInt(n));
-  const row = (n: number, lastSeen: string, lastServerId = 's1', banned: 'org' | 'server' | null = null) => ({
-    steamId: id(n), name: `P${n}`, lastSeen, lastServerId, banned, steam: n === 1 ? { avatar: 'https://a/1.jpg' } : null,
-  });
-  const page = (players: ReturnType<typeof row>[], total = players.length) => fresh({ players, total });
-
-  test('every server\'s watched players, once each, newest first, with the server they were last on', async () => {
-    api.watchedPage.mockImplementation(async (sid: string) =>
-      sid === 's1'
-        ? page([row(1, '2026-10-06T10:00:00Z'), row(2, '2026-10-05T10:00:00Z')])
-        : page([row(1, '2026-10-06T10:00:00Z'), row(3, '2026-10-07T09:00:00Z', 's2')]),
-    );
-    const r = await watchlist();
-    expect(r.data).toEqual([
-      { steamId: id(3), name: 'P3', avatarUrl: null, lastSeen: Date.parse('2026-10-07T09:00:00Z') / 1000, serverId: 's2', serverName: 'OC#1' },
-      { steamId: id(1), name: 'P1', avatarUrl: 'https://a/1.jpg', lastSeen: Date.parse('2026-10-06T10:00:00Z') / 1000, serverId: 's1', serverName: 'EU#1' },
-      { steamId: id(2), name: 'P2', avatarUrl: null, lastSeen: Date.parse('2026-10-05T10:00:00Z') / 1000, serverId: 's1', serverName: 'EU#1' },
-    ]);
-    expect(r.stale).toBe(false);
-    expect(r.missing).toEqual([]);
-  });
-
-  test('org-banned players are left off; server-only bans stay', async () => {
-    api.watchedPage.mockResolvedValue(page([row(1, '2026-10-06T10:00:00Z', 's1', 'org'), row(2, '2026-10-05T10:00:00Z', 's1', 'server')]));
-    expect((await watchlist()).data.map((p) => p.steamId)).toEqual([id(2)]);
-  });
-
-  test('a last server the site does not show is left blank', async () => {
-    api.watchedPage.mockResolvedValue(page([row(1, '2026-10-06T10:00:00Z', 'hidden')]));
-    const [p] = (await watchlist()).data;
-    expect([p.serverId, p.serverName]).toEqual([null, null]);
-  });
-
-  test('pages through more than 100 watched players', async () => {
-    api.servers.mockResolvedValue(fresh([SERVERS[0]]));
-    api.watchedPage.mockImplementation(async (_sid: string, offset: number) =>
-      page(Array.from({ length: offset === 100 ? 20 : 100 }, (_, i) => row(offset + i, '2026-10-06T10:00:00Z')), 120),
-    );
-    expect((await watchlist()).data).toHaveLength(120);
-    expect(api.watchedPage.mock.calls.map((c) => c[1])).toEqual([0, 100]);
-  });
-
-  test('a failing server is named and the rest still show; all failing throws', async () => {
-    api.watchedPage.mockImplementation(async (sid: string) => {
-      if (sid === 's2') throw new Error('down');
-      return page([row(1, '2026-10-06T10:00:00Z')]);
-    });
-    const r = await watchlist();
-    expect(r.data).toHaveLength(1);
-    expect(r.missing).toEqual(['s2']);
-    api.watchedPage.mockRejectedValue(new Error('down'));
-    await expect(watchlist()).rejects.toThrow();
-  });
-});
 
 describe('Steam avatars on player lists', () => {
   // Warcon's player list always says steam: null; the pictures come from its Steam profile lookup.
   const A = '76561198000000001';
   const B = '76561198000000002';
   const pics = { [A]: { name: 'a', avatar: 'https://a/1.jpg' }, [B]: null };
-
-  test('the watchlist gets its pictures from the Steam lookup', async () => {
-    api.steamProfiles.mockResolvedValue(pics);
-    api.watchedPage.mockResolvedValue(fresh({
-      players: [
-        { steamId: A, name: 'A', lastSeen: '2026-10-06T10:00:00Z', lastServerId: 's1', banned: null, steam: null },
-        { steamId: B, name: 'B', lastSeen: '2026-10-05T10:00:00Z', lastServerId: 's1', banned: null, steam: null },
-      ],
-      total: 2,
-    }));
-    const r = await watchlist();
-    expect(r.data.map((p) => p.avatarUrl)).toEqual(['https://a/1.jpg', null]);
-    expect(api.steamProfiles).toHaveBeenCalledWith([A, B]);
-  });
 
   test('recently active players get their pictures from the Steam lookup', async () => {
     api.steamProfiles.mockResolvedValue(pics);
