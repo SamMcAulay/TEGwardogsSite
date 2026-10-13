@@ -14,6 +14,8 @@ export interface Link {
   checkedAt: number | null;
   /** server nickname or Discord name, as last seen; staff-only */
   discordName: string | null;
+  /** a name style staff gave this account, shown while they hold a tier; null: the tier's own */
+  nameStyle: string | null;
   linkedAt: number;
 }
 
@@ -24,6 +26,7 @@ interface Row {
   checked_at: number | null;
   linked_at: number;
   discord_name: string | null;
+  name_style: string | null;
 }
 
 const toLink = (r: Row): Link => ({
@@ -33,11 +36,12 @@ const toLink = (r: Row): Link => ({
   checkedAt: r.checked_at,
   linkedAt: r.linked_at,
   discordName: r.discord_name ?? null,
+  nameStyle: r.name_style ?? null,
 });
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export type AdminAction = 'unlink' | 'recheck';
+export type AdminAction = 'unlink' | 'recheck' | 'style';
 
 export interface AdminLogEntry {
   at: number;
@@ -47,6 +51,8 @@ export interface AdminLogEntry {
   targetSteamId: string | null;
   adminName: string | null;
   targetName: string | null;
+  /** what the action set, e.g. the name style */
+  detail?: string | null;
 }
 
 export class SteamTakenError extends Error {
@@ -88,6 +94,9 @@ export const MIGRATIONS: string[] = [
      at        INTEGER NOT NULL,
      PRIMARY KEY (server_id, match_id)
    )`,
+  // v5: a name style staff gave the account (see lib/name-styles.ts); what a staff action set
+  `ALTER TABLE links ADD COLUMN name_style TEXT;
+   ALTER TABLE admin_log ADD COLUMN detail TEXT;`,
 ];
 
 /** Brings the file up to date; snapshots it first (`<file>.pre-v<n>`) when it already holds links. */
@@ -134,7 +143,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     anyAnnounced: db.prepare('SELECT 1 FROM announced_rounds WHERE server_id = ? LIMIT 1'),
     announce: db.prepare('INSERT OR IGNORE INTO announced_rounds (server_id, match_id, at) VALUES (?, ?, ?)'),
     counts: db.prepare('SELECT tier, count(*) AS n FROM links GROUP BY tier'),
-    log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+    log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+    setStyle: db.prepare('UPDATE links SET name_style = ? WHERE discord_id = ?'),
     byName: db.prepare("SELECT * FROM links WHERE discord_name LIKE ? ESCAPE '\\' ORDER BY discord_name LIMIT ?"),
     auditLog: db.prepare('SELECT * FROM admin_log ORDER BY at DESC, id DESC LIMIT ?'),
   };
@@ -162,6 +172,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         tier: r.tier,
         linkedAt: r.linked_at,
       })),
+    /** Give an account its own name style, or null for its tier's. */
+    setNameStyle: (discordId: string, style: string | null) => void q.setStyle.run(style, discordId),
     /** Round results already posted (or skipped) for a server's match. */
     isAnnounced: (serverId: string, matchId: number) => !!q.announced.get(serverId, matchId),
     /** False until a server's first round is recorded: the first run records without posting. */
@@ -182,7 +194,7 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       return out;
     },
     log(e: Omit<AdminLogEntry, 'at'>, at = now()) {
-      q.log.run(at, e.adminDiscordId, e.action, e.targetDiscordId, e.targetSteamId, e.adminName, e.targetName);
+      q.log.run(at, e.adminDiscordId, e.action, e.targetDiscordId, e.targetSteamId, e.adminName, e.targetName, e.detail ?? null);
     },
     /** Newest admin actions first. */
     auditLog: (limit: number) =>
@@ -195,6 +207,7 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
           target_steam_id: string | null;
           admin_name: string | null;
           target_name: string | null;
+          detail: string | null;
         }[]
       ).map((r) => ({
         at: r.at,
@@ -204,6 +217,7 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         targetSteamId: r.target_steam_id,
         adminName: r.admin_name,
         targetName: r.target_name,
+        detail: r.detail ?? null,
       })),
     /** Links whose last-seen Discord name contains `text` (case-insensitive for ASCII). */
     byName: (text: string, limit = 25) =>

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { TierBadge } from '@/components/tier';
+import { NameTag, TierBadge } from '@/components/tier';
+import { isNameStyle, NAME_STYLE_LABELS, NAME_STYLES, nameStyleFor } from '@/lib/name-styles';
 import { buttonClass, Container, Empty, PageHeader, Panel, Stat, StatGrid } from '@/components/ui';
 import { dateTime, int } from '@/lib/format';
 import { currentAdmin, parseLookup } from '@/lib/server/accounts/admin';
@@ -10,12 +11,13 @@ import type { AccountsEnv } from '@/lib/server/accounts/env';
 import type { Link as AccountLink } from '@/lib/server/accounts/store';
 import { playerName } from '@/lib/server/data';
 import { one } from '@/lib/url';
-import { recheckAccount, unlinkAccount } from './actions';
+import { recheckAccount, setNameStyle, unlinkAccount } from './actions';
 
 // Staff only, and linked from nowhere: everyone else gets the ordinary 404.
 export const metadata: Metadata = { title: 'Admin', robots: { index: false, follow: false } };
 
 const DONE: Record<string, { text: string; good: boolean }> = {
+  styled: { text: 'Name style saved. It shows while they hold a TEG tier.', good: true },
   rechecked: { text: 'Roles re-checked with Discord.', good: true },
   unlinked: { text: 'Account unlinked. They can link again from /account.', good: true },
   'discord-down': { text: 'Discord did not answer; the tier was left as it was.', good: false },
@@ -52,6 +54,28 @@ async function LinkCard({ link, env }: { link: AccountLink; env: AccountsEnv }) 
         <dd>{ts(link.linkedAt)}</dd>
         <dt className="text-muted">Roles last checked</dt>
         <dd>{ts(link.checkedAt)}</dd>
+        <dt className="text-muted">Name style</dt>
+        <dd>
+          <form action={setNameStyle} className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="discordId" value={link.discordId} />
+            <select
+              name="style"
+              defaultValue={isNameStyle(link.nameStyle) ? link.nameStyle : 'default'}
+              className="border border-line-strong bg-surface-2 px-2 py-1 text-sm outline-none focus:border-accent"
+            >
+              <option value="default">Tier default</option>
+              {NAME_STYLES.map((s) => (
+                <option key={s} value={s}>
+                  {NAME_STYLE_LABELS[s]}
+                </option>
+              ))}
+            </select>
+            <button className={buttonClass('secondary')}>Save</button>
+            <NameTag style={nameStyleFor(link.tier, link.nameStyle)} className="font-display text-lg font-bold">
+              {link.discordName ?? 'Preview'}
+            </NameTag>
+          </form>
+        </dd>
       </dl>
       <div className="mt-5 flex flex-wrap items-start gap-3 border-t border-line pt-4">
         <form action={recheckAccount}>
@@ -175,12 +199,13 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
                     <span>
                       <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
                       <span className={e.action === 'unlink' ? 'text-bad' : 'text-text'}>
-                        {e.action === 'unlink' ? 'unlinked' : 're-checked'}
+                        {e.action === 'unlink' ? 'unlinked' : e.action === 'style' ? 'changed the name style of' : 're-checked'}
                       </span>{' '}
                       <Link prefetch={false} href={`/admin?q=${e.targetDiscordId}`} className="link">
                         {e.targetName ?? <span className="font-mono text-xs">{e.targetDiscordId}</span>}
                       </Link>
                       {e.targetSteamId && <span className="font-mono text-xs text-dim"> (Steam {e.targetSteamId})</span>}
+                      {e.detail && <span className="text-muted"> to {e.detail}</span>}
                     </span>
                     <span className="text-xs text-muted">{ts(e.at)}</span>
                   </li>

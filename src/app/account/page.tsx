@@ -5,6 +5,7 @@ import { buttonClass, Container, Empty, PageHeader, Panel } from '@/components/u
 import { accounts, currentSession } from '@/lib/server/accounts';
 import type { AuthError } from '@/lib/server/accounts/routes';
 import { playerName as lookupPlayerName } from '@/lib/server/data';
+import { nameStyleFor } from '@/lib/name-styles';
 import { TIERS, type Tier } from '@/lib/tiers';
 import { one } from '@/lib/url';
 import { signOut, unlinkSteam } from './actions';
@@ -128,7 +129,7 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
                     <p>Shown once both accounts are linked.</p>
                   ) : link.tier ? (
                     <div className="flex flex-wrap items-center gap-3">
-                      <NameTag tier={link.tier} className="font-display text-xl font-bold">
+                      <NameTag style={nameStyleFor(link.tier, link.nameStyle)} className="font-display text-xl font-bold">
                         {playerName ?? session!.name}
                       </NameTag>
                       <TierBadge tier={link.tier} />

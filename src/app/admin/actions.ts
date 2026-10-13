@@ -6,6 +6,7 @@ import type { Accounts } from '@/lib/server/accounts';
 import { currentAdmin } from '@/lib/server/accounts/admin';
 import type { Link as AccountLink } from '@/lib/server/accounts/store';
 import { refreshTier } from '@/lib/server/accounts/sync';
+import { isNameStyle, NAME_STYLE_LABELS } from '@/lib/name-styles';
 
 const SNOWFLAKE = /^\d{17,20}$/;
 
@@ -48,4 +49,22 @@ export async function unlinkAccount(form: FormData) {
   a.store.log({ ...names(a, admin.discordId, admin.name, link), action: 'unlink', targetDiscordId: discordId, targetSteamId: link.steamId });
   console.log(`[admin] ${admin.discordId} unlinked ${discordId} (Steam ${link.steamId})`);
   redirect(`/admin?done=unlinked`);
+}
+
+/** Give an account its own name style, or "default" to go back to its tier's. */
+export async function setNameStyle(form: FormData) {
+  const { a, admin, discordId, link } = await target(form);
+  if (!link) redirect(`/admin?q=${discordId}&done=gone`);
+  const value = String(form.get('style') ?? '');
+  const style = isNameStyle(value) ? value : null;
+  if (value !== 'default' && !style) notFound();
+  a.store.setNameStyle(discordId, style);
+  a.store.log({
+    ...names(a, admin.discordId, admin.name, link),
+    action: 'style',
+    targetDiscordId: discordId,
+    targetSteamId: link.steamId,
+    detail: style ? NAME_STYLE_LABELS[style] : 'tier default',
+  });
+  redirect(`/admin?q=${discordId}&done=styled`);
 }

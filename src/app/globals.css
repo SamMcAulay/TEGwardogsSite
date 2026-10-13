@@ -30,6 +30,14 @@
   --pearl-1: #a9d2ff;
   --pearl-2: #d7cbff;
   --pearl-3: #bdf2ea;
+  /* staff names: aurora */
+  --aurora-1: #3ee6a8;
+  --aurora-2: #38d6f5;
+  --aurora-3: #a98bff;
+  /* a custom style: pink */
+  --pink-1: #ff6fb5;
+  --pink-2: #ffb3dd;
+  --pink-3: #d68cff;
   color-scheme: dark;
 }
 
@@ -189,7 +197,9 @@ body {
   animation: feed-in 240ms ease-out;
 }
 
-/* Names of Premium (gold sheen) and Verified (pearlescent blue) members */
+/* Linked members' names: staff aurora, Premium gold sheen, Verified pearl blue, and custom styles */
+.name-aurora,
+.name-pink,
 .name-premium,
 .name-verified {
   -webkit-background-clip: text;
@@ -223,8 +233,38 @@ body {
   animation: name-pearl 12s ease-in-out infinite alternate;
 }
 
+.name-aurora {
+  background-image: linear-gradient(
+    100deg,
+    var(--aurora-1),
+    var(--aurora-2) 30%,
+    var(--aurora-3) 55%,
+    var(--aurora-2) 80%,
+    var(--aurora-1)
+  );
+  background-size: 300% 100%;
+  animation: name-pearl 7s ease-in-out infinite alternate;
+}
+
+.name-pink {
+  background-image: linear-gradient(
+    110deg,
+    var(--pink-1),
+    var(--pink-2) 30%,
+    var(--pink-3) 55%,
+    var(--pink-2) 80%,
+    var(--pink-1)
+  );
+  background-size: 300% 100%;
+  animation: name-pearl 6s ease-in-out infinite alternate;
+}
+
+.link:hover .name-aurora,
+.link:hover .name-pink,
 .link:hover .name-premium,
 .link:hover .name-verified,
+a:hover > * > .name-aurora,
+a:hover > * > .name-pink,
 a:hover > * > .name-premium,
 a:hover > * > .name-verified {
   filter: brightness(1.25);
@@ -249,6 +289,8 @@ a:hover > * > .name-verified {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .name-aurora,
+  .name-pink,
   .name-premium,
   .name-verified,
   .live-dot,
