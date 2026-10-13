@@ -12,6 +12,11 @@ export async function register() {
   try {
     const a = accounts();
     if (a) startTierSync(a.env, a.store);
+    if (a?.env.discordPublicKey) {
+      const { registerCommands } = await import('./lib/server/accounts/interactions');
+      // Every start, so the commands always match this build; a failure leaves the old ones.
+      registerCommands(a.env).catch((e) => console.error('[discord] slash commands:', e instanceof Error ? e.message : e));
+    }
   } catch (e) {
     // The stats still work; /account shows the error, and the doctor fails the deploy on it.
     console.error('[accounts] not started:', e instanceof Error ? e.message : e);
