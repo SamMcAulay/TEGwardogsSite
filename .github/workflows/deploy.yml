@@ -1,10 +1,13 @@
-# Deploys main to the VPS over SSH after CI passes: scripts/deploy.sh resets the clone to origin/main,
-# builds, runs the doctor against Warcon, and only then replaces the running container.
+# Deploys to the VPS over SSH once CI has built and pushed the commit's image to ghcr.io. The VPS
+# builds nothing (a Next.js build starves its other services): scripts/deploy.sh pulls the image,
+# runs the doctor in it against Warcon, and only then swaps the site over.
 #
 # Off until you set it up (repo Settings > Secrets and variables > Actions):
 #   Variables: DEPLOY_ENABLED = true
 #   Secrets:   VPS_HOST, VPS_USER, VPS_SSH_KEY (private key whose public half is in the VPS user's
 #              ~/.ssh/authorized_keys), optional VPS_HOST_KEY (the host's public key line, pinned in known_hosts)
+#
+# Roll back: Actions > Deploy > Run workflow, with the commit to go back to.
 name: Deploy
 
 on:
@@ -13,19 +16,38 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sha:
+        description: Full sha of a commit on main to deploy (its CI run must have passed). Blank deploys the head of main.
+        required: false
 
 concurrency:
   group: deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   deploy:
     if: >-
       vars.DEPLOY_ENABLED == 'true' &&
-      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 15
     steps:
+      - name: Commit
+        id: commit
+        env:
+          SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          echo "$SHA" | grep -Eq '^[0-9a-f]{40}$' || { echo "not a full commit sha: $SHA"; exit 1; }
+          echo "$ACTOR" | grep -Eq '^[A-Za-z0-9-]+(\[bot\])?$' || { echo "unexpected actor: $ACTOR"; exit 1; }
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
       - name: SSH key
         env:
           KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -43,6 +65,19 @@ jobs:
         env:
           HOST: ${{ secrets.VPS_HOST }}
           USER: ${{ secrets.VPS_USER }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
         run: |
-          ssh -i ~/.ssh/id_deploy "$USER@$HOST" \
-            'DEPLOY_DIR=/home/debian/teg-wardogs-site sh /home/debian/teg-wardogs-site/scripts/deploy.sh'
+          vps() { ssh -i ~/.ssh/id_deploy -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$USER@$HOST" "$@"; }
+          # A read-only login for the pull, valid for this job only and removed afterwards.
+          printf '%s' "$TOKEN" | vps "docker login ghcr.io -u '$ACTOR' --password-stdin" >/dev/null
+          set +e
+          # Only commits already on main: the reset swaps in that commit's deploy.sh and runs it, so a
+          # commit from any other branch would be unreviewed code running on the VPS.
+          vps "cd /home/debian/teg-wardogs-site && git fetch --quiet origin main &&
+               { git merge-base --is-ancestor '$SHA' origin/main || { echo 'refusing: $SHA is not on main'; exit 1; }; } &&
+               git reset --quiet --hard '$SHA' && sh scripts/deploy.sh '$SHA'"
+          status=$?
+          vps "docker logout ghcr.io" >/dev/null
+          exit $status

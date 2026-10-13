@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { CSSProperties } from 'react';
+import { PlayerName } from './tier';
 import { cx } from './ui';
 
 /** Stable hue from a string, so a player's badge keeps its colour everywhere. */
@@ -90,7 +91,7 @@ export function PlayerLink({
   return (
     <Link prefetch={false} href={`/players/${steamId}`} className={cx('link inline-flex min-w-0 items-center gap-2.5', className)}>
       {avatar && <Avatar name={name} steamId={steamId} url={avatarUrl} size={24} />}
-      <span className="truncate font-medium">{name}</span>
+      <PlayerName steamId={steamId} name={name} className="font-medium" />
     </Link>
   );
 }

@@ -22,6 +22,14 @@
   --valkyra: #d86060;
   --lonestar: #5b95d8;
   --manticore: #7bc462;
+  /* Discord status: Premium's gold and Verified's pearl, for tags and names */
+  --premium: #e8b54a;
+  --premium-hi: #fff1bf;
+  --premium-deep: #a8761f;
+  --verified: #9cc8ff;
+  --pearl-1: #a9d2ff;
+  --pearl-2: #d7cbff;
+  --pearl-3: #bdf2ea;
   color-scheme: dark;
 }
 
@@ -43,6 +51,8 @@
   --color-valkyra: var(--valkyra);
   --color-lonestar: var(--lonestar);
   --color-manticore: var(--manticore);
+  --color-premium: var(--premium);
+  --color-verified: var(--verified);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-barlow), var(--font-inter), ui-sans-serif, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, monospace;
@@ -179,7 +189,68 @@ body {
   animation: feed-in 240ms ease-out;
 }
 
+/* Names of Premium (gold sheen) and Verified (pearlescent blue) members */
+.name-premium,
+.name-verified {
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.name-premium {
+  background-image: linear-gradient(
+    110deg,
+    var(--premium-deep) 0%,
+    var(--premium) 30%,
+    var(--premium-hi) 50%,
+    var(--premium) 70%,
+    var(--premium-deep) 100%
+  );
+  background-size: 250% 100%;
+  animation: name-shine 5s linear infinite;
+}
+
+.name-verified {
+  background-image: linear-gradient(
+    120deg,
+    var(--pearl-1),
+    var(--pearl-2) 25%,
+    var(--pearl-3) 50%,
+    var(--pearl-2) 75%,
+    var(--pearl-1)
+  );
+  background-size: 300% 100%;
+  animation: name-pearl 12s ease-in-out infinite alternate;
+}
+
+.link:hover .name-premium,
+.link:hover .name-verified,
+a:hover > * > .name-premium,
+a:hover > * > .name-verified {
+  filter: brightness(1.25);
+}
+
+@keyframes name-shine {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+
+@keyframes name-pearl {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 100% 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .name-premium,
+  .name-verified,
   .live-dot,
   .feed-in {
     animation: none;

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Avatar } from '@/components/player';
+import { PlayerName } from '@/components/tier';
 import { Container, Empty, PageHeader, Panel } from '@/components/ui';
 import { ago, int } from '@/lib/format';
 import { Section, safe } from '@/components/section';
@@ -42,7 +43,9 @@ export default async function WatchlistPage() {
                     >
                       <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={36} />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">{p.name}</div>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <PlayerName steamId={p.steamId} name={p.name} className="font-medium" />
+                        </div>
                         <div className="truncate text-xs text-muted">
                           Seen {ago(p.lastSeen, now)}
                           {p.serverName && ` · ${p.serverName}`}

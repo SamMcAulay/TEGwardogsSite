@@ -4,11 +4,13 @@ import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/client';
 import { KillList } from '@/components/game';
 import { Avatar, PlayerLink } from '@/components/player';
+import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { playerMetadata } from '@/lib/server/card';
+import { tierOfSteam } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -84,6 +86,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
   const favourite = weapons[0];
   const servers = [...player.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
+  const tier = tierOfSteam(steamId);
 
   return (
     <>
@@ -115,8 +118,11 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                   ) : (
                     <Badge>Last seen {player.lastSeen ? ago(player.lastSeen, now) : '—'}</Badge>
                   )}
+                  {tier && <TierBadge tier={tier} />}
                 </div>
-                <h1 className="display truncate text-4xl leading-none sm:text-5xl">{player.name}</h1>
+                <h1 className="display truncate text-4xl leading-none sm:text-5xl">
+                  <NameTag tier={tier}>{player.name}</NameTag>
+                </h1>
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>
                   <CopyButton value={steamId} label="Copy ID" />

@@ -45,3 +45,6 @@ next-env.d.ts
 /config/servers.json
 .env*.local
 .env
+
+# linked accounts (local runs)
+/data/

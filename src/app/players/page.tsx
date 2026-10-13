@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SearchBox } from '@/components/client';
 import { Avatar } from '@/components/player';
+import { PlayerName } from '@/components/tier';
 import { Container, Empty, FactionTag, PageHeader, Panel, StatusDot } from '@/components/ui';
 import { ago, int } from '@/lib/format';
 import { Section, safe } from '@/components/section';
@@ -22,7 +23,9 @@ function PlayerTile({ p, meta }: { p: PlayerSearchRow; meta: React.ReactNode }) 
     >
       <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={36} />
       <div className="min-w-0">
-        <div className="truncate font-medium">{p.name}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          <PlayerName steamId={p.steamId} name={p.name} className="font-medium" />
+        </div>
         <div className="truncate text-xs text-muted">{meta}</div>
       </div>
     </Link>
