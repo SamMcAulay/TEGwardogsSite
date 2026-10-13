@@ -1,6 +1,7 @@
 // Discord slash commands over HTTP: Discord POSTs each use of a command to
 // /api/discord/interactions and shows our JSON reply. No gateway connection, no bot process.
-// Only one command: /lookup, for staff, posting a member's linked stats profile in the channel.
+// /lookup (staff: a member's linked stats profile, in the channel) and /link (anyone: how to link,
+// or what they're linked to, privately).
 import { createPublicKey, verify } from 'node:crypto';
 import type { AccountsEnv } from './env';
 import type { Store } from './store';
@@ -37,6 +38,12 @@ export const COMMANDS = [
     contexts: [0],
     options: [{ type: 6, name: 'member', description: 'The Discord member to look up', required: true }],
   },
+  {
+    name: 'link',
+    description: 'Link your Discord and Steam accounts for your TEG status and queue priority',
+    type: 1,
+    contexts: [0],
+  },
 ];
 
 /** Replaces the guild's commands with COMMANDS (idempotent; safe on every start). */
@@ -53,7 +60,7 @@ export async function registerCommands(env: AccountsEnv, f: typeof fetch = fetch
 interface Interaction {
   type: number;
   guild_id?: string;
-  member?: { roles?: string[] };
+  member?: { roles?: string[]; user?: { id?: string } };
   data?: {
     name?: string;
     options?: { name: string; value: unknown }[];
@@ -85,6 +92,7 @@ export async function handleInteraction(
   deps: { env: AccountsEnv; store: Store; siteUrl: string; playerName: (steamId: string) => Promise<string | null>; nameBudgetMs?: number },
 ): Promise<object> {
   if (i.type === 1) return { type: 1 }; // PING: Discord checking the endpoint
+  if (i.type === 2 && i.data?.name === 'link') return linkCommand(i, deps);
   if (i.type !== 2 || i.data?.name !== 'lookup') return say('Unknown command.', true);
   const { env, store, siteUrl } = deps;
   const roles = i.member?.roles ?? [];
@@ -100,4 +108,21 @@ export async function handleInteraction(
   const found = await within(deps.playerName(link.steamId), deps.nameBudgetMs ?? NAME_BUDGET_MS, null);
   const name = found && plainName(found);
   return say(`**${who}**${name ? ` plays as **${name}**` : ''}: ${siteUrl}/players/${link.steamId}`);
+}
+
+/** /link: private to whoever ran it. Not linked: how to. Linked: which player, and where to change it. */
+async function linkCommand(i: Interaction, deps: Parameters<typeof handleInteraction>[1]): Promise<object> {
+  const { store, siteUrl } = deps;
+  const id = i.member?.user?.id ?? '';
+  const link = /^\d{17,20}$/.test(id) ? store.byDiscord(id) : null;
+  if (!link) {
+    return say(
+      `Link your Discord and Steam accounts at <${siteUrl}/account>: sign in with Discord, then Steam. ` +
+        'It takes a minute, shows your TEG status on your stats profile, and gets you queue priority once tiered queues arrive.',
+      true,
+    );
+  }
+  const found = await within(deps.playerName(link.steamId), deps.nameBudgetMs ?? NAME_BUDGET_MS, null);
+  const name = found ? ` as **${plainName(found)}**` : '';
+  return say(`You're linked${name}: ${siteUrl}/players/${link.steamId}\nTo change or unlink: <${siteUrl}/account>`, true);
 }

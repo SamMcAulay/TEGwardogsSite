@@ -143,6 +143,35 @@ describe('/lookup with hostile names', () => {
   });
 });
 
+describe('/link', () => {
+  const link = (userId: string, roles: string[] = []) => ({ type: 2, guild_id: GUILD, member: { roles, user: { id: userId } }, data: { name: 'link' } });
+
+  test('not linked: privately, how to link', async () => {
+    const r = text(await handleInteraction(link(TARGET), deps()));
+    expect(r.flags).toBe(64);
+    expect(r.content).toContain(`<${SITE}/account>`);
+    expect(r.content).toMatch(/sign in with Discord, then Steam/);
+  });
+
+  test('linked: privately, which player and where to change it; anyone may use it', async () => {
+    const store = openStore(':memory:');
+    store.link(TARGET, STEAM);
+    const r = text(await handleInteraction(link(TARGET, ['200000000000000000']), deps(store)));
+    expect(r).toMatchObject({ flags: 64 });
+    expect(r.content).toBe(`You're linked as **RedOwl57**: ${SITE}/players/${STEAM}\nTo change or unlink: <${SITE}/account>`);
+  });
+
+  test('a hostile player name is plain text; a slow one is left out', async () => {
+    const store = openStore(':memory:');
+    store.link(TARGET, STEAM);
+    const hostile = text(await handleInteraction(link(TARGET), { ...deps(store), playerName: async () => '[x](https://evil.example)' }));
+    expect(hostile.content).not.toMatch(/\]\(|https:\/\/evil/);
+    const slow = () => new Promise<string | null>((done) => setTimeout(() => done('late'), 5_000));
+    const r = text(await handleInteraction(link(TARGET), { ...deps(store), playerName: slow, nameBudgetMs: 50 }));
+    expect(r.content).toBe(`You're linked: ${SITE}/players/${STEAM}\nTo change or unlink: <${SITE}/account>`);
+  });
+});
+
 describe('registerCommands', () => {
   test('overwrites the guild commands with the bot token', async () => {
     const f = vi.fn(async () => Response.json([])) as unknown as typeof fetch;
