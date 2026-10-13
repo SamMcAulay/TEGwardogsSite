@@ -24,6 +24,15 @@ export async function runAccountChecks(env: AccountsEnv, f: typeof fetch = fetch
         detail: missing.length ? `not roles in the guild: ${missing.join(', ')}` : ids.length ? ids.map((id) => known.get(id)).join(', ') : 'none configured',
       });
     }
+    if (env.roundsChannelId) {
+      // Seeing the channel proves View Channel; Send Messages and Embed Links show on the first post.
+      const ch = await get(`/channels/${env.roundsChannelId}`);
+      out.push(
+        ch.ok
+          ? { name: 'round results channel', ok: true, detail: `#${((await ch.json()) as { name?: string }).name}` }
+          : { name: 'round results channel', ok: false, detail: `bot can't see channel ${env.roundsChannelId} (${ch.status}): allow it View Channel, Send Messages and Embed Links there` },
+      );
+    }
   } catch (e) {
     out.push({ name: 'discord', ok: false, detail: e instanceof Error ? e.message : String(e) });
   }

@@ -187,11 +187,15 @@ application's key.
 
 Each round that ends with at least 10 players at its peak is posted to a Discord channel: the
 winner and map, the final scores, the round's awards (most kills, best K/D, longest shot, best
-streak), its length and a link to the match page. It uses a channel webhook, so the bot needs no
-permissions. In the channel: Edit Channel, Integrations, Webhooks, New Webhook, name it, Copy
-Webhook URL. Put it in `.env` as `DISCORD_ROUNDS_WEBHOOK_URL` and
-`docker compose up -d --force-recreate site`. The first pass only records the rounds that have
-already ended, so switching it on doesn't flood the channel; rounds are checked every two minutes
+streak), its length and a link to the match page. The bot posts them, in one channel:
+
+1. Edit Channel, Permissions, add the bot (*TEG Wardogs Stats*), allow **View Channel**, **Send
+   Messages** and **Embed Links**.
+2. Right-click the channel, Copy Channel ID (Developer Mode on), and put it in `.env` as
+   `DISCORD_ROUNDS_CHANNEL_ID`. `docker compose run --rm doctor` checks the bot can see it; then
+   `docker compose up -d --force-recreate site`.
+
+The first pass only records the rounds that have already ended, so switching it on doesn't flood the channel; rounds are checked every two minutes
 and each is posted once (remembered in `accounts.db`).
 
 Back up `accounts.db`:

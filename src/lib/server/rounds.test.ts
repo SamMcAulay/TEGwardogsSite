@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { openStore } from './accounts/store';
-import { announceRounds, MAX_AGE_S, MIN_PEAK_PLAYERS, roundMessage, webhookPoster, type EndedRound } from './rounds';
+import { announceRounds, botPoster, MAX_AGE_S, MIN_PEAK_PLAYERS, roundMessage, type EndedRound } from './rounds';
 
 const NOW = 1_800_000_000;
 const SITE = 'https://stats.example.com';
@@ -67,7 +67,7 @@ describe('announceRounds', () => {
     const { store, deps } = setup([round(1)]);
     await announceRounds(deps);
     deps.ended.mockResolvedValue([round(2)]);
-    deps.post.mockRejectedValueOnce(new Error('webhook post failed (429)'));
+    deps.post.mockRejectedValueOnce(new Error('posting the round failed (429)'));
     await expect(announceRounds(deps)).rejects.toThrow(/429/);
     expect(store.isAnnounced('s1', 2)).toBe(false);
     expect(await announceRounds(deps)).toEqual({ posted: 1, skipped: 0 });
@@ -83,12 +83,23 @@ describe('announceRounds', () => {
   });
 });
 
-describe('webhookPoster', () => {
-  test('posts JSON and throws on a refusal', async () => {
-    const f = vi.fn(async () => new Response(null, { status: 204 })) as unknown as typeof fetch;
-    await webhookPoster('https://discord.com/api/webhooks/1/abc', f)({ content: 'x' });
-    expect((f as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0][1].body).toBe('{"content":"x"}');
-    const bad = vi.fn(async () => new Response('', { status: 404 })) as unknown as typeof fetch;
-    await expect(webhookPoster('https://discord.com/api/webhooks/1/abc', bad)({})).rejects.toThrow(/404/);
+describe('botPoster', () => {
+  const env = { discordBotToken: 'bot', roundsChannelId: '123456789012345678' };
+  const calls = (f: typeof fetch) => (f as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls;
+
+  test('posts JSON to the channel as the bot', async () => {
+    const f = vi.fn(async () => Response.json({ id: '1' })) as unknown as typeof fetch;
+    await botPoster(env, f)({ content: 'x' });
+    const [url, init] = calls(f)[0];
+    expect(url).toBe('https://discord.com/api/v10/channels/123456789012345678/messages');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bot bot');
+    expect(init.body).toBe('{"content":"x"}');
+  });
+
+  test('a missing permission says which ones to allow; other failures throw too', async () => {
+    const denied = vi.fn(async () => Response.json({ code: 50013 }, { status: 403 })) as unknown as typeof fetch;
+    await expect(botPoster(env, denied)({})).rejects.toThrow(/View Channel, Send Messages and Embed Links/);
+    const busy = vi.fn(async () => Response.json({ retry_after: 1 }, { status: 429 })) as unknown as typeof fetch;
+    await expect(botPoster(env, busy)({})).rejects.toThrow(/429/);
   });
 });
