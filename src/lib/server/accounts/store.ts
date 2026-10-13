@@ -1,6 +1,6 @@
-// Linked accounts: one Discord account to one Steam account, and the tier its roles last granted,
-// plus a log of what staff did to them on /admin. Node's built-in SQLite, one file in DATA_DIR.
-// Role ids and Discord names are never stored.
+// Linked accounts: one Discord account to one Steam account, the tier its roles last granted, and
+// its Discord name as last seen (shown to staff on /admin only, never on public pages), plus a log
+// of what staff did on /admin. Node's built-in SQLite, one file in DATA_DIR. Role ids aren't stored.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -12,6 +12,8 @@ export interface Link {
   tier: Tier | null;
   /** unix seconds of the last answer from Discord about this member's roles */
   checkedAt: number | null;
+  /** server nickname or Discord name, as last seen; staff-only */
+  discordName: string | null;
   linkedAt: number;
 }
 
@@ -21,6 +23,7 @@ interface Row {
   tier: number | null;
   checked_at: number | null;
   linked_at: number;
+  discord_name: string | null;
 }
 
 const toLink = (r: Row): Link => ({
@@ -29,6 +32,7 @@ const toLink = (r: Row): Link => ({
   tier: (r.tier as Tier | null) ?? null,
   checkedAt: r.checked_at,
   linkedAt: r.linked_at,
+  discordName: r.discord_name ?? null,
 });
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -41,6 +45,8 @@ export interface AdminLogEntry {
   action: AdminAction;
   targetDiscordId: string;
   targetSteamId: string | null;
+  adminName: string | null;
+  targetName: string | null;
 }
 
 export class SteamTakenError extends Error {
@@ -71,6 +77,10 @@ export const MIGRATIONS: string[] = [
      target_discord_id TEXT NOT NULL,
      target_steam_id   TEXT
    )`,
+  // v3: Discord names for /admin, kept current by the tier sync; names in the log outlive unlinks
+  `ALTER TABLE links ADD COLUMN discord_name TEXT;
+   ALTER TABLE admin_log ADD COLUMN admin_name TEXT;
+   ALTER TABLE admin_log ADD COLUMN target_name TEXT;`,
 ];
 
 /** Brings the file up to date; snapshots it first (`<file>.pre-v<n>`) when it already holds links. */
@@ -107,12 +117,14 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         steam_id = excluded.steam_id
     `),
     remove: db.prepare('DELETE FROM links WHERE discord_id = ?'),
-    setTier: db.prepare('UPDATE links SET tier = ?, checked_at = ? WHERE discord_id = ?'),
+    // a null name (they left the server) keeps the last one seen
+    setTier: db.prepare('UPDATE links SET tier = ?, checked_at = ?, discord_name = COALESCE(?, discord_name) WHERE discord_id = ?'),
     due: db.prepare('SELECT * FROM links WHERE checked_at IS NULL OR checked_at < ? ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?'),
     tiered: db.prepare('SELECT steam_id, tier, linked_at FROM links WHERE tier IS NOT NULL ORDER BY tier, linked_at, steam_id'),
     recent: db.prepare('SELECT * FROM links ORDER BY linked_at DESC, discord_id LIMIT ? OFFSET ?'),
     counts: db.prepare('SELECT tier, count(*) AS n FROM links GROUP BY tier'),
-    log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id) VALUES (?, ?, ?, ?, ?)'),
+    log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+    byName: db.prepare("SELECT * FROM links WHERE discord_name LIKE ? ESCAPE '\\' ORDER BY discord_name LIMIT ?"),
     auditLog: db.prepare('SELECT * FROM admin_log ORDER BY at DESC, id DESC LIMIT ?'),
   };
   const one = (r: unknown) => (r ? toLink(r as Row) : null);
@@ -128,7 +140,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       return one(q.byDiscord.get(discordId))!;
     },
     unlink: (discordId: string) => void q.remove.run(discordId),
-    setTier: (discordId: string, tier: Tier | null, at = now()) => void q.setTier.run(tier, at, discordId),
+    setTier: (discordId: string, tier: Tier | null, at = now(), discordName: string | null = null) =>
+      void q.setTier.run(tier, at, discordName, discordId),
     /** Links whose roles were last checked before `olderThan` (never-checked first). */
     due: (olderThan: number, limit: number) => (q.due.all(olderThan, limit) as unknown as Row[]).map(toLink),
     /** Every linked Steam account that has a tier: best tier first, then earliest linked. */
@@ -151,17 +164,32 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       return out;
     },
     log(e: Omit<AdminLogEntry, 'at'>, at = now()) {
-      q.log.run(at, e.adminDiscordId, e.action, e.targetDiscordId, e.targetSteamId);
+      q.log.run(at, e.adminDiscordId, e.action, e.targetDiscordId, e.targetSteamId, e.adminName, e.targetName);
     },
     /** Newest admin actions first. */
     auditLog: (limit: number) =>
-      (q.auditLog.all(limit) as unknown as { at: number; admin_discord_id: string; action: AdminAction; target_discord_id: string; target_steam_id: string | null }[]).map((r) => ({
+      (
+        q.auditLog.all(limit) as unknown as {
+          at: number;
+          admin_discord_id: string;
+          action: AdminAction;
+          target_discord_id: string;
+          target_steam_id: string | null;
+          admin_name: string | null;
+          target_name: string | null;
+        }[]
+      ).map((r) => ({
         at: r.at,
         adminDiscordId: r.admin_discord_id,
         action: r.action,
         targetDiscordId: r.target_discord_id,
         targetSteamId: r.target_steam_id,
+        adminName: r.admin_name,
+        targetName: r.target_name,
       })),
+    /** Links whose last-seen Discord name contains `text` (case-insensitive for ASCII). */
+    byName: (text: string, limit = 25) =>
+      (q.byName.all(`%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, limit) as unknown as Row[]).map(toLink),
     close: () => db.close(),
   };
 }

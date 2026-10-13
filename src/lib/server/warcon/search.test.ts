@@ -53,6 +53,14 @@ describe('SearchIndex', () => {
     expect(await idx.search('76561198000000003')).toMatchObject([{ name: 'Say "hi"' }]);
   });
 
+  test('name looks a player up by SteamID from the same export, loading it once', async () => {
+    const { idx, load } = index();
+    expect(await idx.name('76561198000000001')).toBe('Night, Owl');
+    expect(await idx.name('76561198000000009')).toBeNull();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(await index(vi.fn(async () => Promise.reject(new Error('down')))).idx.name('76561198000000001')).toBeNull();
+  });
+
   test('says warming while the first load is failing', async () => {
     const { idx } = index(vi.fn(async () => Promise.reject(new Error('down'))));
     expect(await idx.search('owl')).toBe('warming');

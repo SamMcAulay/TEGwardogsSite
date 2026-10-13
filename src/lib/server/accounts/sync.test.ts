@@ -19,7 +19,7 @@ function discord(members: Record<string, string[] | 429>) {
     const m = members[id];
     if (m === 429) return Response.json({ retry_after: 1.5 }, { status: 429 });
     if (!m) return Response.json({ code: 10007 }, { status: 404 });
-    return Response.json({ user: { id }, roles: m });
+    return Response.json({ user: { id, username: `user${id.slice(-1)}` }, nick: id === D1 ? 'Night Owl' : null, roles: m });
   }) as unknown as typeof fetch;
 }
 
@@ -28,9 +28,9 @@ describe('tier sync', () => {
     const s = openStore(':memory:');
     s.link(D1, '76561198000000001');
     expect(await refreshTier(env, s, D1, discord({ [D1]: ['300', '200'] }))).toBe(2);
-    expect(s.byDiscord(D1)?.tier).toBe(2);
+    expect(s.byDiscord(D1)).toMatchObject({ tier: 2, discordName: 'Night Owl' });
     expect(await refreshTier(env, s, D1, discord({}))).toBeNull();
-    expect(s.byDiscord(D1)).toMatchObject({ tier: null });
+    expect(s.byDiscord(D1)).toMatchObject({ tier: null, discordName: 'Night Owl' });
   });
 
   test('an outage leaves the old tier in place', async () => {

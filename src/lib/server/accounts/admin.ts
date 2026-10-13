@@ -31,8 +31,11 @@ export async function currentAdmin(): Promise<{ a: Accounts; admin: Session } | 
   return (await isStaffNow(a.env, a.store, admin.discordId)) ? { a, admin } : null;
 }
 
-/** What staff typed into the search box: a SteamID64, a Discord id, or a profile URL holding one. */
-export function parseLookup(q: string): { steamId: string } | { discordId: string } | null {
+/**
+ * What staff typed into the search box: a SteamID64, a Discord id, or a profile URL holding one;
+ * any other text of two or more characters searches Discord names.
+ */
+export function parseLookup(q: string): { steamId: string } | { discordId: string } | { name: string } | null {
   const s = q.trim();
   const profile = /\/players\/(\d{17})\b/.exec(s) ?? /steamcommunity\.com\/profiles\/(\d{17})\b/.exec(s);
   if (profile) return { steamId: profile[1] };
@@ -40,5 +43,5 @@ export function parseLookup(q: string): { steamId: string } | { discordId: strin
   if (discordUrl) return { discordId: discordUrl[1] };
   if (/^7656119\d{10}$/.test(s)) return { steamId: s };
   if (/^\d{17,20}$/.test(s)) return { discordId: s };
-  return null;
+  return s.length >= 2 ? { name: s } : null;
 }

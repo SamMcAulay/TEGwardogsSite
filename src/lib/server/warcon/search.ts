@@ -52,6 +52,7 @@ export function parseBoardCsv(csv: string): SearchHit[] {
 
 export class SearchIndex {
   private hits: SearchHit[] | null = null;
+  private names = new Map<string, string>();
   private loadedAt = 0;
   private failedAt = -Infinity;
   private loading: Promise<void> | null = null;
@@ -74,6 +75,7 @@ export class SearchIndex {
       .load()
       .then((csv) => {
         this.hits = parseBoardCsv(csv).sort((a, b) => b.minutes - a.minutes);
+        this.names = new Map(this.hits.map((h) => [h.steamId, h.name]));
         this.loadedAt = this.now();
       })
       .catch((e) => {
@@ -93,6 +95,12 @@ export class SearchIndex {
   /** Every player in the export, or 'warming' before it has loaded. */
   async snapshot(): Promise<SearchHit[] | 'warming'> {
     return (await this.current()) ?? 'warming';
+  }
+
+  /** A player's name from the export, without asking Warcon; null when not in it (or still loading). */
+  async name(steamId: string): Promise<string | null> {
+    await this.current();
+    return this.names.get(steamId) ?? null;
   }
 
   async search(q: string, limit = 25): Promise<SearchHit[] | 'warming'> {

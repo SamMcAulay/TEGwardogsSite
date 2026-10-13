@@ -2,10 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { NameTag, TierBadge } from '@/components/tier';
 import { buttonClass, Container, Empty, PageHeader, Panel } from '@/components/ui';
-import { safe } from '@/components/section';
 import { accounts, currentSession } from '@/lib/server/accounts';
 import type { AuthError } from '@/lib/server/accounts/routes';
-import { getPlayer } from '@/lib/server/data';
+import { playerName as lookupPlayerName } from '@/lib/server/data';
 import { TIERS, type Tier } from '@/lib/tiers';
 import { one } from '@/lib/url';
 import { signOut, unlinkSteam } from './actions';
@@ -47,8 +46,8 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
   const a = accounts();
   const session = a ? await currentSession(a) : null;
   const link = a && session ? a.store.byDiscord(session.discordId) : null;
-  const player = link ? await safe(getPlayer(link.steamId)) : null;
-  const playerName = player && !(player instanceof Error) ? player.data.name : null;
+  // From the in-memory index, not a Warcon player lookup: a launch rush of people linking costs Warcon nothing.
+  const playerName = link ? await lookupPlayerName(link.steamId) : null;
 
   return (
     <>

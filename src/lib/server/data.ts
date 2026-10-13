@@ -286,6 +286,18 @@ export async function adjustedRank(warconRank: number | null, steamId: string): 
   return Math.max(1, warconRank - bannedAbove);
 }
 
+/**
+ * A player's name from the in-memory search index: no Warcon player lookup, so pages that only
+ * need a name (/account, /admin) cost Warcon nothing during a rush. Null outside the top 10,000.
+ */
+export async function playerName(steamId: string): Promise<string | null> {
+  try {
+    return await searchIndex(async () => (await serverList()).list[0].id).name(steamId);
+  } catch {
+    return null;
+  }
+}
+
 export async function searchPlayers(q: string): Promise<PlayerSearchRow[] | 'warming'> {
   const idx = searchIndex(async () => (await serverList()).list[0].id);
   const hits = await idx.search(q);

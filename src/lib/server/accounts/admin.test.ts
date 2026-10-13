@@ -55,9 +55,10 @@ describe('parseLookup', () => {
     expect(parseLookup(`https://discord.com/users/${D1}`)).toEqual({ discordId: D1 });
   });
 
-  test('anything else is not a lookup', () => {
-    expect(parseLookup('RedOwl57')).toBeNull();
-    expect(parseLookup('12345')).toBeNull();
+  test('other text searches Discord names; one character is too short', () => {
+    expect(parseLookup(' RedOwl57 ')).toEqual({ name: 'RedOwl57' });
+    expect(parseLookup('12345')).toEqual({ name: '12345' });
+    expect(parseLookup('x')).toBeNull();
     expect(parseLookup('')).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 // Keeps each link's tier in step with the member's Discord roles, so a lapsed Premium or a
 // departed moderator loses their badge and priority within one sweep.
 import { tierFor, type Tier } from '@/lib/tiers';
-import { DiscordError, memberRoles } from './discord';
+import { DiscordError, member } from './discord';
 import type { AccountsEnv } from './env';
 import type { Store } from './store';
 
@@ -9,11 +9,14 @@ import type { Store } from './store';
 export const TIER_MAX_AGE = 10 * 60;
 const PER_SWEEP = 200;
 
-/** Ask Discord for the member's roles and store the tier. Leaves the old tier when Discord can't answer. */
+/**
+ * Ask Discord for the member's roles and store the tier, and their current name for /admin.
+ * Leaves both as they were when Discord can't answer.
+ */
 export async function refreshTier(env: AccountsEnv, store: Store, discordId: string, f: typeof fetch = fetch): Promise<Tier | null> {
-  const roles = await memberRoles(env, discordId, f);
-  const tier = roles ? tierFor(roles, env.roles) : null;
-  store.setTier(discordId, tier);
+  const m = await member(env, discordId, f);
+  const tier = m ? tierFor(m.roles, env.roles) : null;
+  store.setTier(discordId, tier, undefined, m?.name ?? null);
   return tier;
 }
 
