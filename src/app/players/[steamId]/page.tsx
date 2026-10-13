@@ -13,7 +13,7 @@ import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/forma
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { classKills } from '@/lib/weapon-classes';
 import { playerMetadata } from '@/lib/server/card';
-import { tierOfSteam } from '@/lib/server/accounts';
+import { lookOfSteam } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -89,7 +89,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
   const favourite = weapons[0];
   const servers = [...player.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
-  const tier = tierOfSteam(steamId);
+  const look = lookOfSteam(steamId);
+  const tier = look?.tier ?? null;
 
   return (
     <>
@@ -124,7 +125,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                   {tier && <TierBadge tier={tier} />}
                 </div>
                 <h1 className="display truncate text-4xl leading-none sm:text-5xl">
-                  <NameTag tier={tier}>{player.name}</NameTag>
+                  <NameTag style={look?.nameStyle ?? null}>{player.name}</NameTag>
                 </h1>
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>

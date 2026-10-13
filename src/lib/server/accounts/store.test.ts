@@ -197,7 +197,7 @@ describe('accounts.db on disk', () => {
     v2.close();
     const s = openStore(file);
     expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 2, linkedAt: 40, discordName: null });
-    expect(s.auditLog(5)).toEqual([{ at: 10, adminDiscordId: D2, adminName: null, action: 'recheck', targetDiscordId: D1, targetName: null, targetSteamId: S1 }]);
+    expect(s.auditLog(5)).toEqual([{ at: 10, adminDiscordId: D2, adminName: null, action: 'recheck', targetDiscordId: D1, targetName: null, targetSteamId: S1, detail: null }]);
     expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
   });
 
@@ -213,7 +213,24 @@ describe('accounts.db on disk', () => {
     expect(s.auditLog(5)).toHaveLength(1);
     s.markAnnounced('srv', 1);
     expect(s.isAnnounced('srv', 1)).toBe(true);
-    expect(existsSync(`${file}.pre-v4`)).toBe(true);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
+  });
+
+  test('upgrading a v4 database (live since #23) keeps everything and adds name styles', () => {
+    const file = join(fresh(), 'accounts.db');
+    const v4 = new DatabaseSync(file);
+    v4.exec(`${MIGRATIONS.slice(0, 4).join(';\n')}; PRAGMA user_version = 4;`);
+    v4.prepare("INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at, discord_name) VALUES (?, ?, 1, 50, 40, 'Jan')").run(D1, S1);
+    v4.prepare("INSERT INTO announced_rounds (server_id, match_id, at) VALUES ('srv', 9, 1)").run();
+    v4.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 1, discordName: 'Jan', nameStyle: null });
+    expect(s.isAnnounced('srv', 9)).toBe(true);
+    s.setNameStyle(D1, 'pink');
+    expect(s.bySteam(S1)?.nameStyle).toBe('pink');
+    s.log({ adminDiscordId: D1, adminName: 'Jan', action: 'style', targetDiscordId: D1, targetName: 'Jan', targetSteamId: S1, detail: 'Pink' }, 5);
+    expect(s.auditLog(1)[0]).toMatchObject({ action: 'style', detail: 'Pink' });
+    expect(existsSync(`${file}.pre-v5`)).toBe(true);
   });
 
   test('upgrading the live v1 database keeps its links and adds the admin log', () => {
@@ -227,7 +244,7 @@ describe('accounts.db on disk', () => {
     expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 1, checkedAt: 50, linkedAt: 40 });
     expect(s.byDiscord(D1)?.steamId).toBe(S1);
     s.log({ adminDiscordId: D2, adminName: 'Jan', action: 'unlink', targetDiscordId: D1, targetName: 'Owl', targetSteamId: S1 }, 100);
-    expect(s.auditLog(5)).toEqual([{ at: 100, adminDiscordId: D2, adminName: 'Jan', action: 'unlink', targetDiscordId: D1, targetName: 'Owl', targetSteamId: S1 }]);
+    expect(s.auditLog(5)).toEqual([{ at: 100, adminDiscordId: D2, adminName: 'Jan', action: 'unlink', targetDiscordId: D1, targetName: 'Owl', targetSteamId: S1, detail: null }]);
     expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
   });
 });
