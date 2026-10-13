@@ -6,7 +6,7 @@ import { refreshTier, sweep } from './sync';
 const env: AccountsEnv = {
   discordClientId: 'c', discordClientSecret: 's', discordBotToken: 'bot', discordGuildId: '999999999999999999',
   roles: { staff: ['100'], premium: ['200'], verified: ['300'] },
-  sessionSecret: 'x'.repeat(32), priorityApiKey: '', discordPublicKey: '', dataDir: ':memory:',
+  sessionSecret: 'x'.repeat(32), priorityApiKey: '', discordPublicKey: '', roundsWebhookUrl: '', dataDir: ':memory:',
 };
 const D1 = '111111111111111111';
 const D2 = '222222222222222222';

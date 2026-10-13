@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/client';
 import { KillList } from '@/components/game';
 import { Milestones } from '@/components/milestones';
+import { RecentForm } from '@/components/recent-form';
 import { Avatar, PlayerLink } from '@/components/player';
 import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
@@ -171,6 +172,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
             sub={favourite ? `Main: ${causeInfo(favourite.cause).label}` : undefined}
           />
         </StatGrid>
+
+        <RecentForm rounds={player.matches} streak={player.streak} />
 
         <Milestones totals={{ ...t, classKills: classKills(player.weapons) }} />
 

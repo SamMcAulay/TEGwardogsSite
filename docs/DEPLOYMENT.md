@@ -183,6 +183,17 @@ application's key.
    `https://stats.tegwardogs.fyi/api/discord/interactions` and save. Discord tests it on save; it
    only accepts the URL once step 1 is live.
 
+### Round results in a channel (optional)
+
+Each round that ends with at least 10 players at its peak is posted to a Discord channel: the
+winner and map, the final scores, the round's awards (most kills, best K/D, longest shot, best
+streak), its length and a link to the match page. It uses a channel webhook, so the bot needs no
+permissions. In the channel: Edit Channel, Integrations, Webhooks, New Webhook, name it, Copy
+Webhook URL. Put it in `.env` as `DISCORD_ROUNDS_WEBHOOK_URL` and
+`docker compose up -d --force-recreate site`. The first pass only records the rounds that have
+already ended, so switching it on doesn't flood the channel; rounds are checked every two minutes
+and each is posted once (remembered in `accounts.db`).
+
 Back up `accounts.db`:
 `docker run --rm -v teg-wardogs-site_site-data:/d -v "$PWD":/b debian:bookworm-slim cp /d/accounts.db /b/`
 (stop the site first, or the copy may miss writes still in `accounts.db-wal`).

@@ -4,7 +4,7 @@ import { siteEnv } from '@/lib/server/warcon/env';
 
 export const dynamic = 'force-dynamic';
 
-const PAGES = ['', '/servers', '/leaderboards', '/players', '/matches', '/feed'];
+const PAGES = ['', '/servers', '/leaderboards', '/records', '/players', '/matches', '/feed'];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { siteUrl } = siteEnv();

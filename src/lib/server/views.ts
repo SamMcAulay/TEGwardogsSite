@@ -189,4 +189,35 @@ export interface MatchPlayerRow {
   killStreak: number;
 }
 
+/** One record-holding kill: who, whom, with what, how far, when and where. */
+export interface RecordShot {
+  steamId: string;
+  name: string;
+  victim: string;
+  cause: string;
+  distance: number;
+  ts: number;
+  serverId: string;
+  serverName: string;
+}
+
+/** A player and their record value. */
+export interface RecordRow {
+  steamId: string;
+  name: string;
+  avatarUrl: string | null;
+  value: number;
+}
+
+export interface Records {
+  /** the ten longest rifle and machine-gun kills ever */
+  longestShots: RecordShot[];
+  /** most kills in one life, all time */
+  streaks: RecordRow[];
+  vehicleKills: RecordRow[];
+  headshots: RecordRow[];
+  /** most kills in the last 24 hours, across servers */
+  today: RecordRow[];
+}
+
 export interface MatchAward { key: string; label: string; steamId: string; name: string; value: string }

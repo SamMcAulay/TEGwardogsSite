@@ -72,7 +72,7 @@ setInterval(() => {
 function board(params) {
   const rows = PLAYERS.map((p, i) => ({
     rank: 0, steamId: p.steamId, name: p.name, minutes: 60 + ((i * 37) % 3000), seedMinutes: 0, kills: (i * 13) % 900, deaths: (i * 7) % 600 + 1,
-    headshots: (i * 3) % 200, teamKills: 0, suicides: 0, vehicleKills: 0, killStreak: 5, deathStreak: 3, matches: 1 + (i % 80), wins: i % 40, losses: i % 30, draws: 0, cash: i * 100, lastSeen: iso(now() - i * 60_000),
+    headshots: (i * 3) % 200, teamKills: 0, suicides: 0, vehicleKills: i % 7, killStreak: 3 + (i % 20), deathStreak: 3, matches: 1 + (i % 80), wins: i % 40, losses: i % 30, draws: 0, cash: i * 100, lastSeen: iso(now() - i * 60_000),
   }));
   const sort = params.get('sort') ?? 'kills';
   const key = { perHour: (r) => r.kills / r.minutes, kd: (r) => r.kills / r.deaths, playtime: (r) => r.minutes, winRate: (r) => r.wins / (r.wins + r.losses || 1) }[sort] ?? ((r) => r[sort] ?? r.kills);
@@ -108,7 +108,7 @@ const routes = [
   }],
   [/^\/api\/servers\/([^/]+)\/leaderboard\/export$/, (q) => {
     const head = 'rank,steam_id,name,playtime_min,seeded_min,kills,deaths,kd,kills_per_hour,headshots,team_kills,suicides,vehicle_kills,kill_streak,death_streak,matches,wins,losses,draws,win_pct,cash,last_seen';
-    return { csv: [head, ...board(q).map((r) => `${r.rank},${r.steamId},"${r.name}",${r.minutes},0,${r.kills},${r.deaths},0,0,0,0,0,0,0,0,${r.matches},${r.wins},${r.losses},0,0,${r.cash},${r.lastSeen}`)].join('\n') };
+    return { csv: [head, ...board(q).map((r) => `${r.rank},${r.steamId},"${r.name}",${r.minutes},0,${r.kills},${r.deaths},0,0,${r.headshots},0,0,${r.vehicleKills},${r.killStreak},0,${r.matches},${r.wins},${r.losses},0,0,${r.cash},${r.lastSeen}`)].join('\n') };
   }],
   [/^\/api\/servers\/([^/]+)\/players\/(\d{17})\/career$/, (_, id, steamId) => {
     if (!PLAYERS.some((p) => p.steamId === steamId)) return { ok: true, career: { rank: { server: null, org: null, floorMinutes: 60 }, streak: null, matches: 0, wins: 0, losses: 0, draws: 0, kills: 0, deaths: 0, minutes: 0, headshots: 0, vehicleKills: 0, longestM: null, killStreak: 0, deathStreak: 0, maps: [], factions: [], last: [] } };

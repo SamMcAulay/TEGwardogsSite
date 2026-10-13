@@ -14,7 +14,7 @@ const STAFF = '100000000000000000';
 const env: AccountsEnv = {
   discordClientId: '555555555555555555', discordClientSecret: 's', discordBotToken: 'bot', discordGuildId: GUILD,
   roles: { staff: [STAFF], premium: ['200000000000000000'], verified: [] },
-  sessionSecret: 'x'.repeat(32), priorityApiKey: '', discordPublicKey: PUBLIC_HEX, dataDir: ':memory:',
+  sessionSecret: 'x'.repeat(32), priorityApiKey: '', discordPublicKey: PUBLIC_HEX, roundsWebhookUrl: '', dataDir: ':memory:',
 };
 const TARGET = '111111111111111111';
 const STEAM = '76561198000000001';
