@@ -465,6 +465,19 @@ describe('records', () => {
     expect(r.data.longestShots.map((x) => [x.name, x.distance])).toEqual([['K1', 900], ['K1', 900]]); // once per server
   });
 
+  test('impossible distances and vehicle-explosion kills are not records', async () => {
+    api.kills.mockImplementation(async (_sid: string, q: { cause: string }) =>
+      fresh({
+        kills: q.cause === 'Id.Item.Mosin'
+          ? [shot(1, 3940), shot(2, 1199), shot(3, 900, { tags: ['meta.progression.context.player.killcontext.VehicleExplosion'] }), shot(4, 880, { tags: ['meta.progression.context.player.killcontext.Penetration'] })]
+          : [],
+        total: null,
+      }),
+    );
+    const r = await records();
+    expect(r.data.longestShots.filter((x) => x.serverName === 'EU#1').map((x) => [x.name, x.distance])).toEqual([['K2', 1199], ['K4', 880]]);
+  });
+
   test('a failed search marks its server missing instead of failing the page', async () => {
     api.kills.mockRejectedValue(new Error('down'));
     const r = await records();
