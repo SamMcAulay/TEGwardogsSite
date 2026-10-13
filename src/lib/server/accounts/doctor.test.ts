@@ -5,7 +5,7 @@ import type { AccountsEnv } from './env';
 const env: AccountsEnv = {
   discordClientId: 'c', discordClientSecret: 's', discordBotToken: 'bot', discordGuildId: '999',
   roles: { staff: ['100', '101'], premium: ['200'], verified: [] },
-  sessionSecret: 'x'.repeat(32), priorityApiKey: '', discordPublicKey: '', dataDir: './data',
+  sessionSecret: 'x'.repeat(32), priorityApiKey: '', discordPublicKey: '', roundsWebhookUrl: '', dataDir: './data',
 };
 
 const discord = (status: { me?: number; roles?: number } = {}) =>

@@ -80,6 +80,16 @@ describe('accounts store', () => {
     expect(s.counts()).toEqual({ total: 2, 1: 1, 2: 0, 3: 0, none: 1 });
   });
 
+  test('announced rounds: per server, each once', () => {
+    const s = openStore(':memory:');
+    expect(s.knowsServer('s1')).toBe(false);
+    s.markAnnounced('s1', 7);
+    s.markAnnounced('s1', 7);
+    expect(s.knowsServer('s1')).toBe(true);
+    expect(s.isAnnounced('s1', 7)).toBe(true);
+    expect(s.isAnnounced('s2', 7)).toBe(false);
+  });
+
   test('linkedSteamIds lists every linked Steam account', () => {
     const s = openStore(':memory:');
     expect(s.linkedSteamIds()).toEqual(new Set());
@@ -188,7 +198,22 @@ describe('accounts.db on disk', () => {
     const s = openStore(file);
     expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 2, linkedAt: 40, discordName: null });
     expect(s.auditLog(5)).toEqual([{ at: 10, adminDiscordId: D2, adminName: null, action: 'recheck', targetDiscordId: D1, targetName: null, targetSteamId: S1 }]);
-    expect(existsSync(`${file}.pre-v3`)).toBe(true);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
+  });
+
+  test('upgrading a v3 database (live since #15) keeps everything and adds announced rounds', () => {
+    const file = join(fresh(), 'accounts.db');
+    const v3 = new DatabaseSync(file);
+    v3.exec(`${MIGRATIONS[0]}; ${MIGRATIONS[1]}; ${MIGRATIONS[2]} PRAGMA user_version = 3;`);
+    v3.prepare("INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at, discord_name) VALUES (?, ?, 1, 50, 40, 'Jan')").run(D1, S1);
+    v3.prepare("INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name) VALUES (10, ?, 'recheck', ?, ?, 'Jan', 'Jan')").run(D1, D1, S1);
+    v3.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 1, discordName: 'Jan', linkedAt: 40 });
+    expect(s.auditLog(5)).toHaveLength(1);
+    s.markAnnounced('srv', 1);
+    expect(s.isAnnounced('srv', 1)).toBe(true);
+    expect(existsSync(`${file}.pre-v4`)).toBe(true);
   });
 
   test('upgrading the live v1 database keeps its links and adds the admin log', () => {

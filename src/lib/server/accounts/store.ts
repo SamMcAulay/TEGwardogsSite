@@ -81,6 +81,13 @@ export const MIGRATIONS: string[] = [
   `ALTER TABLE links ADD COLUMN discord_name TEXT;
    ALTER TABLE admin_log ADD COLUMN admin_name TEXT;
    ALTER TABLE admin_log ADD COLUMN target_name TEXT;`,
+  // v4: rounds already posted to Discord, so each is posted once
+  `CREATE TABLE announced_rounds (
+     server_id TEXT NOT NULL,
+     match_id  INTEGER NOT NULL,
+     at        INTEGER NOT NULL,
+     PRIMARY KEY (server_id, match_id)
+   )`,
 ];
 
 /** Brings the file up to date; snapshots it first (`<file>.pre-v<n>`) when it already holds links. */
@@ -123,6 +130,9 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     tiered: db.prepare('SELECT steam_id, tier, linked_at FROM links WHERE tier IS NOT NULL ORDER BY tier, linked_at, steam_id'),
     recent: db.prepare('SELECT * FROM links ORDER BY linked_at DESC, discord_id LIMIT ? OFFSET ?'),
     steamIds: db.prepare('SELECT steam_id FROM links'),
+    announced: db.prepare('SELECT 1 FROM announced_rounds WHERE server_id = ? AND match_id = ?'),
+    anyAnnounced: db.prepare('SELECT 1 FROM announced_rounds WHERE server_id = ? LIMIT 1'),
+    announce: db.prepare('INSERT OR IGNORE INTO announced_rounds (server_id, match_id, at) VALUES (?, ?, ?)'),
     counts: db.prepare('SELECT tier, count(*) AS n FROM links GROUP BY tier'),
     log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name) VALUES (?, ?, ?, ?, ?, ?, ?)'),
     byName: db.prepare("SELECT * FROM links WHERE discord_name LIKE ? ESCAPE '\\' ORDER BY discord_name LIMIT ?"),
@@ -152,6 +162,11 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         tier: r.tier,
         linkedAt: r.linked_at,
       })),
+    /** Round results already posted (or skipped) for a server's match. */
+    isAnnounced: (serverId: string, matchId: number) => !!q.announced.get(serverId, matchId),
+    /** False until a server's first round is recorded: the first run records without posting. */
+    knowsServer: (serverId: string) => !!q.anyAnnounced.get(serverId),
+    markAnnounced: (serverId: string, matchId: number, at = now()) => void q.announce.run(serverId, matchId, at),
     /** Every linked Steam account. */
     linkedSteamIds: () => new Set((q.steamIds.all() as unknown as { steam_id: string }[]).map((r) => r.steam_id)),
     /** Newest links first. */

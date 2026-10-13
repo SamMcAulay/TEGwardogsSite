@@ -126,6 +126,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link className="link text-muted" href="/leaderboards">
                 Leaderboards
               </Link>
+              <Link className="link text-muted" href="/records">
+                Records
+              </Link>
               <Link className="link text-muted" href="/players">
                 Players
               </Link>

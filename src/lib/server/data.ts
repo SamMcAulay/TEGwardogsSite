@@ -8,8 +8,9 @@ import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import type {
   KillRow, LeaderRow, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
-  PlayerProfile, PlayerSearchRow, PopulationPoint, ServerRow,
+  PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
 } from './views';
+import { RECORD_CAUSES } from '@/lib/weapon-classes';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
 const loaded = <T>(data: T, stale = false, missing: string[] = []): Loaded<T> => ({ data, stale, missing });
@@ -528,4 +529,123 @@ export async function headToHead(a: string, b: string) {
   };
   const [ab, ba] = await Promise.all([count(a, b), count(b, a)]);
   return loaded({ aKills: ab.n, bKills: ba.n }, ab.stale || ba.stale, [...new Set([...ab.failed, ...ba.failed])]);
+}
+
+/** Shots at least this long are searched for the longest-shot records. */
+const RECORD_MIN_M = 500;
+/** Records move slowly: each search is cached this long. */
+const RECORDS_TTL = 30 * 60_000;
+const RECORD_ROWS = 10;
+
+/**
+ * The records page. Longest shots: each rifle and machine gun searched for kills of 500 m or more on
+ * every server (Warcon has fewer than 200 per gun, so the search covers all time), the top ten
+ * kept. Kill streaks, vehicle kills and headshots: the all-time board export. Today: Warcon's
+ * last-24-hours top killers, added up across servers. Org-banned players are left out throughout.
+ */
+export async function records(): Promise<Loaded<Records>> {
+  const { list } = await serverList();
+  if (!list.length) return loaded({ longestShots: [], streaks: [], vehicleKills: [], headshots: [], today: [] });
+  const banned = await orgBannedIds();
+  const nameOf = new Map(list.map((s) => [s.id, shortNameOf(s.name)]));
+  let stale = banned.stale;
+  const missing = new Set<string>();
+
+  const searches = list.flatMap((s) => RECORD_CAUSES.map((cause) => ({ serverId: s.id, cause })));
+  const found = await mapLimited(searches, 4, async ({ serverId, cause }) => {
+    try {
+      const r = await warcon().kills(serverId, { limit: 200, cause, minM: RECORD_MIN_M }, { ttl: RECORDS_TTL });
+      stale ||= r.stale;
+      return r.value.kills.map((k) => ({ k, serverId }));
+    } catch {
+      missing.add(serverId);
+      return [];
+    }
+  });
+  const seen = new Set<string>();
+  const longestShots: RecordShot[] = found
+    .flat()
+    .filter(({ k, serverId }) => {
+      const key = `${serverId}:${k.eventId}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return k.killer && !k.teamKill && !k.suicide && (k.distanceM ?? 0) >= RECORD_MIN_M && !banned.ids.has(k.killer.steamId);
+    })
+    .sort((a, b) => b.k.distanceM! - a.k.distanceM!)
+    .slice(0, RECORD_ROWS)
+    .map(({ k, serverId }) => ({
+      steamId: k.killer!.steamId,
+      name: k.killer!.name,
+      victim: k.victim.name,
+      cause: k.cause ?? '',
+      distance: k.distanceM!,
+      ts: sec(k.ts)!,
+      serverId,
+      serverName: nameOf.get(serverId) ?? serverId,
+    }));
+
+  let board: WBoardRow[] = [];
+  try {
+    const ex = await warcon().boardExport(list[0].id, { scope: 'org', range: 'all', sort: 'kills' });
+    stale ||= ex.stale;
+    board = ex.value.filter((r) => !banned.ids.has(r.steamId));
+  } catch (e) {
+    console.error('[records] board export failed:', e instanceof Error ? e.message : e);
+    missing.add('board');
+  }
+  const top = (pick: (r: WBoardRow) => number) =>
+    [...board].sort((a, b) => pick(b) - pick(a)).filter((r) => pick(r) > 0).slice(0, RECORD_ROWS).map((r) => ({ steamId: r.steamId, name: r.name, avatarUrl: null, value: pick(r) }));
+
+  const day = await fanOut(list.map((s) => s.id), (id) => warcon().analytics(id, '24h'));
+  stale ||= day.stale;
+  for (const id of day.failed) missing.add(id);
+  const todayKills = new Map<string, { name: string; kills: number }>();
+  for (const { value } of day.ok) {
+    for (const p of value.combat?.players ?? []) {
+      if (banned.ids.has(p.steamId)) continue;
+      const had = todayKills.get(p.steamId);
+      todayKills.set(p.steamId, { name: p.name, kills: (had?.kills ?? 0) + p.kills });
+    }
+  }
+  const today = [...todayKills].map(([steamId, p]) => ({ steamId, name: p.name, avatarUrl: null, value: p.kills })).sort((a, b) => b.value - a.value).slice(0, RECORD_ROWS);
+
+  const withPics = async (rows: RecordRow[]) => withAvatars(rows);
+  const [streaks, vehicleKills, headshots, todayRows] = await Promise.all([
+    withPics(top((r) => r.killStreak)),
+    withPics(top((r) => r.vehicleKills)),
+    withPics(top((r) => r.headshots)),
+    withPics(today),
+  ]);
+  return loaded({ longestShots, streaks, vehicleKills, headshots, today: todayRows }, stale, [...missing]);
+}
+
+/** Rounds that have ended, from each visible server's first match page, for the round poster. */
+export async function endedRounds(): Promise<import('./rounds').EndedRound[]> {
+  const { list } = await serverList();
+  const r = await fanOut(list.map((s) => s.id), (id) => warcon().matches(id, 1));
+  return r.ok.flatMap(({ id, value }) =>
+    value.matches
+      .filter((m) => m.endedAt)
+      .map((m) => ({
+        serverId: id,
+        serverName: shortNameOf(list.find((s) => s.id === id)!.name),
+        matchId: m.id,
+        map: m.map ?? '',
+        startedAt: sec(m.startedAt)!,
+        endedAt: sec(m.endedAt)!,
+        peakPlayers: m.peakPlayers ?? 0,
+        winner: m.winner ?? null,
+        scores: (m.finalScores ?? []).map((f) => ({ name: f.name, score: f.score })),
+      })),
+  );
+}
+
+/** A finished round's awards and faction colours, for its Discord post. */
+export async function roundDetail(serverId: string, matchId: number): Promise<import('./rounds').RoundDetail | null> {
+  const m = await getMatch(serverId, matchId);
+  if (!m) return null;
+  return {
+    colours: Object.fromEntries(m.data.factions.map((f) => [f.name, f.colorHex])),
+    awards: m.data.awards.map((a) => ({ key: a.key, label: a.label, name: a.name, value: a.value })),
+  };
 }

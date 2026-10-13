@@ -21,7 +21,7 @@ vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, shortNameOf } from './data';
+import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, shortNameOf } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -415,5 +415,61 @@ describe('Steam avatars on player lists', () => {
     const p = await getPlayer('76561198000000009');
     expect(p?.data.victims[0].avatarUrl).toBe('https://a/1.jpg');
     expect(p?.data.nemeses[0].avatarUrl).toBeNull();
+  });
+});
+
+describe('records', () => {
+  const id = (n: number) => String(76561198000000000n + BigInt(n));
+  const shot = (killer: number, m: number, extra: object = {}) => ({
+    eventId: `e${killer}-${m}`, ts: '2026-10-10T12:00:00Z', map: 'Europe', eventTime: 1,
+    killer: { steamId: id(killer), name: `K${killer}`, faction: null }, victim: { steamId: id(99), name: 'V', faction: null },
+    cause: 'Id.Item.Mosin', distanceM: m, headshot: false, suicide: false, teamKill: false, tags: [], ...extra,
+  });
+  const boardRow = (n: number, o: object) => ({ rank: n, steamId: id(n), name: `P${n}`, minutes: 60, kills: 1, deaths: 1, headshots: 0, vehicleKills: 0, killStreak: 0, matches: 1, wins: 0, losses: 0, draws: 0, cash: 0, lastSeen: null, ...o });
+
+  beforeEach(() => {
+    api.kills.mockImplementation(async (sid: string, q: { cause: string; minM: number }) => {
+      expect(q.minM).toBe(500);
+      if (q.cause !== 'Id.Item.Mosin') return fresh({ kills: [], total: null });
+      return fresh({ kills: sid === 's1' ? [shot(1, 610), shot(2, 990), shot(3, 700, { teamKill: true })] : [shot(4, 820), shot(5, 1000)], total: null });
+    });
+    api.boardExport.mockResolvedValue(fresh([boardRow(1, { killStreak: 12, headshots: 50 }), boardRow(2, { killStreak: 30, vehicleKills: 7 }), boardRow(5, { killStreak: 99 })]));
+    api.analytics.mockImplementation(async (sid: string) =>
+      fresh({ combat: { kills: 0, headshots: 0, players: sid === 's1' ? [{ steamId: id(1), name: 'K1', kills: 10, deaths: 1, headshots: 0 }, { steamId: id(2), name: 'K2', kills: 30, deaths: 1, headshots: 0 }] : [{ steamId: id(1), name: 'K1', kills: 25, deaths: 1, headshots: 0 }] } }),
+    );
+    bans.orgBannedIds.mockResolvedValue({ ids: new Set([id(5)]), stale: false });
+  });
+
+  test('longest shots across servers and guns, longest first; team kills and banned players left out', async () => {
+    const r = await records();
+    expect(r.data.longestShots.map((x) => [x.name, x.distance, x.serverName])).toEqual([['K2', 990, 'EU#1'], ['K4', 820, 'OC#1'], ['K1', 610, 'EU#1']]);
+  });
+
+  test('all-time leaders from the export, without banned players or zeros', async () => {
+    const r = await records();
+    expect(r.data.streaks.map((x) => [x.name, x.value])).toEqual([['P2', 30], ['P1', 12]]);
+    expect(r.data.vehicleKills.map((x) => [x.name, x.value])).toEqual([['P2', 7]]);
+    expect(r.data.headshots.map((x) => [x.name, x.value])).toEqual([['P1', 50]]);
+  });
+
+  test("today's killers add up across servers", async () => {
+    const r = await records();
+    expect(r.data.today.map((x) => [x.name, x.value])).toEqual([['K1', 35], ['K2', 30]]);
+  });
+
+  test('shorter shots and the same kill found twice are not counted', async () => {
+    api.kills.mockImplementation(async (_sid: string, q: { cause: string }) =>
+      fresh({ kills: q.cause === 'Id.Item.Mosin' || q.cause === 'Id.Item.SV98' ? [shot(1, 900), shot(2, 300)] : [], total: null }),
+    );
+    const r = await records();
+    expect(r.data.longestShots.map((x) => [x.name, x.distance])).toEqual([['K1', 900], ['K1', 900]]); // once per server
+  });
+
+  test('a failed search marks its server missing instead of failing the page', async () => {
+    api.kills.mockRejectedValue(new Error('down'));
+    const r = await records();
+    expect(r.data.longestShots).toEqual([]);
+    expect(r.missing).toEqual(expect.arrayContaining(['s1', 's2']));
+    expect(r.data.streaks).toHaveLength(2);
   });
 });

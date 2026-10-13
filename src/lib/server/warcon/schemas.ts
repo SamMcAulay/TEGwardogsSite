@@ -53,6 +53,9 @@ const boardRow = z.object({
   kills: z.number(),
   deaths: z.number(),
   headshots: z.number(),
+  vehicleKills: z.number(),
+  /** most kills in one life */
+  killStreak: z.number(),
   matches: z.number(),
   wins: z.number(),
   losses: z.number(),
@@ -218,7 +221,13 @@ export const analyticsBody = z.object({
   population: z.array(z.object({ ts: iso, avg: z.number().nullable(), max: z.number().nullable(), cap: z.number().nullable() })),
   maps: z.array(z.object({ map: z.string(), minutes: z.number(), matches: z.number() })),
   wins: z.object({ teams: z.array(z.object({ name: z.string(), wins: z.number(), colorHex: z.string().nullable() })) }),
-  combat: z.object({ kills: z.number(), headshots: z.number() }).nullable(),
+  combat: z
+    .object({
+      kills: z.number(),
+      headshots: z.number(),
+      players: z.array(z.object({ steamId: z.string(), name: z.string(), kills: z.number(), deaths: z.number(), headshots: z.number() })).default([]),
+    })
+    .nullable(),
 });
 export type WAnalytics = z.infer<typeof analyticsBody>;
 

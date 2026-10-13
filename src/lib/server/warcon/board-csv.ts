@@ -9,6 +9,8 @@ const NUMBERS = {
   kills: 'kills',
   deaths: 'deaths',
   headshots: 'headshots',
+  vehicleKills: 'vehicle_kills',
+  killStreak: 'kill_streak',
   matches: 'matches',
   wins: 'wins',
   losses: 'losses',

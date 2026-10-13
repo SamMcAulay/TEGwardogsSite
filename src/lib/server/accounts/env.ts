@@ -17,6 +17,8 @@ export interface AccountsEnv {
   discordPublicKey: string;
   /** Where accounts.db lives (a Docker volume in production) */
   dataDir: string;
+  /** A Discord channel webhook for round results; blank: no round posts */
+  roundsWebhookUrl: string;
 }
 
 const REQUIRED = [
@@ -28,6 +30,13 @@ const REQUIRED = [
 ] as const;
 
 const ids = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+function webhook(v: string): string {
+  if (v && !/^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(v)) {
+    throw new Error('DISCORD_ROUNDS_WEBHOOK_URL must be a Discord channel webhook URL (https://discord.com/api/webhooks/…)');
+  }
+  return v;
+}
 
 function publicKey(v: string): string {
   if (v && !/^[0-9a-f]{64}$/i.test(v)) throw new Error('DISCORD_PUBLIC_KEY must be the 64-character hex Public Key from the Developer Portal');
@@ -60,6 +69,7 @@ export function loadAccountsEnv(src: Record<string, string | undefined> = proces
     priorityApiKey: val('PRIORITY_API_KEY'),
     discordPublicKey: publicKey(val('DISCORD_PUBLIC_KEY')),
     dataDir: val('DATA_DIR') || './data',
+    roundsWebhookUrl: webhook(val('DISCORD_ROUNDS_WEBHOOK_URL')),
   };
 }
 

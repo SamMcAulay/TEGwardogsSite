@@ -45,6 +45,18 @@ const CLASSES: Record<string, WeaponClass> = {
   'id.item.ied.explosive': 'explosive',
 };
 
+/**
+ * Rifles and machine guns, in Warcon's exact spelling (its cause filter is case-sensitive): the
+ * guns the longest-shot records search. Explosives, vehicles and unknown weapons are left out,
+ * since their "distance" is measured from wherever the shooter stands (a mine can read 5 km).
+ */
+export const RECORD_CAUSES = [
+  'Id.Item.M4', 'Id.Item.AK74M', 'Id.Item.WEPN_029', 'Id.Item.TAR21', 'Id.Item.A91', 'Id.Item.KH2002',
+  'Id.Item.Mosin', 'Id.Item.SV98', 'Id.Item.MK22',
+  'Id.Item.SVDM', 'Id.Item.SKS',
+  'Id.Item.M249', 'Id.Item.LMG_02',
+] as const;
+
 export function weaponClass(cause: string): WeaponClass | null {
   return CLASSES[cause.toLowerCase()] ?? null;
 }
