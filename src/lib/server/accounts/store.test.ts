@@ -82,10 +82,25 @@ describe('accounts store', () => {
 
   test('the audit log lists newest actions first', () => {
     const s = openStore(':memory:');
-    s.log({ adminDiscordId: D1, action: 'recheck', targetDiscordId: D2, targetSteamId: S2 }, 100);
-    s.log({ adminDiscordId: D1, action: 'unlink', targetDiscordId: D2, targetSteamId: S2 }, 200);
-    expect(s.auditLog(10).map((e) => [e.at, e.action])).toEqual([[200, 'unlink'], [100, 'recheck']]);
+    s.log({ adminDiscordId: D1, adminName: 'Jan', action: 'recheck', targetDiscordId: D2, targetName: 'Owl', targetSteamId: S2 }, 100);
+    s.log({ adminDiscordId: D1, adminName: 'Jan', action: 'unlink', targetDiscordId: D2, targetName: null, targetSteamId: S2 }, 200);
+    expect(s.auditLog(10).map((e) => [e.at, e.action, e.targetName])).toEqual([[200, 'unlink', null], [100, 'recheck', 'Owl']]);
     expect(s.auditLog(1)).toHaveLength(1);
+  });
+
+  test('Discord names: stored with the tier, kept when Discord has none, searchable', () => {
+    const s = openStore(':memory:');
+    s.link(D1, S1);
+    s.link(D2, S2);
+    s.setTier(D1, 2, 100, 'Night Owl');
+    s.setTier(D2, 3, 100, '100%_real');
+    expect(s.byDiscord(D1)?.discordName).toBe('Night Owl');
+    s.setTier(D1, null, 200, null); // left the server: name kept
+    expect(s.byDiscord(D1)).toMatchObject({ tier: null, discordName: 'Night Owl' });
+    expect(s.byName('owl').map((l) => l.discordId)).toEqual([D1]);
+    expect(s.byName('%').map((l) => l.discordId)).toEqual([D2]); // wildcards match literally
+    expect(s.byName('_r').map((l) => l.discordId)).toEqual([D2]);
+    expect(s.byName('zzz')).toEqual([]);
   });
 
   test('re-linking the same Steam account keeps the original link date; switching accounts resets it', () => {
@@ -155,6 +170,19 @@ describe('accounts.db on disk', () => {
     expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(false);
   });
 
+  test('upgrading a v2 database (live since #14) keeps links and log, and adds names', () => {
+    const file = join(fresh(), 'accounts.db');
+    const v2 = new DatabaseSync(file);
+    v2.exec(`${MIGRATIONS[0]}; ${MIGRATIONS[1]}; PRAGMA user_version = 2;`);
+    v2.prepare('INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at) VALUES (?, ?, 2, 50, 40)').run(D1, S1);
+    v2.prepare("INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id) VALUES (10, ?, 'recheck', ?, ?)").run(D2, D1, S1);
+    v2.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 2, linkedAt: 40, discordName: null });
+    expect(s.auditLog(5)).toEqual([{ at: 10, adminDiscordId: D2, adminName: null, action: 'recheck', targetDiscordId: D1, targetName: null, targetSteamId: S1 }]);
+    expect(existsSync(`${file}.pre-v3`)).toBe(true);
+  });
+
   test('upgrading the live v1 database keeps its links and adds the admin log', () => {
     const file = join(fresh(), 'accounts.db');
     // what the deployed v1 build wrote
@@ -165,8 +193,8 @@ describe('accounts.db on disk', () => {
     const s = openStore(file);
     expect(s.byDiscord(D1)).toMatchObject({ steamId: S1, tier: 1, checkedAt: 50, linkedAt: 40 });
     expect(s.byDiscord(D1)?.steamId).toBe(S1);
-    s.log({ adminDiscordId: D2, action: 'unlink', targetDiscordId: D1, targetSteamId: S1 }, 100);
-    expect(s.auditLog(5)).toEqual([{ at: 100, adminDiscordId: D2, action: 'unlink', targetDiscordId: D1, targetSteamId: S1 }]);
-    expect(existsSync(`${file}.pre-v2`)).toBe(true);
+    s.log({ adminDiscordId: D2, adminName: 'Jan', action: 'unlink', targetDiscordId: D1, targetName: 'Owl', targetSteamId: S1 }, 100);
+    expect(s.auditLog(5)).toEqual([{ at: 100, adminDiscordId: D2, adminName: 'Jan', action: 'unlink', targetDiscordId: D1, targetName: 'Owl', targetSteamId: S1 }]);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
   });
 });

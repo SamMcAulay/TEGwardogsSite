@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { safe } from '@/components/section';
 import { TierBadge } from '@/components/tier';
 import { buttonClass, Container, Empty, PageHeader, Panel, Stat, StatGrid } from '@/components/ui';
 import { dateTime, int } from '@/lib/format';
@@ -9,7 +8,7 @@ import { currentAdmin, parseLookup } from '@/lib/server/accounts/admin';
 import { member } from '@/lib/server/accounts/discord';
 import type { AccountsEnv } from '@/lib/server/accounts/env';
 import type { Link as AccountLink } from '@/lib/server/accounts/store';
-import { getPlayer } from '@/lib/server/data';
+import { playerName } from '@/lib/server/data';
 import { one } from '@/lib/url';
 import { recheckAccount, unlinkAccount } from './actions';
 
@@ -27,12 +26,9 @@ const DONE: Record<string, { text: string; good: boolean }> = {
 const ts = (sec: number | null) => (sec ? dateTime(sec) : '—');
 
 async function LinkCard({ link, env }: { link: AccountLink; env: AccountsEnv }) {
-  const [who, player] = await Promise.all([
-    member(env, link.discordId).catch(() => undefined),
-    safe(getPlayer(link.steamId)),
-  ]);
-  const playerName = player && !(player instanceof Error) ? player.data.name : null;
-  const discordName = who === undefined ? 'Discord did not answer' : who === null ? 'Not in the TEG server' : who.name;
+  const [who, name] = await Promise.all([member(env, link.discordId).catch(() => undefined), playerName(link.steamId)]);
+  const discordName =
+    who === undefined ? `${link.discordName ?? 'Unknown'} (Discord did not answer)` : who === null ? `${link.discordName ?? 'Unknown'} (left the TEG server)` : who.name;
   return (
     <Panel title="Linked account">
       <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-[10rem_1fr]">
@@ -46,7 +42,7 @@ async function LinkCard({ link, env }: { link: AccountLink; env: AccountsEnv }) 
         <dt className="text-muted">Steam</dt>
         <dd>
           <Link prefetch={false} href={`/players/${link.steamId}`} className="link font-medium">
-            {playerName ?? 'No stats yet'}
+            {name ?? 'Player'}
           </Link>{' '}
           <span className="font-mono text-xs text-muted">{link.steamId}</span>
         </dd>
@@ -83,7 +79,9 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
   const q = (one(sp.q) ?? '').trim().slice(0, 200);
   const done = DONE[one(sp.done) ?? ''];
   const lookup = q ? parseLookup(q) : null;
-  const found = lookup ? ('steamId' in lookup ? store.bySteam(lookup.steamId) : store.byDiscord(lookup.discordId)) : null;
+  const byName = lookup && 'name' in lookup ? store.byName(lookup.name) : [];
+  const found =
+    lookup && 'steamId' in lookup ? store.bySteam(lookup.steamId) : lookup && 'discordId' in lookup ? store.byDiscord(lookup.discordId) : byName.length === 1 ? byName[0] : null;
   const counts = store.counts();
   const recent = store.recent(50);
   const log = store.auditLog(30);
@@ -114,13 +112,25 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
             <input
               name="q"
               defaultValue={q}
-              placeholder="SteamID, Discord ID, or a profile link"
+              placeholder="Discord name, SteamID, Discord ID, or a profile link"
               className="min-w-0 flex-1 border border-line-strong bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
             <button className={buttonClass('primary')}>Find</button>
           </form>
-          {q && !lookup && <p className="mt-3 text-sm text-bad">Not a SteamID, Discord ID or profile link.</p>}
-          {lookup && !found && <p className="mt-3 text-sm text-muted">No linked account for that id.</p>}
+          {q && !lookup && <p className="mt-3 text-sm text-bad">Type at least two characters.</p>}
+          {lookup && !found && byName.length === 0 && <p className="mt-3 text-sm text-muted">No linked account matches.</p>}
+          {byName.length > 1 && (
+            <ul className="mt-3 divide-y divide-line border border-line text-sm">
+              {byName.map((l) => (
+                <li key={l.discordId}>
+                  <Link prefetch={false} href={`/admin?q=${l.discordId}`} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-surface-2">
+                    <span className="font-medium">{l.discordName}</span>
+                    {l.tier ? <TierBadge tier={l.tier} compact /> : <span className="text-dim">—</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </Panel>
 
         {found && <LinkCard link={found} env={gate.a.env} />}
@@ -132,7 +142,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Steam</th>
+                      <th>Discord</th>
                       <th>Tier</th>
                       <th className="r">Linked</th>
                     </tr>
@@ -141,8 +151,8 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
                     {recent.map((l) => (
                       <tr key={l.discordId}>
                         <td>
-                          <Link prefetch={false} href={`/admin?q=${l.discordId}`} className="link font-mono text-xs">
-                            {l.steamId}
+                          <Link prefetch={false} href={`/admin?q=${l.discordId}`} className="link">
+                            {l.discordName ?? <span className="font-mono text-xs">{l.discordId}</span>}
                           </Link>
                         </td>
                         <td>{l.tier ? <TierBadge tier={l.tier} compact /> : <span className="text-dim">—</span>}</td>
@@ -163,12 +173,12 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
                 {log.map((e, i) => (
                   <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5">
                     <span>
-                      <span className="font-mono text-xs text-muted">{e.adminDiscordId}</span>{' '}
+                      <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
                       <span className={e.action === 'unlink' ? 'text-bad' : 'text-text'}>
                         {e.action === 'unlink' ? 'unlinked' : 're-checked'}
                       </span>{' '}
-                      <Link prefetch={false} href={`/admin?q=${e.targetDiscordId}`} className="link font-mono text-xs">
-                        {e.targetDiscordId}
+                      <Link prefetch={false} href={`/admin?q=${e.targetDiscordId}`} className="link">
+                        {e.targetName ?? <span className="font-mono text-xs">{e.targetDiscordId}</span>}
                       </Link>
                       {e.targetSteamId && <span className="font-mono text-xs text-dim"> (Steam {e.targetSteamId})</span>}
                     </span>
