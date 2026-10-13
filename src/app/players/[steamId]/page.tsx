@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/client';
 import { KillList } from '@/components/game';
+import { Milestones } from '@/components/milestones';
 import { Avatar, PlayerLink } from '@/components/player';
 import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
@@ -169,6 +170,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
             sub={favourite ? `Main: ${causeInfo(favourite.cause).label}` : undefined}
           />
         </StatGrid>
+
+        <Milestones totals={t} />
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Servers played" flush>

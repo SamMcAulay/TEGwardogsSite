@@ -222,7 +222,7 @@ async function keptFromPages(anchor: string, query: BoardQuery, banned: Readonly
  * when the export fails. Throws if the ban list has never loaded, so the page shows "unavailable"
  * rather than banned players. Boards stop at page MAX_BOARD_PAGE.
  */
-export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number }) {
+export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number; members?: Set<string> }) {
   const anchor = (await visibleIds(q.serverId))[0];
   if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE });
   const banned = await orgBannedIds();
@@ -233,8 +233,14 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   try {
     board = await keptFromExport(anchor, query, banned.ids);
   } catch (e) {
+    // Only the whole board can be filtered to members; a page-by-page board would miss most of them.
+    if (q.members) throw e;
     console.error('[board] export failed, reading pages instead:', e instanceof Error ? e.message : e);
     board = await keptFromPages(anchor, query, banned.ids, page);
+  }
+  if (q.members) {
+    const kept = board.kept.filter((r) => q.members!.has(r.steamId));
+    board = { ...board, kept, total: kept.length };
   }
   const { kept, pageSize } = board;
   const total = Math.min(board.total, MAX_BOARD_PAGE * pageSize);

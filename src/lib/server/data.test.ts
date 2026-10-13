@@ -224,6 +224,21 @@ describe('leaderboard from the whole-board export', () => {
     expect(r.data.total).toBe(1000);
   });
 
+  test('linked members only: the whole board filtered, ranked 1, 2, 3 among them', async () => {
+    exportOf(100);
+    bans.orgBannedIds.mockResolvedValue({ ids: new Set([row(30).steamId]), stale: false });
+    const members = new Set([row(7).steamId, row(30).steamId, row(81).steamId, '76561198099999999']);
+    const r = await leaderboard({ metric: 'kills', period: '30d', members });
+    expect(r.data.rows.map((x) => [x.rank, x.name])).toEqual([[1, 'P7'], [2, 'P81']]);
+    expect(r.data.total).toBe(2);
+  });
+
+  test('linked members only: no page-by-page fallback, so never a partial list', async () => {
+    api.board.mockResolvedValue(fresh({ ok: true, total: 1, pageSize: 50, rows: [row(1)] }));
+    await expect(leaderboard({ metric: 'kills', period: '30d', members: new Set([row(1).steamId]) })).rejects.toThrow();
+    expect(api.board).not.toHaveBeenCalled();
+  });
+
   test('when the export fails, the board falls back to Warcon pages', async () => {
     api.board.mockResolvedValue(fresh({ ok: true, total: 1, pageSize: 50, rows: [row(1)] }));
     const r = await leaderboard({ metric: 'kills', period: '30d' });

@@ -4,6 +4,8 @@ import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
+import Link from 'next/link';
+import { linkedSteamIds } from '@/lib/server/accounts';
 import { getServers, leaderboard, MAX_BOARD_PAGE } from '@/lib/server/data';
 import { METRIC_LABELS, METRICS, parseMetric, parsePeriod, PERIOD_LABELS, PERIODS, type LeaderRow, type Metric } from '@/lib/server/views';
 import { one, pageParam, withParams } from '@/lib/url';
@@ -55,7 +57,10 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
   const servers = await safe(getServers());
   const serverList = servers instanceof Error ? [] : servers.data;
   const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
-  const board = await safe(leaderboard({ metric, period, serverId, page }));
+  // "Linked members": the same board, only players who linked Discord and Steam. Hidden when linking is off.
+  const linked = linkedSteamIds();
+  const members = linked && one(sp.who) === 'members' ? linked : undefined;
+  const board = await safe(leaderboard({ metric, period, serverId, page, members }));
   if (!(board instanceof Error) && page > 1) {
     const pages = Math.max(1, Math.ceil(board.data.total / board.data.pageSize));
     if (page > pages) redirect(withParams('/leaderboards', sp, { page: pages > 1 ? pages : null }));
@@ -91,6 +96,16 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
                 href: withParams('/leaderboards', sp, { period: p, page: null }),
               }))}
             />
+            {linked && (
+              <Segmented
+                label="Players"
+                active={members ? 'members' : 'all'}
+                items={[
+                  { key: 'all', label: 'Everyone', href: withParams('/leaderboards', sp, { who: null, page: null }) },
+                  { key: 'members', label: 'Linked members', href: withParams('/leaderboards', sp, { who: 'members', page: null }) },
+                ]}
+              />
+            )}
             <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
               <Segmented
                 label="Server"
@@ -115,11 +130,11 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
 
       <Container className="mt-8">
         <Panel
-          title={`${METRIC_LABELS[metric]} · ${PERIOD_LABELS[period]}${serverId ? ` · ${serverList.find((s) => s.id === serverId)?.shortName}` : ''}`}
+          title={`${members ? 'Linked members · ' : ''}${METRIC_LABELS[metric]} · ${PERIOD_LABELS[period]}${serverId ? ` · ${serverList.find((s) => s.id === serverId)?.shortName}` : ''}`}
           action={
             <span>
-              {board instanceof Error ? '' : `${int(board.data.total)} ranked · `}Players with at least an hour on
-              the server
+              {board instanceof Error ? '' : `${int(board.data.total)} ranked · `}
+              {members ? 'Members who linked Discord and Steam, with' : 'Players with'} at least an hour on the server
             </span>
           }
           flush
@@ -164,6 +179,14 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
                       </tbody>
                     </table>
                   </div>
+                ) : members ? (
+                  <Empty>
+                    No linked members on this board yet.{' '}
+                    <Link href="/account" className="link text-accent">
+                      Link your accounts
+                    </Link>{' '}
+                    to appear here.
+                  </Empty>
                 ) : (
                   <Empty>Nobody qualifies for this board yet.</Empty>
                 )}
