@@ -37,6 +37,12 @@ describe('loadAccountsEnv', () => {
     expect(() => loadAccountsEnv({ ...base, DISCORD_VERIFIED_ROLE_IDS: '123456789012345678,@Verified' })).toThrow(/VERIFIED.*@Verified/);
   });
 
+  test('DISCORD_PUBLIC_KEY is optional, and must be the 64-hex key when set', () => {
+    expect(loadAccountsEnv(base)!.discordPublicKey).toBe('');
+    expect(loadAccountsEnv({ ...base, DISCORD_PUBLIC_KEY: 'AB'.repeat(32) })!.discordPublicKey).toBe('ab'.repeat(32));
+    expect(() => loadAccountsEnv({ ...base, DISCORD_PUBLIC_KEY: 'not-a-key' })).toThrow(/DISCORD_PUBLIC_KEY/);
+  });
+
   test('rejects a short session secret', () => {
     expect(() => loadAccountsEnv({ ...base, SESSION_SECRET: 'short' })).toThrow(/SESSION_SECRET/);
   });

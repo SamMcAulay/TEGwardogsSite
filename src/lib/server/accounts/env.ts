@@ -13,6 +13,8 @@ export interface AccountsEnv {
   sessionSecret: string;
   /** Bearer key for /api/priority; blank keeps that endpoint off */
   priorityApiKey: string;
+  /** The application's public key (64 hex); verifies Discord's calls to /api/discord/interactions. Blank: no slash commands */
+  discordPublicKey: string;
   /** Where accounts.db lives (a Docker volume in production) */
   dataDir: string;
 }
@@ -26,6 +28,11 @@ const REQUIRED = [
 ] as const;
 
 const ids = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+function publicKey(v: string): string {
+  if (v && !/^[0-9a-f]{64}$/i.test(v)) throw new Error('DISCORD_PUBLIC_KEY must be the 64-character hex Public Key from the Developer Portal');
+  return v.toLowerCase();
+}
 
 /** null when account linking is not configured at all. */
 export function loadAccountsEnv(src: Record<string, string | undefined> = process.env): AccountsEnv | null {
@@ -51,6 +58,7 @@ export function loadAccountsEnv(src: Record<string, string | undefined> = proces
     roles,
     sessionSecret: val('SESSION_SECRET'),
     priorityApiKey: val('PRIORITY_API_KEY'),
+    discordPublicKey: publicKey(val('DISCORD_PUBLIC_KEY')),
     dataDir: val('DATA_DIR') || './data',
   };
 }
