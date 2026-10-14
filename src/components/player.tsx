@@ -24,8 +24,8 @@ function initials(name: string): string {
  * Border in the player's main faction colour, or the accent when they have none (or it isn't known).
  * Thick on the big profile avatar, faint on the small ones in lists.
  */
-function ringStyle(faction: string | null | undefined, size: number): CSSProperties {
-  const color = faction ? `var(--${faction.toLowerCase()})` : 'var(--accent)';
+function ringStyle(faction: string | null | undefined, size: number, ring?: string): CSSProperties {
+  const color = ring ?? (faction ? `var(--${faction.toLowerCase()})` : 'var(--accent)');
   return {
     borderStyle: 'solid',
     borderWidth: size >= 80 ? 3 : size >= 48 ? 2 : 1,
@@ -39,6 +39,7 @@ export function Avatar({
   url,
   size = 28,
   faction,
+  ring,
   className,
 }: {
   name: string;
@@ -47,13 +48,15 @@ export function Avatar({
   size?: number;
   /** A main faction from `mainFaction()`; colours the border. */
   faction?: string | null;
+  /** A custom profile colour; wins over the faction's. */
+  ring?: string;
   className?: string;
 }) {
-  const ring = ringStyle(faction, size);
+  const ringCss = ringStyle(faction, size, ring);
   if (url) {
     // Steam CDN avatars; plain img keeps next/image remote config out of self-hosted setups.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" width={size} height={size} className={cx('shrink-0 bg-surface-3', className)} style={ring} />;
+    return <img src={url} alt="" width={size} height={size} className={cx('shrink-0 bg-surface-3', className)} style={ringCss} />;
   }
   const h = hue(steamId);
   return (
@@ -66,7 +69,7 @@ export function Avatar({
         fontSize: size * 0.4,
         background: `hsl(${h} 28% 18%)`,
         color: `hsl(${h} 55% 72%)`,
-        ...ring,
+        ...ringCss,
       }}
     >
       {initials(name)}

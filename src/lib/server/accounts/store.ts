@@ -16,6 +16,10 @@ export interface Link {
   discordName: string | null;
   /** a name style staff gave this account, shown while they hold a tier; null: the tier's own */
   nameStyle: string | null;
+  /** custom profile, shown while they're Premium or staff (lib/profile-themes.ts) */
+  bio: string | null;
+  colour: string | null;
+  featured: string[];
   linkedAt: number;
 }
 
@@ -27,6 +31,18 @@ interface Row {
   linked_at: number;
   discord_name: string | null;
   name_style: string | null;
+  bio: string | null;
+  colour: string | null;
+  featured: string | null;
+}
+
+function featuredList(json: string | null): string[] {
+  try {
+    const v = JSON.parse(json ?? '[]');
+    return Array.isArray(v) ? v.filter((k): k is string => typeof k === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 const toLink = (r: Row): Link => ({
@@ -37,11 +53,14 @@ const toLink = (r: Row): Link => ({
   linkedAt: r.linked_at,
   discordName: r.discord_name ?? null,
   nameStyle: r.name_style ?? null,
+  bio: r.bio ?? null,
+  colour: r.colour ?? null,
+  featured: featuredList(r.featured ?? null),
 });
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export type AdminAction = 'unlink' | 'recheck' | 'style';
+export type AdminAction = 'unlink' | 'recheck' | 'style' | 'profile';
 
 export interface AdminLogEntry {
   at: number;
@@ -97,6 +116,10 @@ export const MIGRATIONS: string[] = [
   // v5: a name style staff gave the account (see lib/name-styles.ts); what a staff action set
   `ALTER TABLE links ADD COLUMN name_style TEXT;
    ALTER TABLE admin_log ADD COLUMN detail TEXT;`,
+  // v6: custom profiles (Premium and staff): bio, profile colour, featured milestone badges (JSON)
+  `ALTER TABLE links ADD COLUMN bio TEXT;
+   ALTER TABLE links ADD COLUMN colour TEXT;
+   ALTER TABLE links ADD COLUMN featured TEXT;`,
 ];
 
 /** Brings the file up to date; snapshots it first (`<file>.pre-v<n>`) when it already holds links. */
@@ -145,6 +168,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     counts: db.prepare('SELECT tier, count(*) AS n FROM links GROUP BY tier'),
     log: db.prepare('INSERT INTO admin_log (at, admin_discord_id, action, target_discord_id, target_steam_id, admin_name, target_name, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
     setStyle: db.prepare('UPDATE links SET name_style = ? WHERE discord_id = ?'),
+    setProfile: db.prepare('UPDATE links SET bio = ?, colour = ?, featured = ? WHERE discord_id = ?'),
+    clearBio: db.prepare('UPDATE links SET bio = NULL WHERE discord_id = ?'),
     byName: db.prepare("SELECT * FROM links WHERE discord_name LIKE ? ESCAPE '\\' ORDER BY discord_name LIMIT ?"),
     auditLog: db.prepare('SELECT * FROM admin_log ORDER BY at DESC, id DESC LIMIT ?'),
   };
@@ -174,6 +199,10 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       })),
     /** Give an account its own name style, or null for its tier's. */
     setNameStyle: (discordId: string, style: string | null) => void q.setStyle.run(style, discordId),
+    /** Save a custom profile (already checked by the caller). */
+    setProfile: (discordId: string, p: { bio: string | null; colour: string | null; featured: string[] }) =>
+      void q.setProfile.run(p.bio, p.colour, JSON.stringify(p.featured), discordId),
+    clearBio: (discordId: string) => void q.clearBio.run(discordId),
     /** Round results already posted (or skipped) for a server's match. */
     isAnnounced: (serverId: string, matchId: number) => !!q.announced.get(serverId, matchId),
     /** False until a server's first round is recorded: the first run records without posting. */

@@ -7,6 +7,11 @@ import { getPlayer, shortNameOf } from './data';
 import { fetchAvatar, renderPng } from './og-render';
 import { TtlCache } from './warcon/cache';
 import type { PlayerProfile } from './views';
+import { createHash } from 'node:crypto';
+import { milestones } from '@/lib/milestones';
+import { PROFILE_COLOURS } from '@/lib/profile-themes';
+import { classKills } from '@/lib/weapon-classes';
+import { lookOfSteam, type Look } from './accounts';
 
 export interface CardModel {
   name: string;
@@ -16,9 +21,28 @@ export interface CardModel {
   rank: string | null;
   seen: string;
   stats: { label: string; value: string }[];
+  /** a Premium or staff member's custom profile, as the card draws it */
+  custom?: { colour: string | null; bio: string | null; featured: string[] } | null;
 }
 
-export function cardModel(p: PlayerProfile, now = Date.now() / 1000): CardModel {
+/** The parts of a custom profile the card shows, from the player's look; null for none. */
+export function cardCustom(p: PlayerProfile, look: Look | null): CardModel['custom'] {
+  const c = look?.custom;
+  if (!c) return null;
+  const earned = milestones({ ...p.totals, classKills: classKills(p.weapons) });
+  return {
+    colour: c.colour ? PROFILE_COLOURS[c.colour].hex : null,
+    bio: c.bio,
+    featured: earned.filter((m) => m.earned && c.featured.includes(m.key)).map((m) => m.earned!),
+  };
+}
+
+/** Changes when the card's custom part does, so chat apps fetch the new card for new posts. */
+export function cardVersion(custom: CardModel['custom']): string {
+  return custom ? createHash('sha1').update(JSON.stringify(custom)).digest('hex').slice(0, 8) : '0';
+}
+
+export function cardModel(p: PlayerProfile, now = Date.now() / 1000, look: Look | null = null): CardModel {
   const t = p.totals;
   const main = [...p.servers].sort((a, b) => b.playtime - a.playtime)[0];
   const seen = p.onlineOn ? `Playing now on ${shortNameOf(p.onlineOn.serverName)}` : `Last seen ${ago(p.lastSeen, now)}`;
@@ -35,14 +59,17 @@ export function cardModel(p: PlayerProfile, now = Date.now() / 1000): CardModel 
       { label: 'Playtime', value: duration(t.playtime) },
       { label: 'Win rate', value: t.matches ? `${Math.round((t.wins / t.matches) * 100)}%` : '—' },
     ],
+    custom: cardCustom(p, look),
   };
 }
 
 /** The profile page's title, summary and preview tags (Open Graph for Discord, Twitter card). */
-export function playerMetadata(p: PlayerProfile): Metadata {
+export function playerMetadata(p: PlayerProfile, look: Look | null = null): Metadata {
   const t = p.totals;
-  const description = `${int(t.kills)} kills · ${kd(t.kills, t.deaths)} K/D · ${duration(t.playtime)} played on TEG WARDOGS servers.`;
-  const image = `/players/${p.steamId}/card.png`;
+  const stats = `${int(t.kills)} kills · ${kd(t.kills, t.deaths)} K/D · ${duration(t.playtime)} played on TEG WARDOGS servers.`;
+  const custom = cardCustom(p, look);
+  const description = custom?.bio ? `${custom.bio}\n${stats}` : stats;
+  const image = `/players/${p.steamId}/card.png?v=${cardVersion(custom)}`;
   return {
     title: p.name,
     description,
@@ -83,10 +110,13 @@ function siteCard(maxAge: number): Promise<Card> {
 export async function playerCard(steamId: string): Promise<Card> {
   if (!/^\d{17}$/.test(steamId)) return siteCard(86_400);
   try {
-    const { value } = await cards.get<ArrayBuffer | null>(steamId, HOUR, async () => {
+    // Keyed by the custom profile too, so a saved change draws a new card at once.
+    const look = lookOfSteam(steamId);
+    const key = `${steamId}:${look?.custom ? createHash('sha1').update(JSON.stringify(look.custom)).digest('hex').slice(0, 8) : '0'}`;
+    const { value } = await cards.get<ArrayBuffer | null>(key, HOUR, async () => {
       const loaded = await getPlayer(steamId);
       if (!loaded) return null;
-      const model = cardModel(loaded.data);
+      const model = cardModel(loaded.data, Date.now() / 1000, look);
       const avatar = model.avatarUrl ? await fetchAvatar(model.avatarUrl) : null;
       return renderPng(PlayerCardImage({ model, avatar }));
     });

@@ -23,7 +23,7 @@ const label = {
   color: C.muted,
 };
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children, accent = C.accent }: { children: React.ReactNode; accent?: string }) {
   return (
     <div
       style={{
@@ -34,7 +34,7 @@ function Frame({ children }: { children: React.ReactNode }) {
         background: C.bg,
         backgroundImage: `linear-gradient(${C.surface} 1px, transparent 1px), linear-gradient(90deg, ${C.surface} 1px, transparent 1px)`,
         backgroundSize: '48px 48px',
-        borderLeft: `12px solid ${C.accent}`,
+        borderLeft: `12px solid ${accent}`,
         padding: '48px 64px 40px 64px',
         fontFamily: 'Inter',
         color: C.text,
@@ -45,7 +45,7 @@ function Frame({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Brand({ right }: { right?: string | null }) {
+function Brand({ right, accent = C.accent }: { right?: string | null; accent?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -55,7 +55,7 @@ function Brand({ right }: { right?: string | null }) {
         <div style={{ display: 'flex', marginLeft: 16, fontFamily: 'Barlow', fontWeight: 700, fontSize: 30, letterSpacing: 6 }}>WARDOGS</div>
       </div>
       {right && (
-        <div style={{ display: 'flex', border: `2px solid ${C.accent}`, padding: '6px 16px', ...label, color: C.accent, fontSize: 26 }}>
+        <div style={{ display: 'flex', border: `2px solid ${accent}`, padding: '6px 16px', ...label, color: accent, fontSize: 26 }}>
           {right}
         </div>
       )}
@@ -63,7 +63,7 @@ function Brand({ right }: { right?: string | null }) {
   );
 }
 
-function Initials({ name }: { name: string }) {
+function Initials({ name, accent }: { name: string; accent?: string | null }) {
   const letters = name.replace(/\[[^\]]*\]\s*/g, '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2).toUpperCase() || '?';
   return (
     <div
@@ -74,8 +74,8 @@ function Initials({ name }: { name: string }) {
         width: 168,
         height: 168,
         background: '#181d25',
-        border: `2px solid ${C.lineStrong}`,
-        color: C.accent,
+        border: accent ? `4px solid ${accent}` : `2px solid ${C.lineStrong}`,
+        color: accent ?? C.accent,
         fontFamily: 'Barlow',
         fontWeight: 700,
         fontSize: 72,
@@ -87,29 +87,50 @@ function Initials({ name }: { name: string }) {
 }
 
 export function PlayerCardImage({ model, avatar }: { model: CardModel; avatar: string | null }) {
-  const nameSize = model.name.length > 24 ? 48 : model.name.length > 16 ? 60 : 72;
+  const custom = model.custom ?? null;
+  const accent = custom?.colour ?? C.accent;
+  // A bio or badges take room from the name.
+  const roomy = !custom?.bio && !custom?.featured.length;
+  const nameSize = model.name.length > 24 ? 48 : model.name.length > 16 || !roomy ? 60 : 72;
   return (
-    <Frame>
-      <Brand right={model.rank} />
-      <div style={{ display: 'flex', alignItems: 'center', marginTop: 44 }}>
+    <Frame accent={accent}>
+      <Brand right={model.rank} accent={accent} />
+      <div style={{ display: 'flex', alignItems: 'center', marginTop: roomy ? 44 : 32 }}>
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} width={168} height={168} alt="" style={{ border: `2px solid ${C.lineStrong}` }} />
+          <img src={avatar} width={168} height={168} alt="" style={{ border: `${custom?.colour ? 4 : 2}px solid ${custom?.colour ?? C.lineStrong}` }} />
         ) : (
-          <Initials name={model.name} />
+          <Initials name={model.name} accent={custom?.colour} />
         )}
         <div style={{ display: 'flex', flexDirection: 'column', marginLeft: 40, maxWidth: 860 }}>
           <div style={{ display: 'flex', fontSize: nameSize, fontWeight: 600, lineHeight: 1.1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: 860 }}>
             {model.name}
           </div>
           <div style={{ display: 'flex', marginTop: 14, fontSize: 28, color: C.muted }}>{model.seen}</div>
+          {custom?.bio && (
+            <div style={{ display: 'flex', marginTop: 12, fontSize: 26, color: C.text, maxWidth: 860, maxHeight: 68, overflow: 'hidden', lineHeight: 1.3 }}>
+              {custom.bio}
+            </div>
+          )}
+          {custom && custom.featured.length > 0 && (
+            <div style={{ display: 'flex', marginTop: 14 }}>
+              {custom.featured.map((b, i) => (
+                <div
+                  key={b}
+                  style={{ ...label, display: 'flex', marginLeft: i ? 10 : 0, border: `2px solid ${accent}`, color: accent, padding: '4px 12px', fontSize: 20, letterSpacing: 2 }}
+                >
+                  {b}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <div style={{ display: 'flex', marginTop: 'auto', borderTop: `2px solid ${C.line}`, paddingTop: 28 }}>
         {model.stats.map((s, i) => (
           <div key={s.label} style={{ display: 'flex', flexDirection: 'column', flex: 1, paddingLeft: i ? 28 : 0, borderLeft: i ? `2px solid ${C.line}` : 'none' }}>
             <div style={{ display: 'flex', ...label }}>{s.label}</div>
-            <div style={{ display: 'flex', marginTop: 6, fontFamily: 'Barlow', fontWeight: 700, fontSize: 64, color: i === 0 ? C.accent : C.text }}>
+            <div style={{ display: 'flex', marginTop: 6, fontFamily: 'Barlow', fontWeight: 700, fontSize: roomy ? 64 : 56, color: i === 0 ? accent : C.text }}>
               {s.value}
             </div>
           </div>

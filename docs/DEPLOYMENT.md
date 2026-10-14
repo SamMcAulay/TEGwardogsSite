@@ -198,6 +198,24 @@ streak), its length and a link to the match page. The bot posts them, in one cha
 The first pass only records the rounds that have already ended, so switching it on doesn't flood the channel; rounds are checked every two minutes
 and each is posted once (remembered in `accounts.db`).
 
+### Custom profiles
+
+Premium members and staff can give their profile a bio (160 characters), a colour from a fixed
+palette and up to three featured milestone badges, on `/account`. They show on the profile page
+and on the player's Discord card, and only while the member is Premium or staff. Name colours
+stay staff-set (`/admin`, Name style).
+
+Bios are checked when saved: no links, invites or mass pings, and none of the words in
+`blocked-words.txt` beside `accounts.db` (one word per line; look-alike spellings such as `3` for
+`e` are caught; changes apply on the next save, no restart). Write the list locally, then:
+
+```sh
+docker cp blocked-words.txt teg-wardogs-site:/app/data/blocked-words.txt
+```
+
+Staff can remove a bio or reset a whole custom profile from that account's card on `/admin`;
+both go in the audit log.
+
 Back up `accounts.db`:
 `docker run --rm -v teg-wardogs-site_site-data:/d -v "$PWD":/b debian:bookworm-slim cp /d/accounts.db /b/`
 (stop the site first, or the copy may miss writes still in `accounts.db-wal`).
