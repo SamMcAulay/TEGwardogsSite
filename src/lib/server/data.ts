@@ -16,8 +16,9 @@ const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor
 const loaded = <T>(data: T, stale = false, missing: string[] = []): Loaded<T> => ({ data, stale, missing });
 
 export const shortNameOf = (name: string) => name.split(' - ')[0].trim();
+/** "EU#1" and "NA-West" both start with their region. */
 export function regionOf(shortName: string): string {
-  const r = shortName.split('#')[0].toUpperCase();
+  const r = shortName.split(/[#-]/)[0].trim().toUpperCase();
   return r === 'OC' ? 'OCE' : r;
 }
 

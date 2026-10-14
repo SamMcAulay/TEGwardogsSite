@@ -45,6 +45,9 @@ describe('labels', () => {
     expect(shortNameOf('EU#1 - Sealclubbing = ban')).toBe('EU#1');
     expect(regionOf('EU#1')).toBe('EU');
     expect(regionOf('OC#1')).toBe('OCE');
+    expect(shortNameOf('NA-WEST - TEG.gg')).toBe('NA-WEST');
+    expect(regionOf('NA-WEST')).toBe('NA');
+    expect(regionOf('NA-East')).toBe('NA');
     expect(shortNameOf('Plain')).toBe('Plain');
   });
 });
