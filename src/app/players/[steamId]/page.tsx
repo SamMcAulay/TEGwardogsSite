@@ -13,7 +13,7 @@ import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/forma
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { classKills } from '@/lib/weapon-classes';
 import { milestones } from '@/lib/milestones';
-import { PROFILE_COLOURS } from '@/lib/profile-themes';
+import { PROFILE_COLOURS, profileThemeStyle } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
@@ -101,7 +101,8 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
     : [];
 
   return (
-    <>
+    // A Premium or staff member's colour re-themes their whole profile, not just the header.
+    <div style={colour ? profileThemeStyle(colour) : undefined}>
       <header className="grid-bg relative border-b border-line" style={colour ? { borderBottomColor: colour } : undefined}>
         {colour && (
           // A custom profile colour washes the header from the left.
@@ -369,6 +370,6 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
           </Panel>
         </div>
       </Container>
-    </>
+    </div>
   );
 }

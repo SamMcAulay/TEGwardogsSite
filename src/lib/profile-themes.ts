@@ -1,5 +1,6 @@
 // Custom profiles: who may customise, the colour palette, and the limits. Client-safe.
 // The palette is hex here, not CSS tokens, because the Discord card (next/og) draws with it too.
+import type { CSSProperties } from 'react';
 import type { Tier } from './tiers';
 
 /** Premium members and staff customise their profiles; it shows only while they hold that tier. */
@@ -34,4 +35,18 @@ export interface ProfileCustom {
   colour: ProfileColour | null;
   /** milestone track keys, at most FEATURED_MAX */
   featured: string[];
+}
+
+/**
+ * The site's accent tokens (globals.css) re-pointed at a profile colour, for a wrapper around that
+ * profile page: stat highlights, meters, badges, link hovers and accent buttons take the colour.
+ * Every palette colour is bright enough for the site's dark accent ink on it.
+ */
+export function profileThemeStyle(hex: string): CSSProperties {
+  return {
+    '--accent': hex,
+    '--accent-soft': `color-mix(in srgb, ${hex} 12%, transparent)`,
+    '--accent-ink': '#0b0d10',
+    '--line-strong': `color-mix(in srgb, ${hex} 28%, #29313c)`,
+  } as CSSProperties;
 }
