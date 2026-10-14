@@ -21,7 +21,7 @@ vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, shortNameOf } from './data';
+import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -45,6 +45,12 @@ describe('labels', () => {
     expect(shortNameOf('EU#1 - Sealclubbing = ban')).toBe('EU#1');
     expect(regionOf('EU#1')).toBe('EU');
     expect(regionOf('OC#1')).toBe('OCE');
+    expect(shortNameOf('NA-WEST - TEG.gg')).toBe('NA-West');
+    expect(shortNameOf('na-east - TEG.gg')).toBe('NA-East');
+    expect(serverNameOf('NA-WEST - TEG.gg')).toBe('NA-West - TEG.gg');
+    expect(serverNameOf('EU#1 - TEG.gg')).toBe('EU#1 - TEG.gg');
+    expect(regionOf('NA-WEST')).toBe('NA');
+    expect(regionOf('NA-East')).toBe('NA');
     expect(shortNameOf('Plain')).toBe('Plain');
   });
 });

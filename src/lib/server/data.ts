@@ -15,9 +15,19 @@ import { RECORD_CAUSES } from '@/lib/weapon-classes';
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
 const loaded = <T>(data: T, stale = false, missing: string[] = []): Loaded<T> => ({ data, stale, missing });
 
-export const shortNameOf = (name: string) => name.split(' - ')[0].trim();
+/** Warcon's "NA-WEST" reads as "NA-West"; "EU#1" is left alone. */
+const tidyShort = (short: string) =>
+  short.replace(/^([A-Za-z]+)-([A-Za-z]+)$/, (_, region: string, word: string) =>
+    `${region.toUpperCase()}-${word[0].toUpperCase()}${word.slice(1).toLowerCase()}`);
+export const shortNameOf = (name: string) => tidyShort(name.split(' - ')[0].trim());
+/** A full Warcon name with its short part tidied: "NA-WEST - TEG.gg" -> "NA-West - TEG.gg". */
+export function serverNameOf(name: string): string {
+  const [head, ...rest] = name.split(' - ');
+  return [tidyShort(head.trim()), ...rest].join(' - ');
+}
+/** "EU#1" and "NA-West" both start with their region. */
 export function regionOf(shortName: string): string {
-  const r = shortName.split('#')[0].toUpperCase();
+  const r = shortName.split(/[#-]/)[0].trim().toUpperCase();
   return r === 'OC' ? 'OCE' : r;
 }
 
@@ -25,10 +35,10 @@ export function regionOf(shortName: string): string {
 async function serverList() {
   const { value, stale } = await warcon().servers();
   const ids = siteEnv().serverIds;
-  const list = ids.length
+  const picked = ids.length
     ? ids.map((id) => value.find((s) => s.id === id)).filter((s) => s !== undefined)
     : [...value].sort((a, b) => a.sortOrder - b.sortOrder);
-  return { list, stale };
+  return { list: picked.map((s) => ({ ...s, name: serverNameOf(s.name) })), stale };
 }
 
 /** Server ids a caller may read: all visible ones for null, the one asked for if visible, else none. */
@@ -397,11 +407,11 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       },
       rank: await adjustedRank(c.rank.org, steamId),
       streak: c.streak,
-      onlineOn: d.online && shown(d.online.serverId) ? d.online : null,
+      onlineOn: d.online && shown(d.online.serverId) ? { ...d.online, serverName: nameOf.get(d.online.serverId)! } : null,
       weapons: (d.combat?.causes ?? []).map((w) => ({ cause: w.cause, kills: w.kills })),
       victims,
       nemeses,
-      servers: d.perServer.filter((p) => shown(p.serverId)).map((p) => ({ serverId: p.serverId, name: p.serverName, playtime: p.minutes * 60, kills: p.kills })),
+      servers: d.perServer.filter((p) => shown(p.serverId)).map((p) => ({ serverId: p.serverId, name: serverNameOf(p.serverName), playtime: p.minutes * 60, kills: p.kills })),
       matches: c.last.filter((m) => shown(m.serverId)).map((m) => ({
         matchId: m.matchId, serverId: m.serverId, serverName: shortNameOf(nameOf.get(m.serverId) ?? m.serverName),
         map: m.map ?? '', startedAt: sec(m.startedAt)!, endedAt: sec(m.endedAt), faction: m.faction, result: m.result,
