@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { NameTag, TierBadge } from '@/components/tier';
 import { isNameStyle, NAME_STYLE_LABELS, NAME_STYLES, nameStyleFor } from '@/lib/name-styles';
+import { canCustomise, isProfileColour, PROFILE_COLOURS } from '@/lib/profile-themes';
 import { buttonClass, Container, Empty, PageHeader, Panel, Stat, StatGrid } from '@/components/ui';
 import { dateTime, int } from '@/lib/format';
 import { currentAdmin, parseLookup } from '@/lib/server/accounts/admin';
@@ -11,13 +12,15 @@ import type { AccountsEnv } from '@/lib/server/accounts/env';
 import type { Link as AccountLink } from '@/lib/server/accounts/store';
 import { playerName } from '@/lib/server/data';
 import { one } from '@/lib/url';
-import { recheckAccount, setNameStyle, unlinkAccount } from './actions';
+import { clearProfile, recheckAccount, setNameStyle, unlinkAccount } from './actions';
 
 // Staff only, and linked from nowhere: everyone else gets the ordinary 404.
 export const metadata: Metadata = { title: 'Admin', robots: { index: false, follow: false } };
 
 const DONE: Record<string, { text: string; good: boolean }> = {
   styled: { text: 'Name style saved. It shows while they hold a TEG tier.', good: true },
+  'bio-cleared': { text: 'Bio removed. They can write a new one.', good: true },
+  'profile-reset': { text: 'Custom profile reset: bio, colour and featured badges cleared.', good: true },
   rechecked: { text: 'Roles re-checked with Discord.', good: true },
   unlinked: { text: 'Account unlinked. They can link again from /account.', good: true },
   'discord-down': { text: 'Discord did not answer; the tier was left as it was.', good: false },
@@ -54,6 +57,33 @@ async function LinkCard({ link, env }: { link: AccountLink; env: AccountsEnv }) 
         <dd>{ts(link.linkedAt)}</dd>
         <dt className="text-muted">Roles last checked</dt>
         <dd>{ts(link.checkedAt)}</dd>
+        <dt className="text-muted">Custom profile</dt>
+        <dd className="space-y-2">
+          {link.bio || link.colour || link.featured.length ? (
+            <>
+              {link.bio && <p className="text-text">&ldquo;{link.bio}&rdquo;</p>}
+              <p className="text-xs text-muted">
+                Colour: {isProfileColour(link.colour) ? PROFILE_COLOURS[link.colour].label : 'default'} · Featured: {link.featured.length || 'none'}
+                {!canCustomise(link.tier) && ' · hidden while they are not Premium or staff'}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {link.bio && (
+                  <form action={clearProfile}>
+                    <input type="hidden" name="discordId" value={link.discordId} />
+                    <button className={buttonClass('danger')}>Remove bio</button>
+                  </form>
+                )}
+                <form action={clearProfile}>
+                  <input type="hidden" name="discordId" value={link.discordId} />
+                  <input type="hidden" name="reset" value="yes" />
+                  <button className={buttonClass('secondary')}>Reset profile</button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <span className="text-muted">Not customised</span>
+          )}
+        </dd>
         <dt className="text-muted">Name style</dt>
         <dd>
           <form action={setNameStyle} className="flex flex-wrap items-center gap-2">
@@ -199,13 +229,19 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
                     <span>
                       <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
                       <span className={e.action === 'unlink' ? 'text-bad' : 'text-text'}>
-                        {e.action === 'unlink' ? 'unlinked' : e.action === 'style' ? 'changed the name style of' : 're-checked'}
+                        {e.action === 'unlink'
+                          ? 'unlinked'
+                          : e.action === 'style'
+                            ? 'changed the name style of'
+                            : e.action === 'profile'
+                              ? 'moderated the profile of'
+                              : 're-checked'}
                       </span>{' '}
                       <Link prefetch={false} href={`/admin?q=${e.targetDiscordId}`} className="link">
                         {e.targetName ?? <span className="font-mono text-xs">{e.targetDiscordId}</span>}
                       </Link>
                       {e.targetSteamId && <span className="font-mono text-xs text-dim"> (Steam {e.targetSteamId})</span>}
-                      {e.detail && <span className="text-muted"> to {e.detail}</span>}
+                      {e.detail && <span className="text-muted"> {e.action === 'style' ? 'to ' : '· '}{e.detail}</span>}
                     </span>
                     <span className="text-xs text-muted">{ts(e.at)}</span>
                   </li>

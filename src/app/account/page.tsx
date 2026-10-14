@@ -4,7 +4,11 @@ import { NameTag, TierBadge } from '@/components/tier';
 import { buttonClass, Container, Empty, PageHeader, Panel } from '@/components/ui';
 import { accounts, currentSession } from '@/lib/server/accounts';
 import type { AuthError } from '@/lib/server/accounts/routes';
-import { playerName as lookupPlayerName } from '@/lib/server/data';
+import { safe } from '@/components/section';
+import { getPlayer, playerName as lookupPlayerName } from '@/lib/server/data';
+import { canCustomise } from '@/lib/profile-themes';
+import { classKills } from '@/lib/weapon-classes';
+import { Customise } from './customise';
 import { nameStyleFor } from '@/lib/name-styles';
 import { TIERS, type Tier } from '@/lib/tiers';
 import { one } from '@/lib/url';
@@ -49,6 +53,9 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
   const link = a && session ? a.store.byDiscord(session.discordId) : null;
   // From the in-memory index, not a Warcon player lookup: a launch rush of people linking costs Warcon nothing.
   const playerName = link ? await lookupPlayerName(link.steamId) : null;
+  // Featured badges need the player's totals: a full profile load, only for the few who may customise.
+  const full = link && canCustomise(link.tier) ? await safe(getPlayer(link.steamId)) : null;
+  const totals = full && !(full instanceof Error) ? { ...full.data.totals, classKills: classKills(full.data.weapons) } : null;
 
   return (
     <>
@@ -145,6 +152,9 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
                 </Step>
               </ol>
             </Panel>
+          )}
+          {link?.tier && (
+            <Customise link={link} name={playerName ?? session!.name} totals={totals} status={one(sp.profile)} />
           )}
         </div>
         <Panel title="Queue priority">

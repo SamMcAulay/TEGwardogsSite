@@ -68,3 +68,20 @@ export async function setNameStyle(form: FormData) {
   });
   redirect(`/admin?q=${discordId}&done=styled`);
 }
+
+/** Remove an account's bio (one that breaks the rules), or with reset=yes their whole custom profile. */
+export async function clearProfile(form: FormData) {
+  const { a, admin, discordId, link } = await target(form);
+  if (!link) redirect(`/admin?q=${discordId}&done=gone`);
+  const reset = form.get('reset') === 'yes';
+  if (reset) a.store.setProfile(discordId, { bio: null, colour: null, featured: [] });
+  else a.store.clearBio(discordId);
+  a.store.log({
+    ...names(a, admin.discordId, admin.name, link),
+    action: 'profile',
+    targetDiscordId: discordId,
+    targetSteamId: link.steamId,
+    detail: reset ? 'custom profile reset' : link.bio ? `bio removed: "${link.bio}"` : 'bio removed',
+  });
+  redirect(`/admin?q=${discordId}&done=${reset ? 'profile-reset' : 'bio-cleared'}`);
+}

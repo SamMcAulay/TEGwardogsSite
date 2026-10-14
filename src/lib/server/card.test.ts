@@ -96,8 +96,28 @@ describe('playerMetadata', () => {
       title: '[TEG] s k r u b',
       description: m.description,
       siteName: 'TEG WARDOGS',
-      images: [{ url: `/players/${ID}/card.png`, width: 1200, height: 630 }],
+      images: [{ url: `/players/${ID}/card.png?v=0`, width: 1200, height: 630 }],
     });
-    expect(m.twitter).toMatchObject({ card: 'summary_large_image', images: [`/players/${ID}/card.png`] });
+    expect(m.twitter).toMatchObject({ card: 'summary_large_image', images: [`/players/${ID}/card.png?v=0`] });
+  });
+
+  test('a custom profile: bio leads the summary, and the card address changes with it', () => {
+    const look = { tier: 2 as const, nameStyle: 'gold' as const, custom: { bio: 'Sniper main', colour: 'teal' as const, featured: ['kills', 'class:sniper'] } };
+    const m = playerMetadata(profile(), look);
+    expect(m.description).toBe('Sniper main\n102 kills · 0.84 K/D · 14h 18m played on TEG WARDOGS servers.');
+    const url = (m.openGraph!.images as { url: string }[])[0].url;
+    expect(url).toMatch(new RegExp(`^/players/${ID}/card\\.png\\?v=[0-9a-f]{8}$`));
+    const other = playerMetadata(profile(), { ...look, custom: { ...look.custom, bio: 'Medic main' } });
+    expect((other.openGraph!.images as { url: string }[])[0].url).not.toBe(url);
+  });
+});
+
+describe('cardModel with a custom profile', () => {
+  test('colour as hex, the bio, and only featured badges actually earned', () => {
+    const look = { tier: 1 as const, nameStyle: 'aurora' as const, custom: { bio: 'Hi', colour: 'teal' as const, featured: ['kills', 'wins'] } };
+    const m = cardModel(profile(), 0, look);
+    // 102 kills earns the first kills badge; 6 wins earns none yet
+    expect(m.custom).toEqual({ colour: '#12a594', bio: 'Hi', featured: ['100 kills'] });
+    expect(cardModel(profile(), 0, null).custom).toBeNull();
   });
 });

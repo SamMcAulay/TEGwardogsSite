@@ -12,6 +12,8 @@ import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, Stat
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { classKills } from '@/lib/weapon-classes';
+import { milestones } from '@/lib/milestones';
+import { PROFILE_COLOURS } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
@@ -24,7 +26,7 @@ export async function generateMetadata({ params }: PageProps<'/players/[steamId]
   const loaded = await safe(getPlayer(steamId));
   if (loaded === null) return { title: 'Player not found' };
   if (loaded instanceof Error) return { title: 'Player' };
-  return playerMetadata(loaded.data);
+  return playerMetadata(loaded.data, lookOfSteam(steamId));
 }
 
 /** Discord colours a link preview's side bar with the page's theme colour: the site's orange. */
@@ -91,11 +93,25 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
   const now = nowSec();
   const look = lookOfSteam(steamId);
   const tier = look?.tier ?? null;
+  const custom = look?.custom ?? null;
+  const colour = custom?.colour ? PROFILE_COLOURS[custom.colour].hex : undefined;
+  const milestoneTotals = { ...t, classKills: classKills(player.weapons) };
+  const featured = custom
+    ? milestones(milestoneTotals).filter((m) => m.earned && custom.featured.includes(m.key)).map((m) => m.earned!)
+    : [];
 
   return (
     <>
-      <header className="grid-bg border-b border-line">
-        <Container className="py-10">
+      <header className="grid-bg relative border-b border-line" style={colour ? { borderBottomColor: colour } : undefined}>
+        {colour && (
+          // A custom profile colour washes the header from the left.
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: `linear-gradient(110deg, color-mix(in srgb, ${colour} 24%, transparent), transparent 65%)`, borderTop: `3px solid ${colour}` }}
+          />
+        )}
+        <Container className="relative py-10">
           <div className="eyebrow mb-5">
             <Link href="/players" className="link text-muted">
               Players
@@ -110,6 +126,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                 url={player.avatarUrl}
                 size={84}
                 faction={mainFaction(player.factions)}
+                ring={colour}
               />
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -127,6 +144,24 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
                 <h1 className="display truncate text-4xl leading-none sm:text-5xl">
                   <NameTag style={look?.nameStyle ?? null}>{player.name}</NameTag>
                 </h1>
+                {custom?.bio && <p className="mt-3 max-w-xl text-[15px] text-text/90">{custom.bio}</p>}
+                {featured.length > 0 && (
+                  <ul className="mt-3 flex flex-wrap gap-2" aria-label="Featured badges">
+                    {featured.map((b) => (
+                      <li
+                        key={b}
+                        className="border px-2 py-0.5 font-display text-[11px] font-semibold uppercase tracking-[0.1em]"
+                        style={{
+                          borderColor: colour ?? 'var(--accent)',
+                          color: colour ?? 'var(--accent)',
+                          background: `color-mix(in srgb, ${colour ?? 'var(--accent)'} 12%, transparent)`,
+                        }}
+                      >
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>
                   <CopyButton value={steamId} label="Copy ID" />
@@ -176,7 +211,7 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
 
         <RecentForm rounds={player.matches} streak={player.streak} />
 
-        <Milestones totals={{ ...t, classKills: classKills(player.weapons) }} />
+        <Milestones totals={milestoneTotals} />
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Servers played" flush>

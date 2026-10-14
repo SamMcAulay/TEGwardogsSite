@@ -230,7 +230,22 @@ describe('accounts.db on disk', () => {
     expect(s.bySteam(S1)?.nameStyle).toBe('pink');
     s.log({ adminDiscordId: D1, adminName: 'Jan', action: 'style', targetDiscordId: D1, targetName: 'Jan', targetSteamId: S1, detail: 'Pink' }, 5);
     expect(s.auditLog(1)[0]).toMatchObject({ action: 'style', detail: 'Pink' });
-    expect(existsSync(`${file}.pre-v5`)).toBe(true);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
+  });
+
+  test('upgrading a v5 database (live since #26) keeps everything and adds custom profiles', () => {
+    const file = join(fresh(), 'accounts.db');
+    const v5 = new DatabaseSync(file);
+    v5.exec(`${MIGRATIONS.slice(0, 5).join(';\n')}; PRAGMA user_version = 5;`);
+    v5.prepare("INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at, discord_name, name_style) VALUES (?, ?, 1, 50, 40, 'Jan', 'pink')").run(D1, S1);
+    v5.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ nameStyle: 'pink', bio: null, colour: null, featured: [] });
+    s.setProfile(D1, { bio: 'Sniper main', colour: 'teal', featured: ['kills', 'class:sniper'] });
+    expect(s.bySteam(S1)).toMatchObject({ bio: 'Sniper main', colour: 'teal', featured: ['kills', 'class:sniper'] });
+    s.clearBio(D1);
+    expect(s.byDiscord(D1)).toMatchObject({ bio: null, colour: 'teal' });
+    expect(existsSync(`${file}.pre-v6`)).toBe(true);
   });
 
   test('upgrading the live v1 database keeps its links and adds the admin log', () => {
