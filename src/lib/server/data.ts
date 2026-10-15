@@ -7,6 +7,7 @@ import { TTL, type KillKind } from './warcon/api';
 import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
+import { seasonOne, seasonView, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
@@ -443,6 +444,22 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
     },
     dossier.stale || career.stale,
   );
+}
+
+/** One season's slice of a profile (see seasons.ts); 'unavailable' without the season-one snapshot. */
+export async function playerSeason(player: PlayerProfile, season: Exclude<Season, 'all'>): Promise<SeasonView | 'unavailable'> {
+  const s1 = seasonOne(player.steamId);
+  if (s1 === 'unavailable') return 'unavailable';
+  const { list } = await serverList();
+  const view = seasonView(player, s1, season, {
+    name: new Map(list.map((s) => [s.id, s.name])),
+    short: new Map(list.map((s) => [s.id, shortNameOf(s.name)])),
+  });
+  if (season === 's1') {
+    const [victims, nemeses] = await Promise.all([withAvatars(view.profile.victims), withAvatars(view.profile.nemeses)]);
+    view.profile = { ...view.profile, victims, nemeses };
+  }
+  return view;
 }
 
 export async function recentKills(q: { serverId?: string | null; steamId?: string; limit?: number; before?: string | null; kind?: KillKind; cause?: string; minM?: number | null }): Promise<Loaded<KillRow[]>> {

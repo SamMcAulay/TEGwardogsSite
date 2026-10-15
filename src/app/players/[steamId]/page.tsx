@@ -8,7 +8,7 @@ import { RecentForm } from '@/components/recent-form';
 import { Avatar, PlayerLink } from '@/components/player';
 import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
-import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid, StatusDot } from '@/components/ui';
+import { Badge, Container, Empty, FactionTag, Meter, Panel, Segmented, Stat, StatGrid, StatusDot } from '@/components/ui';
 import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { classKills } from '@/lib/weapon-classes';
@@ -16,7 +16,8 @@ import { milestones } from '@/lib/milestones';
 import { PROFILE_COLOURS, profileThemeStyle } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam } from '@/lib/server/accounts';
-import { getPlayer } from '@/lib/server/data';
+import { getPlayer, playerSeason } from '@/lib/server/data';
+import { parseSeason, SEASON_LABELS, SEASONS } from '@/lib/server/seasons';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -67,8 +68,9 @@ function GroupTable({ title, rows, label }: { title: string; rows: Group[]; labe
   );
 }
 
-export default async function PlayerPage({ params }: PageProps<'/players/[steamId]'>) {
+export default async function PlayerPage({ params, searchParams }: PageProps<'/players/[steamId]'>) {
   const { steamId } = await params;
+  const season = parseSeason((await searchParams).season);
   if (!/^\d{17}$/.test(steamId)) notFound();
   const loadedPlayer = await safe(getPlayer(steamId));
   if (loadedPlayer === null) notFound();
@@ -85,17 +87,20 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
     );
   }
   const player = loadedPlayer.data;
-  const t = player.totals;
-  const weapons = player.weapons.slice(0, 15);
+  const view = season === 'all' ? null : await playerSeason(player, season);
+  // The header is always all time; everything under the tabs is the chosen season.
+  const p = view && view !== 'unavailable' ? view.profile : player;
+  const t = p.totals;
+  const weapons = p.weapons.slice(0, 15);
   const weaponKills = weapons.reduce((a, w) => a + w.kills, 0);
   const favourite = weapons[0];
-  const servers = [...player.servers].sort((a, b) => b.playtime - a.playtime);
+  const servers = [...p.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
   const look = lookOfSteam(steamId);
   const tier = look?.tier ?? null;
   const custom = look?.custom ?? null;
   const colour = custom?.colour ? PROFILE_COLOURS[custom.colour].hex : undefined;
-  const milestoneTotals = { ...t, classKills: classKills(player.weapons) };
+  const milestoneTotals = { ...player.totals, classKills: classKills(player.weapons) };
   const featured = custom
     ? milestones(milestoneTotals).filter((m) => m.earned && custom.featured.includes(m.key)).map((m) => m.earned!)
     : [];
@@ -195,170 +200,199 @@ export default async function PlayerPage({ params }: PageProps<'/players/[steamI
       </header>
 
       <Container className="mt-8 space-y-4">
-        <StatGrid className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
-          <Stat label="Kills" value={int(t.kills)} accent />
-          <Stat label="Deaths" value={int(t.deaths)} />
-          <Stat label="K/D" value={kd(t.kills, t.deaths)} />
-          <Stat label="Headshot %" value={pct(t.headshots, t.kills)} sub={`${int(t.headshots)} headshots`} />
-          <Stat label="Kills / hour" value={t.playtime ? ((t.kills * 3600) / t.playtime).toFixed(1) : '—'} />
-          <Stat label="Longest kill" value={metres(t.longest)} />
-          <Stat label="Playtime" value={duration(t.playtime)} />
-          <Stat
-            label="Rounds"
-            value={int(t.matches)}
-            sub={favourite ? `Main: ${causeInfo(favourite.cause).label}` : undefined}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Segmented
+            label="Season"
+            active={season}
+            items={SEASONS.map((k) => ({ key: k, label: SEASON_LABELS[k], href: k === 'all' ? `/players/${steamId}` : `?season=${k}` }))}
           />
-        </StatGrid>
-
-        <RecentForm rounds={player.matches} streak={player.streak} />
-
-        <Milestones totals={milestoneTotals} />
-
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Panel title="Servers played" flush>
-            <ul className="divide-y divide-line">
-              {servers.map((s) => (
-                <li key={s.serverId} className="px-4 py-3">
-                  <div className="mb-1.5 flex items-baseline justify-between text-sm">
-                    <Link href={`/servers/${s.serverId}`} className="link font-medium">
-                      {s.name}
-                    </Link>
-                    <span className="num text-muted">
-                      {duration(s.playtime)} · {int(s.kills)} kills
-                    </span>
-                  </div>
-                  <Meter value={s.playtime} max={servers[0].playtime} />
-                </li>
-              ))}
-              {!servers.length && <Empty>No time recorded.</Empty>}
-            </ul>
-          </Panel>
-          <GroupTable title="By map" rows={player.maps} label={mapName} />
-          <GroupTable title="By faction" rows={player.factions} label={(k) => k} />
+          {season === 's1' && <span className="text-xs text-muted">Up to 14 October 2026</span>}
+          {season === 's2' && <span className="text-xs text-muted">Since 14 October 2026</span>}
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Panel title="Weapons" flush className="lg:col-span-2" action={<span>Kill feed · all time</span>}>
-            {weapons.length ? (
+        {view === 'unavailable' ? (
+          <Empty>Season stats aren&apos;t available right now.</Empty>
+        ) : (
+          <>
+          <StatGrid className="grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
+            <Stat label="Kills" value={int(t.kills)} accent />
+            <Stat label="Deaths" value={int(t.deaths)} />
+            <Stat label="K/D" value={kd(t.kills, t.deaths)} />
+            <Stat label="Headshot %" value={pct(t.headshots, t.kills)} sub={`${int(t.headshots)} headshots`} />
+            <Stat label="Kills / hour" value={t.playtime ? ((t.kills * 3600) / t.playtime).toFixed(1) : '—'} />
+            <Stat
+              label="Longest kill"
+              value={view?.unknownBest.longest ? '—' : metres(t.longest)}
+              sub={view?.unknownBest.longest ? 'Season 1 best not beaten' : undefined}
+            />
+            <Stat label="Playtime" value={duration(t.playtime)} />
+            <Stat
+              label="Rounds"
+              value={int(t.matches)}
+              sub={favourite ? `Main: ${causeInfo(favourite.cause).label}` : undefined}
+            />
+          </StatGrid>
+
+          <RecentForm rounds={p.matches} streak={season === 'all' ? player.streak : null} />
+
+          {season === 'all' && <Milestones totals={milestoneTotals} />}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="Servers played" flush>
+              <ul className="divide-y divide-line">
+                {servers.map((s) => (
+                  <li key={s.serverId} className="px-4 py-3">
+                    <div className="mb-1.5 flex items-baseline justify-between text-sm">
+                      <Link href={`/servers/${s.serverId}`} className="link font-medium">
+                        {s.name}
+                      </Link>
+                      <span className="num text-muted">
+                        {duration(s.playtime)} · {int(s.kills)} kills
+                      </span>
+                    </div>
+                    <Meter value={s.playtime} max={servers[0].playtime} />
+                  </li>
+                ))}
+                {!servers.length && <Empty>No time recorded.</Empty>}
+              </ul>
+            </Panel>
+            <GroupTable title="By map" rows={p.maps} label={mapName} />
+            <GroupTable title="By faction" rows={p.factions} label={(k) => k} />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Panel title="Weapons" flush className="lg:col-span-2" action={<span>Kill feed · {SEASON_LABELS[season].toLowerCase()}</span>}>
+              {weapons.length ? (
+                <div className="overflow-x-auto">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Weapon</th>
+                        <th className="hidden w-40 sm:table-cell">Share</th>
+                        <th className="r">Kills</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weapons.map((w) => {
+                        const info = causeInfo(w.cause);
+                        return (
+                          <tr key={w.cause}>
+                            <td>
+                              <span className="font-medium">{info.label}</span>
+                              <span className="ml-2 text-xs text-dim capitalize">{info.kind}</span>
+                            </td>
+                            <td className="hidden sm:table-cell">
+                              <div className="flex items-center gap-2">
+                                <Meter value={w.kills} max={weapons[0].kills} />
+                                <span className="num w-10 text-right text-xs text-muted">
+                                  {pct(w.kills, weaponKills, 0)}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="r font-semibold">{int(w.kills)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Empty>No kill feed data for this player.</Empty>
+              )}
+            </Panel>
+            <div className="grid gap-4">
+              {(
+                [
+                  ['Favourite targets', p.victims, 'kills'],
+                  ['Nemeses', p.nemeses, 'deaths'],
+                ] as const
+              ).map(([title, list, unit]) => (
+                <Panel key={title} title={title} flush>
+                  <ul className="divide-y divide-line">
+                    {list.map((r) => (
+                      <li key={r.steamId} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} className="text-sm" />
+                        <span className="num shrink-0 text-sm">
+                          <span className="font-semibold">{r.count}</span> <span className="text-muted">{unit}</span>
+                        </span>
+                      </li>
+                    ))}
+                    {!list.length && <Empty>None yet.</Empty>}
+                  </ul>
+                </Panel>
+              ))}
+            </div>
+          </div>
+
+          {view?.topListsOnly && (
+            <p className="text-xs text-dim">
+              Season 2 weapons, targets and nemeses are counted from the all-time top lists, so a rare one can be missing.
+            </p>
+          )}
+
+          <Panel title={season === 's1' ? 'Last rounds of season 1' : 'Recent rounds'} flush>
+            {p.matches.length ? (
               <div className="overflow-x-auto">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Weapon</th>
-                      <th className="hidden w-40 sm:table-cell">Share</th>
+                      <th>Round</th>
+                      <th>Server</th>
+                      <th>Faction</th>
                       <th className="r">Kills</th>
+                      <th className="r">Deaths</th>
+                      <th className="r hidden sm:table-cell">Time</th>
+                      <th>Result</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {weapons.map((w) => {
-                      const info = causeInfo(w.cause);
-                      return (
-                        <tr key={w.cause}>
-                          <td>
-                            <span className="font-medium">{info.label}</span>
-                            <span className="ml-2 text-xs text-dim capitalize">{info.kind}</span>
-                          </td>
-                          <td className="hidden sm:table-cell">
-                            <div className="flex items-center gap-2">
-                              <Meter value={w.kills} max={weapons[0].kills} />
-                              <span className="num w-10 text-right text-xs text-muted">
-                                {pct(w.kills, weaponKills, 0)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="r font-semibold">{int(w.kills)}</td>
-                        </tr>
-                      );
-                    })}
+                    {p.matches.map((m) => (
+                      <tr key={m.matchId}>
+                        <td>
+                          <Link prefetch={false} href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
+                            {mapName(m.map)}
+                          </Link>
+                          <div className="text-xs text-dim">{dateTime(m.startedAt)}</div>
+                        </td>
+                        <td className="text-muted">{m.serverName}</td>
+                        <td>
+                          {m.faction ? <FactionTag name={m.faction} /> : <span className="text-dim">—</span>}
+                        </td>
+                        <td className="r font-semibold">{m.kills}</td>
+                        <td className="r text-muted">{m.deaths}</td>
+                        <td className="r hidden text-muted sm:table-cell">{duration(m.timePlayed)}</td>
+                        <td>
+                          {!m.endedAt ? (
+                            <Badge tone="good">Live</Badge>
+                          ) : m.result === 'win' ? (
+                            <Badge tone="accent">Won</Badge>
+                          ) : m.result === 'loss' ? (
+                            <Badge>Lost</Badge>
+                          ) : m.result === 'draw' ? (
+                            <Badge>Draw</Badge>
+                          ) : (
+                            <span className="text-dim">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             ) : (
-              <Empty>No kill feed data for this player.</Empty>
+              <Empty>No rounds recorded.</Empty>
             )}
           </Panel>
-          <div className="grid gap-4">
-            {(
-              [
-                ['Favourite targets', player.victims, 'kills'],
-                ['Nemeses', player.nemeses, 'deaths'],
-              ] as const
-            ).map(([title, list, unit]) => (
-              <Panel key={title} title={title} flush>
-                <ul className="divide-y divide-line">
-                  {list.map((r) => (
-                    <li key={r.steamId} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                      <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} className="text-sm" />
-                      <span className="num shrink-0 text-sm">
-                        <span className="font-semibold">{r.count}</span> <span className="text-muted">{unit}</span>
-                      </span>
-                    </li>
-                  ))}
-                  {!list.length && <Empty>None yet.</Empty>}
-                </ul>
-              </Panel>
-            ))}
-          </div>
-        </div>
 
-        <Panel title="Recent rounds" flush>
-          {player.matches.length ? (
-            <div className="overflow-x-auto">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Round</th>
-                    <th>Server</th>
-                    <th>Faction</th>
-                    <th className="r">Kills</th>
-                    <th className="r">Deaths</th>
-                    <th className="r hidden sm:table-cell">Time</th>
-                    <th>Result</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {player.matches.map((m) => (
-                    <tr key={m.matchId}>
-                      <td>
-                        <Link prefetch={false} href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
-                          {mapName(m.map)}
-                        </Link>
-                        <div className="text-xs text-dim">{dateTime(m.startedAt)}</div>
-                      </td>
-                      <td className="text-muted">{m.serverName}</td>
-                      <td>
-                        {m.faction ? <FactionTag name={m.faction} /> : <span className="text-dim">—</span>}
-                      </td>
-                      <td className="r font-semibold">{m.kills}</td>
-                      <td className="r text-muted">{m.deaths}</td>
-                      <td className="r hidden text-muted sm:table-cell">{duration(m.timePlayed)}</td>
-                      <td>
-                        {!m.endedAt ? (
-                          <Badge tone="good">Live</Badge>
-                        ) : m.result === 'win' ? (
-                          <Badge tone="accent">Won</Badge>
-                        ) : m.result === 'loss' ? (
-                          <Badge>Lost</Badge>
-                        ) : m.result === 'draw' ? (
-                          <Badge>Draw</Badge>
-                        ) : (
-                          <span className="text-dim">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Empty>No rounds recorded.</Empty>
-          )}
-        </Panel>
+          </>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-3">
-          <Panel title="Recent kills & deaths" flush className="lg:col-span-2">
-            {player.recentKills.length ? <KillList kills={player.recentKills} showServer /> : <Empty>Nothing yet.</Empty>}
-          </Panel>
+          {season !== 's1' && (
+            <Panel title="Recent kills & deaths" flush className="lg:col-span-2">
+              {p.recentKills.length ? <KillList kills={p.recentKills} showServer /> : <Empty>Nothing yet.</Empty>}
+            </Panel>
+          )}
           <Panel title="Known names" flush>
             <ul className="divide-y divide-line">
               {player.aliases.map((a) => (
