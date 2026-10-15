@@ -1,8 +1,8 @@
 // The shapes pages render, and the period/metric vocabulary. Filled from Warcon by data.ts.
 
-export const PERIODS = ['7d', '30d', '90d', 'all'] as const;
+export const PERIODS = ['7d', '30d', '90d', 's2', 'all'] as const;
 export type Period = (typeof PERIODS)[number];
-export const PERIOD_LABELS: Record<Period, string> = { '7d': '7 days', '30d': '30 days', '90d': '90 days', all: 'All time' };
+export const PERIOD_LABELS: Record<Period, string> = { '7d': '7 days', '30d': '30 days', '90d': '90 days', s2: 'Season 2', all: 'All time' };
 export function parsePeriod(v: unknown, fallback: Period = '7d'): Period {
   return PERIODS.includes(v as Period) ? (v as Period) : fallback;
 }

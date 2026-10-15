@@ -28,19 +28,58 @@ export interface SeasonOne {
   weapons: [cause: string, kills: number][];
   victims: [steamId: string, name: string, kills: number][];
   nemeses: [steamId: string, name: string, deaths: number][];
-  servers: [serverId: string, seconds: number, kills: number][];
+  /** then deaths, headshots, matches, wins, losses, draws, cash: the board's numbers (see SeasonOneBoardRow) */
+  servers: [serverId: string, seconds: number, kills: number, ...rest: number[]][];
 }
 
-/** Reads one player's season one from a snapshot file; null when they didn't play it. */
-export function openSeasonOne(file: string): (steamId: string) => SeasonOne | null {
-  const get = new DatabaseSync(file, { readOnly: true }).prepare('SELECT data FROM players WHERE steam_id = ?');
-  return (steamId) => {
-    const row = get.get(steamId) as { data: Uint8Array } | undefined;
-    return row ? (JSON.parse(inflateRawSync(row.data).toString('utf8')) as SeasonOne) : null;
+/** One player's season one on one server, counted as Warcon's leaderboard counts it. */
+export interface SeasonOneBoardRow {
+  seconds: number; kills: number; deaths: number; headshots: number; matches: number; wins: number; losses: number; draws: number; cash: number;
+}
+
+interface SeasonOneFile {
+  player: (steamId: string) => SeasonOne | null;
+  board: (serverId: string) => Map<string, SeasonOneBoardRow>;
+}
+
+/**
+ * Reads a snapshot file: one player's season one (null when they didn't play it), or every
+ * player's season one on a server, kept once read since it never changes.
+ */
+export function openSeasonOne(file: string): SeasonOneFile {
+  const db = new DatabaseSync(file, { readOnly: true });
+  const get = db.prepare('SELECT data FROM players WHERE steam_id = ?');
+  const boards = new Map<string, Map<string, SeasonOneBoardRow>>();
+  return {
+    player: (steamId) => {
+      const row = get.get(steamId) as { data: Uint8Array } | undefined;
+      return row ? (JSON.parse(inflateRawSync(row.data).toString('utf8')) as SeasonOne) : null;
+    },
+    board: (serverId) => {
+      let board = boards.get(serverId);
+      if (!board) {
+        // Prepared here, not on open: a snapshot from before boards were added still serves profiles.
+        const rows = db
+          .prepare('SELECT steam_id, seconds, kills, deaths, headshots, matches, wins, losses, draws, cash FROM boards WHERE server_id = ?')
+          .all(serverId) as unknown as (SeasonOneBoardRow & { steam_id: string })[];
+        board = new Map(rows.map(({ steam_id, ...r }) => [steam_id, r]));
+        boards.set(serverId, board);
+      }
+      return board;
+    },
   };
 }
 
-const g = globalThis as unknown as { __seasonOne?: (steamId: string) => SeasonOne | null };
+const g = globalThis as unknown as { __seasonOne?: SeasonOneFile };
+
+function installed(): SeasonOneFile | null {
+  if (!g.__seasonOne) {
+    const file = join(process.env.DATA_DIR || './data', 'season-one.db');
+    if (!existsSync(file)) return null;
+    g.__seasonOne = openSeasonOne(file);
+  }
+  return g.__seasonOne;
+}
 
 /**
  * A player's season one from DATA_DIR/season-one.db: null when they didn't play it, 'unavailable'
@@ -48,12 +87,12 @@ const g = globalThis as unknown as { __seasonOne?: (steamId: string) => SeasonOn
  * again on every call until it is).
  */
 export function seasonOne(steamId: string): SeasonOne | null | 'unavailable' {
-  if (!g.__seasonOne) {
-    const file = join(process.env.DATA_DIR || './data', 'season-one.db');
-    if (!existsSync(file)) return 'unavailable';
-    g.__seasonOne = openSeasonOne(file);
-  }
-  return g.__seasonOne(steamId);
+  return installed()?.player(steamId) ?? (installed() ? null : 'unavailable');
+}
+
+/** Every player's season one on a server, by Steam ID; 'unavailable' without the snapshot. */
+export function seasonOneBoard(serverId: string): Map<string, SeasonOneBoardRow> | 'unavailable' {
+  return installed()?.board(serverId) ?? 'unavailable';
 }
 
 export interface SeasonView {

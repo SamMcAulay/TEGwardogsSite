@@ -68,12 +68,21 @@ nemeses AS (
    GROUP BY steam_id
 ),
 servers AS (
-  SELECT s.steam_id, json_agg(json_build_array(s.server_id, s.seconds, COALESCE(k.kills, 0)) ORDER BY s.seconds DESC) AS rows FROM (
+  -- One entry per server: [id, seconds, kills, deaths, headshots, matches, wins, losses, draws, cash],
+  -- as Warcon's board counts them (time and cash from sessions, the rest from match lines), so a
+  -- season-two board is a server's all-time board less these.
+  SELECT steam_id, json_agg(json_build_array(server_id, COALESCE(s.seconds, 0), COALESCE(k.kills, 0), COALESCE(k.deaths, 0),
+           COALESCE(k.headshots, 0), COALESCE(k.matches, 0), COALESCE(k.wins, 0), COALESCE(k.losses, 0), COALESCE(k.draws, 0), COALESCE(s.cash, 0))
+           ORDER BY s.seconds DESC NULLS LAST) AS rows FROM (
     SELECT steam_id, server_id,
-           round(SUM(EXTRACT(EPOCH FROM (LEAST(COALESCE(left_at, now()), :cutoff::timestamptz) - joined_at))))::bigint AS seconds
+           round(SUM(EXTRACT(EPOCH FROM (LEAST(COALESCE(left_at, now()), :cutoff::timestamptz) - joined_at))))::bigint AS seconds,
+           SUM(cash) AS cash
       FROM player_sessions WHERE joined_at < :cutoff GROUP BY 1, 2) s
-  LEFT JOIN (SELECT steam_id, server_id, SUM(kills) AS kills FROM lines GROUP BY 1, 2) k USING (steam_id, server_id)
-   GROUP BY s.steam_id
+  FULL JOIN (SELECT steam_id, server_id, SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(headshots) AS headshots, COUNT(*) AS matches,
+                    COUNT(*) FILTER (WHERE result = 'win') AS wins, COUNT(*) FILTER (WHERE result = 'loss') AS losses,
+                    COUNT(*) FILTER (WHERE result = 'draw') AS draws
+               FROM lines GROUP BY 1, 2) k USING (steam_id, server_id)
+   GROUP BY steam_id
 ),
 everyone AS (SELECT steam_id FROM totals UNION SELECT steam_id FROM combat UNION SELECT steam_id FROM servers)
 SELECT e.steam_id, json_build_object(

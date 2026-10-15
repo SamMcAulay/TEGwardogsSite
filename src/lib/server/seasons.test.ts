@@ -44,7 +44,7 @@ const one: SeasonOne = {
   weapons: [['AK', 80], ['Knife', 20], ['Pistol', 1]],
   victims: [['v1', 'V1', 10], ['v2', 'V2', 1]],
   nemeses: [['n1', 'N1', 2]],
-  servers: [['eu2', 25_000, 90], ['old-eu1', 5_000, 10]],
+  servers: [['eu2', 25_000, 90, 60, 15, 12, 6, 6, 0, 4_000], ['old-eu1', 5_000, 10, 10, 5, 3, 2, 1, 0, 500]],
 };
 
 describe('season two: all time minus season one', () => {
@@ -125,8 +125,11 @@ describe('the snapshot file', () => {
     const file = join(dir, 'season-one.db');
     execFileSync('node', ['scripts/season-one-db.mjs', file], { input: rows.join('\n') + '\n', stdio: ['pipe', 'ignore', 'ignore'] });
     const read = openSeasonOne(file);
-    expect(read('76561198000000007')).toMatchObject({ kills: 7, factions: one.factions });
-    expect(read('76561190000000000')).toBeNull();
+    expect(read.player('76561198000000007')).toMatchObject({ kills: 7, factions: one.factions });
+    expect(read.player('76561190000000000')).toBeNull();
+    expect(read.board('eu2').get('76561198000000007')).toEqual({ seconds: 25_000, kills: 90, deaths: 60, headshots: 15, matches: 12, wins: 6, losses: 6, draws: 0, cash: 4_000 });
+    expect(read.board('eu2').size).toBe(1000);
+    expect(read.board('nowhere').size).toBe(0);
   });
 
   test('without the file, season stats are unavailable rather than empty', () => {
