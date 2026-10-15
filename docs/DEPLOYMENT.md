@@ -220,6 +220,26 @@ Back up `accounts.db`:
 `docker run --rm -v teg-wardogs-site_site-data:/d -v "$PWD":/b debian:bookworm-slim cp /d/accounts.db /b/`
 (stop the site first, or the copy may miss writes still in `accounts.db-wal`).
 
+## 9b. Season stats
+
+Player profiles have All time, Season 2 and Season 1 tabs. Warcon only answers all time, so
+season one (everything before 2026-10-14 00:00 UTC) is a frozen snapshot of its database in
+`season-one.db` beside `accounts.db`, and season two is all time minus it. Without the file the
+season tabs say the stats aren't available; nothing else changes. It only needs making once,
+from a machine with the deploy key (the query reads Warcon's database and changes nothing; ~20 s):
+
+```sh
+ssh -i ~/.ssh/wardogs_deploy debian@57.129.156.97 \
+  'cd /home/debian/warcon && docker compose exec -T db sh -c "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB -At -F \"	\""' \
+  < scripts/season-one.sql | node scripts/season-one-db.mjs data/season-one.db
+scp -i ~/.ssh/wardogs_deploy data/season-one.db debian@57.129.156.97:/tmp/
+ssh -i ~/.ssh/wardogs_deploy debian@57.129.156.97 \
+  'docker cp /tmp/season-one.db teg-wardogs-site:/app/data/season-one.db && rm /tmp/season-one.db'
+```
+
+(The `-F` argument is a literal tab.) The site picks the file up on the next profile view; no
+restart. It lives in the volume, so deploys keep it.
+
 ## 10. Troubleshooting
 
 | Symptom | Cause |
