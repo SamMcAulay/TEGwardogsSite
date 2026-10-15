@@ -121,6 +121,15 @@ export function createApi(
       return cached(path, TTL.stats, () => players.run(async () => (await client.json(path, dossierBody, { timeoutMs: PLAYER_TIMEOUT_MS })).dossier));
     },
 
+    /**
+     * A player's org-wide sessions and minutes, from the dossier but not cached here: the live
+     * scoreboard's "New" tag keeps its own small record, so a full server doesn't flush the cache.
+     */
+    playerSummary(serverId: string, steamId: string): Promise<WDossier['summary']> {
+      const path = `/api/servers/${enc(serverId)}/players/${enc(steamId)}`;
+      return players.run(async () => (await client.json(path, dossierBody, { timeoutMs: PLAYER_TIMEOUT_MS })).dossier.summary);
+    },
+
     matches(serverId: string, page = 1): Promise<Cached<WMatchList>> {
       const path = `/api/servers/${enc(serverId)}/matches${qs({ page })}`;
       return cached(path, TTL.stats, () => client.json(path, matchListBody));

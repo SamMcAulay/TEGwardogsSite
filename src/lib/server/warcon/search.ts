@@ -53,6 +53,7 @@ export function parseBoardCsv(csv: string): SearchHit[] {
 export class SearchIndex {
   private hits: SearchHit[] | null = null;
   private names = new Map<string, string>();
+  private minutesOf = new Map<string, number>();
   private loadedAt = 0;
   private failedAt = -Infinity;
   private loading: Promise<void> | null = null;
@@ -76,6 +77,7 @@ export class SearchIndex {
       .then((csv) => {
         this.hits = parseBoardCsv(csv).sort((a, b) => b.minutes - a.minutes);
         this.names = new Map(this.hits.map((h) => [h.steamId, h.name]));
+        this.minutesOf = new Map(this.hits.map((h) => [h.steamId, h.minutes]));
         this.loadedAt = this.now();
       })
       .catch((e) => {
@@ -101,6 +103,12 @@ export class SearchIndex {
   async name(steamId: string): Promise<string | null> {
     await this.current();
     return this.names.get(steamId) ?? null;
+  }
+
+  /** A player's all-time minutes from the export; null when not in it (or still loading). */
+  async minutes(steamId: string): Promise<number | null> {
+    await this.current();
+    return this.minutesOf.get(steamId) ?? null;
   }
 
   async search(q: string, limit = 25): Promise<SearchHit[] | 'warming'> {

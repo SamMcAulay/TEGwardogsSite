@@ -131,7 +131,7 @@ export function Badge({
 }: {
   children: ReactNode;
   className?: string;
-  tone?: 'default' | 'accent' | 'good' | 'bad' | 'admin' | 'premium' | 'verified';
+  tone?: 'default' | 'accent' | 'good' | 'bad' | 'admin' | 'premium' | 'verified' | 'lonestar';
 }) {
   const tones = {
     default: 'border-line-strong text-muted',
@@ -141,6 +141,7 @@ export function Badge({
     admin: 'border-text/50 bg-text/10 text-text',
     premium: 'border-premium/50 bg-premium/10 text-premium',
     verified: 'border-verified/50 bg-verified/10 text-verified',
+    lonestar: 'border-lonestar/50 bg-lonestar/10 text-lonestar',
   };
   return (
     <span
