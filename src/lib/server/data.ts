@@ -6,8 +6,9 @@ import { fanOut, mergeNewest } from './warcon/merge';
 import { TTL, type KillKind } from './warcon/api';
 import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
+import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
 import type {
-  KillRow, LeaderRow, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
+  KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
 } from './views';
 import { RECORD_CAUSES } from '@/lib/weapon-classes';
@@ -93,6 +94,25 @@ export async function getServer(id: string): Promise<Loaded<ServerRow> | null> {
   } catch {
     return loaded(serverRow(s, null, true), false, [id]);
   }
+}
+
+const g = globalThis as unknown as { __newPlayers?: NewPlayers };
+function newPlayers(): NewPlayers {
+  return (g.__newPlayers ??= new NewPlayers({
+    summary: async (steamId) => warcon().playerSummary((await serverList()).list[0].id, steamId),
+    knownMinutes: (steamId) => searchIndex(async () => (await serverList()).list[0].id).minutes(steamId),
+  }));
+}
+
+/** Each live player's scoreboard tags (see live-tags.ts); players with none are left out. */
+export async function liveTags(players: LivePlayer[]): Promise<Record<string, LiveTag[]>> {
+  const fresh = await newPlayers().check(players.map((p) => p.steamId));
+  const out: Record<string, LiveTag[]> = {};
+  for (const p of players) {
+    const tags = [fresh.has(p.steamId) && ('new' as const), factionTag(p.faction, seasonOneMain(p.steamId))].filter((t) => !!t);
+    if (tags.length) out[p.steamId] = tags;
+  }
+  return out;
 }
 
 /** Servers whose live status is unknown count toward serversTotal only, and are listed in missing. */

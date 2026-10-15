@@ -22,7 +22,8 @@ import {
 import { ago, clock, compact, dateTime, duration, int, kd, money } from '@/lib/format';
 import { factionColor, lightingName, mapName, REGION_NAMES } from '@/lib/game';
 import { Section, safe } from '@/components/section';
-import { getServer, leaderboard, listMatches, population, recentKills, serverTotals } from '@/lib/server/data';
+import { getServer, leaderboard, listMatches, liveTags, population, recentKills, serverTotals } from '@/lib/server/data';
+import type { LiveTag } from '@/lib/server/live-tags';
 import type { LivePlayer } from '@/lib/server/views';
 
 export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): Promise<Metadata> {
@@ -37,7 +38,23 @@ export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): 
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
-function Scoreboard({ faction, players, score }: { faction: string; players: LivePlayer[]; score?: number }) {
+const TAGS: Record<LiveTag, { label: string; tone: 'good' | 'lonestar'; title: string }> = {
+  new: { label: 'New', tone: 'good', title: 'First session or first 45 minutes on TEG servers' },
+  imposter: { label: 'Blue Imposter', tone: 'lonestar', title: 'Mained Valkyra or Manticore in season one' },
+  lover: { label: 'Blue Lover', tone: 'lonestar', title: 'Mained Lonestar in season one' },
+};
+
+function Scoreboard({
+  faction,
+  players,
+  score,
+  tags,
+}: {
+  faction: string;
+  players: LivePlayer[];
+  score?: number;
+  tags: Record<string, LiveTag[]>;
+}) {
   const sorted = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
   return (
     <div className="min-w-0 border border-line">
@@ -69,8 +86,17 @@ function Scoreboard({ faction, players, score }: { faction: string; players: Liv
           <tbody>
             {sorted.map((p) => (
               <tr key={p.steamId}>
-                <td className="max-w-40">
-                  <PlayerLink steamId={p.steamId} name={p.name} avatar={false} />
+                <td className="max-w-56">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <PlayerLink steamId={p.steamId} name={p.name} avatar={false} className="max-w-40" />
+                    {tags[p.steamId]?.map((t) => (
+                      <span key={t} title={TAGS[t].title}>
+                        <Badge tone={TAGS[t].tone} className="!px-1 !py-0 !text-[10px]">
+                          {TAGS[t].label}
+                        </Badge>
+                      </span>
+                    ))}
+                  </div>
                 </td>
                 <td className="r font-semibold">{p.kills}</td>
                 <td className="r text-muted">{p.deaths}</td>
@@ -112,12 +138,14 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   const server = loadedServer.data;
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
-  const [pop, totals, matches, top, kills] = await Promise.all([
+  const [pop, totals, matches, top, kills, tags] = await Promise.all([
     safe(population(server.id, range)),
     safe(serverTotals(server.id)),
     safe(listMatches({ serverId: server.id, limit: 8 })),
     safe(leaderboard({ metric: 'kills', period: '7d', serverId: server.id })),
     safe(recentKills({ serverId: server.id, limit: 15 })),
+    // Decoration: a failed lookup means no tags, never a broken scoreboard.
+    liveTags(server.players).catch(() => ({})),
   ]);
   const st = server.status;
   const factions = st?.factionScores.map((f) => f.name) ?? ['Valkyra', 'Lonestar', 'Manticore'];
@@ -250,6 +278,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                   faction={f}
                   players={server.players.filter((p) => p.faction === f)}
                   score={st?.factionScores.find((x) => x.name === f)?.score}
+                  tags={tags}
                 />
               ))}
             </div>

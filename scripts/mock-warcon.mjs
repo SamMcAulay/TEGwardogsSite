@@ -30,6 +30,9 @@ const PLAYERS = Array.from({ length: 300 }, (_, i) => ({
   name: `${pick(['Night', 'Iron', 'Red', 'Silent', 'Owl', 'Rook', 'Viper'])}${pick(['Owl', 'Fox', 'Bear', 'Hawk', 'Wolf'])}${i}`,
 }));
 
+// Every ninth player is brand new (under 45 minutes), so the live scoreboard shows "New" tags.
+const isNew = (steamId) => Number(BigInt(steamId) % 9n) === 0;
+
 const now = () => Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 
@@ -71,7 +74,7 @@ setInterval(() => {
 
 function board(params) {
   const rows = PLAYERS.map((p, i) => ({
-    rank: 0, steamId: p.steamId, name: p.name, minutes: 60 + ((i * 37) % 3000), seedMinutes: 0, kills: (i * 13) % 900, deaths: (i * 7) % 600 + 1,
+    rank: 0, steamId: p.steamId, name: p.name, minutes: isNew(p.steamId) ? 20 : 60 + ((i * 37) % 3000), seedMinutes: 0, kills: (i * 13) % 900, deaths: (i * 7) % 600 + 1,
     headshots: (i * 3) % 200, teamKills: 0, suicides: 0, vehicleKills: i % 7, killStreak: 3 + (i % 20), deathStreak: 3, matches: 1 + (i % 80), wins: i % 40, losses: i % 30, draws: 0, cash: i * 100, lastSeen: iso(now() - i * 60_000),
   }));
   const sort = params.get('sort') ?? 'kills';
@@ -124,7 +127,7 @@ const routes = [
       steam: p ? { persona: p.name, avatar: '', profileUrl: '', public: true, vacBans: 1 } : null,
       risk: { level: 'high' }, watch: { watched: true, reason: 'PRIVATE-WATCH-REASON', updatedByName: 'mod', updatedAt: null },
       bannedOn: [], orgServerCount: 6, orgLists: { ban: null, reserve: null, canBan: false, canReserve: false },
-      summary: p ? { sessions: 40, minutes: 4000, kills: 1200, deaths: 800, firstSeen: iso(now() - 30 * 86_400_000), lastSeen: iso(now()) } : { sessions: 0, minutes: 0, kills: 0, deaths: 0, firstSeen: null, lastSeen: null },
+      summary: p && isNew(steamId) ? { sessions: 1, minutes: 20, kills: 2, deaths: 3, firstSeen: iso(now() - 1_200_000), lastSeen: iso(now()) } : p ? { sessions: 40, minutes: 4000, kills: 1200, deaths: 800, firstSeen: iso(now() - 30 * 86_400_000), lastSeen: iso(now()) } : { sessions: 0, minutes: 0, kills: 0, deaths: 0, firstSeen: null, lastSeen: null },
       combat: p ? { kills: 1200, deaths: 800, headshots: 200, teamKills: 3, teamKilled: 2, suicides: 1, avgDistanceM: 60, longestM: 412,
         causes: CAUSES.map((cause, i) => ({ cause, kills: 300 - i * 50 })), victims: PLAYERS.slice(0, 5).map((v) => ({ ...v, kills: 9 })), nemeses: PLAYERS.slice(5, 10).map((v) => ({ ...v, deaths: 7 })), recent } : null,
       perServer: p ? SERVERS.slice(0, 3).map((s) => ({ serverId: s.id, serverName: s.name, sessions: 10, minutes: 1000, kills: 300, deaths: 200, lastSeen: iso(now()) })) : [],
