@@ -18,6 +18,11 @@ const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => index }));
 const bans = { orgBannedIds: vi.fn() };
 vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
+const seasonBoards: { byServer: Record<string, Map<string, object>> | 'unavailable' } = { byServer: {} };
+vi.mock('./seasons', async (original) => ({
+  ...(await original<typeof import('./seasons')>()),
+  seasonOneBoard: (id: string) => (seasonBoards.byServer === 'unavailable' ? 'unavailable' : (seasonBoards.byServer[id] ?? new Map())),
+}));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
@@ -194,6 +199,52 @@ describe('leaderboard without org-banned players', () => {
     boardPages([[1]], 50);
     bans.orgBannedIds.mockResolvedValue({ ids: new Set<string>(), stale: true });
     expect((await leaderboard({ metric: 'kills', period: '7d' })).stale).toBe(true);
+  });
+});
+
+describe('season two leaderboard', () => {
+  const A = '76561198000000001';
+  const B = '76561198000000002';
+  const C = '76561198000000003';
+  const line = (steamId: string, o: object) => ({ rank: 0, steamId, name: steamId.slice(-1), minutes: 0, kills: 0, deaths: 0, headshots: 0, vehicleKills: 0, killStreak: 0, matches: 0, wins: 0, losses: 0, draws: 0, cash: 0, lastSeen: null, ...o });
+  const s1 = (o: object) => ({ seconds: 0, kills: 0, deaths: 0, headshots: 0, matches: 0, wins: 0, losses: 0, draws: 0, cash: 0, ...o });
+
+  beforeEach(() => {
+    // s1 is an old server with a season-one history; s2 only ever ran in season two.
+    api.boardExport.mockImplementation(async (id: string) =>
+      fresh(
+        id === 's1'
+          ? [line(A, { minutes: 600, kills: 500, deaths: 100, lastSeen: '2026-10-15T09:00:00Z', name: 'A-old' }), line(B, { minutes: 300, kills: 90, deaths: 30 })]
+          : [line(A, { minutes: 50, kills: 40, deaths: 5, lastSeen: '2026-10-15T10:00:00Z', name: 'A-new' }), line(C, { minutes: 70, kills: 60, deaths: 10 })],
+      ),
+    );
+    seasonBoards.byServer = { s1: new Map([[A, s1({ seconds: 550 * 60, kills: 480, deaths: 90 })], [B, s1({ seconds: 290 * 60, kills: 80 })]]) };
+  });
+
+  test('each server less its season one, added up, under the 60-minute floor dropped', async () => {
+    const r = await leaderboard({ metric: 'kills', period: 's2' });
+    expect(api.boardExport).toHaveBeenCalledWith('s1', { scope: 'server', range: 'all', sort: 'playtime', minMinutes: 0 });
+    expect(api.boardExport).toHaveBeenCalledWith('s2', { scope: 'server', range: 'all', sort: 'playtime', minMinutes: 0 });
+    // A: (500-480) + 40 = 60 kills over (600-550) + 50 = 100 minutes. C: new, 60 kills in 70 minutes. B: 10 minutes this season.
+    expect(r.data.rows.map((x) => [x.steamId, x.kills, x.playtime])).toEqual([[A, 60, 6000], [C, 60, 4200]]);
+    expect(r.data.rows[0]).toMatchObject({ rank: 1, name: 'A-new', deaths: 15 });
+    expect(r.data.total).toBe(2);
+  });
+
+  test('a single server is its own board less its season one', async () => {
+    const r = await leaderboard({ metric: 'kills', period: 's2', serverId: 's1' });
+    expect(api.boardExport).toHaveBeenCalledTimes(1);
+    expect(r.data.rows).toEqual([]);
+  });
+
+  test('banned players stay off it', async () => {
+    bans.orgBannedIds.mockResolvedValue({ ids: new Set([C]), stale: false });
+    expect((await leaderboard({ metric: 'kills', period: 's2' })).data.rows.map((x) => x.steamId)).toEqual([A]);
+  });
+
+  test('without the season-one snapshot the board is unavailable, not all time', async () => {
+    seasonBoards.byServer = 'unavailable';
+    await expect(leaderboard({ metric: 'kills', period: 's2' })).rejects.toThrow(/snapshot/);
   });
 });
 

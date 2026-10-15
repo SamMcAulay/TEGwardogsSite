@@ -7,7 +7,7 @@ import { TTL, type KillKind } from './warcon/api';
 import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
-import { seasonOne, seasonView, type Season, type SeasonView } from './seasons';
+import { seasonOne, seasonOneBoard, seasonView, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
@@ -201,7 +201,7 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
 /** Rows a board page shows; the same as Warcon's own page size. */
 const BOARD_PAGE_SIZE = 50;
 
-type BoardQuery = { scope: 'server' | 'org'; range: Period; sort: Metric };
+type BoardQuery = { scope: 'server' | 'org'; range: Exclude<Period, 's2'>; sort: Metric };
 interface Kept {
   kept: WBoardRow[];
   total: number;
@@ -248,6 +248,55 @@ async function keptFromPages(anchor: string, query: BoardQuery, banned: Readonly
   return { kept, total, pageSize, stale };
 }
 
+/** The season-two board's playtime floor, as Warcon's boards. */
+const SEASON_TWO_FLOOR_MINUTES = 60;
+
+/**
+ * Season two's whole board. Warcon has no "since" range, but season two is only played on today's
+ * servers, so each one's all-time board less its season one (the snapshot) is its season two, and
+ * the network board adds the servers up. One playtime-sorted export per server, every player on it,
+ * serves every stat. Warcon caps an export at 10,000 players, which on a long-running server drops
+ * only those with the least time there all time: a few minutes, far below the 60-minute floor.
+ */
+async function keptSeasonTwo(serverIds: string[], sort: Metric, banned: ReadonlySet<string>): Promise<Kept> {
+  const exports = await Promise.all(
+    serverIds.map((id) => warcon().boardExport(id, { scope: 'server', range: 'all', sort: 'playtime', minMinutes: 0 })),
+  );
+  const sum = new Map<string, WBoardRow>();
+  let stale = false;
+  serverIds.forEach((id, i) => {
+    const before = seasonOneBoard(id);
+    if (before === 'unavailable') throw new Error('season one snapshot is not installed');
+    stale ||= exports[i].stale;
+    for (const r of exports[i].value) {
+      const b = before.get(r.steamId);
+      const less = (all: number, s1: number) => Math.max(0, all - s1);
+      const two = b
+        ? { ...r, minutes: less(r.minutes, b.seconds / 60), kills: less(r.kills, b.kills), deaths: less(r.deaths, b.deaths),
+            headshots: less(r.headshots, b.headshots), matches: less(r.matches, b.matches), wins: less(r.wins, b.wins),
+            losses: less(r.losses, b.losses), draws: less(r.draws, b.draws), cash: less(r.cash, b.cash) }
+        : r;
+      const had = sum.get(r.steamId);
+      if (!had) {
+        sum.set(r.steamId, { ...two, vehicleKills: 0, killStreak: 0 });
+        continue;
+      }
+      const newer = (Date.parse(two.lastSeen ?? '') || 0) > (Date.parse(had.lastSeen ?? '') || 0);
+      sum.set(r.steamId, {
+        ...had,
+        name: newer ? two.name : had.name, lastSeen: newer ? two.lastSeen : had.lastSeen,
+        minutes: had.minutes + two.minutes, kills: had.kills + two.kills, deaths: had.deaths + two.deaths,
+        headshots: had.headshots + two.headshots, matches: had.matches + two.matches, wins: had.wins + two.wins,
+        losses: had.losses + two.losses, draws: had.draws + two.draws, cash: had.cash + two.cash,
+      });
+    }
+  });
+  const kept = [...sum.values()]
+    .filter((r) => r.minutes >= SEASON_TWO_FLOOR_MINUTES && !banned.has(r.steamId))
+    .sort((a, b) => metricValue(sort, b) - metricValue(sort, a) || b.kills - a.kills || a.steamId.localeCompare(b.steamId));
+  return { kept, total: kept.length, pageSize: BOARD_PAGE_SIZE, stale };
+}
+
 /**
  * A leaderboard page without org-banned players, ranked 1, 2, 3 with no gaps. Built from the whole
  * board (one Warcon export, cached), so every page costs the same; falls back to Warcon's pages
@@ -259,16 +308,19 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE });
   const banned = await orgBannedIds();
   const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
-  const query: BoardQuery = { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric };
-
   let board: Kept;
-  try {
-    board = await keptFromExport(anchor, query, banned.ids);
-  } catch (e) {
-    // Only the whole board can be filtered to members; a page-by-page board would miss most of them.
-    if (q.members) throw e;
-    console.error('[board] export failed, reading pages instead:', e instanceof Error ? e.message : e);
-    board = await keptFromPages(anchor, query, banned.ids, page);
+  if (q.period === 's2') {
+    board = await keptSeasonTwo(await visibleIds(q.serverId), q.metric, banned.ids);
+  } else {
+    const query: BoardQuery = { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric };
+    try {
+      board = await keptFromExport(anchor, query, banned.ids);
+    } catch (e) {
+      // Only the whole board can be filtered to members; a page-by-page board would miss most of them.
+      if (q.members) throw e;
+      console.error('[board] export failed, reading pages instead:', e instanceof Error ? e.message : e);
+      board = await keptFromPages(anchor, query, banned.ids, page);
+    }
   }
   if (q.members) {
     const kept = board.kept.filter((r) => q.members!.has(r.steamId));

@@ -225,7 +225,9 @@ Back up `accounts.db`:
 Player profiles have All time, Season 2 and Season 1 tabs. Warcon only answers all time, so
 season one (everything before 2026-10-14 00:00 UTC) is a frozen snapshot of its database in
 `season-one.db` beside `accounts.db`, and season two is all time minus it. Without the file the
-season tabs say the stats aren't available; nothing else changes. It only needs making once,
+season tabs and the Season 2 leaderboard say the stats aren't available; nothing else changes.
+The Season 2 leaderboard is each current server's all-time board less its season one (the file's
+`boards` table), added up; play on retired servers after the cutoff isn't counted. It only needs making once,
 from a machine with the deploy key (the query reads Warcon's database and changes nothing; ~20 s):
 
 ```sh

@@ -106,8 +106,8 @@ export function createApi(
      * cost of a single 50-row page, and every page then comes from it. Warcon allows 10 exports a
      * minute per key; callers fall back to board pages when this fails.
      */
-    boardExport(serverId: string, q: { scope: 'server' | 'org'; range: Range; sort: Sort }): Promise<Cached<WBoardRow[]>> {
-      const path = `/api/servers/${enc(serverId)}/leaderboard/export${qs({ scope: q.scope, range: q.range, sort: q.sort, dir: 'desc', minMinutes: 60 })}`;
+    boardExport(serverId: string, q: { scope: 'server' | 'org'; range: Range; sort: Sort; minMinutes?: number }): Promise<Cached<WBoardRow[]>> {
+      const path = `/api/servers/${enc(serverId)}/leaderboard/export${qs({ scope: q.scope, range: q.range, sort: q.sort, dir: 'desc', minMinutes: q.minMinutes ?? 60 })}`;
       return exportCache.get(path, TTL.stats, async () => parseBoardExport(await client.text(path)), { serveStaleMs: SERVE_STALE.stats });
     },
 

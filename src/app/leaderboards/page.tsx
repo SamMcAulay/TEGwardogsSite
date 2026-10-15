@@ -135,6 +135,7 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
             <span>
               {board instanceof Error ? '' : `${int(board.data.total)} ranked · `}
               {members ? 'Members who linked Discord and Steam, with' : 'Players with'} at least an hour on the server
+              {period === 's2' && ' since 14 October 2026'}
             </span>
           }
           flush
