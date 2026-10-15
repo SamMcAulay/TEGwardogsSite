@@ -1,7 +1,7 @@
 // Tags on a server's live scoreboard. "New": a player's first session, or first 45 minutes, on
 // TEG's servers. "Blue Imposter" / "Blue Lover": Lonestar got a buff after season one, so a
-// season-one Valkyra or Manticore main now on Lonestar is an imposter, and a Lonestar main now on
-// another side is a lover. Season-one mains are a frozen snapshot (season-one-factions.json).
+// season-one Valkyra or Manticore main now on Lonestar is an imposter, and a Lonestar main is a
+// lover whichever side they're on. Season-one mains are a frozen snapshot (season-one-factions.json).
 import seasonOne from './season-one-factions.json';
 
 export type LiveTag = 'new' | 'imposter' | 'lover';
@@ -20,8 +20,8 @@ export const seasonOneMain = (steamId: string): Faction | null => MAINS.get(stea
 
 export function factionTag(playingFor: string, main: string | null): LiveTag | null {
   if (!main || !playingFor) return null;
-  if (playingFor === 'Lonestar') return main === 'Valkyra' || main === 'Manticore' ? 'imposter' : null;
-  return main === 'Lonestar' ? 'lover' : null;
+  if (main === 'Lonestar') return 'lover';
+  return playingFor === 'Lonestar' ? 'imposter' : null;
 }
 
 export const isNewPlayer = (s: { sessions: number; minutes: number }) => s.minutes < NEW_MINUTES || s.sessions <= 1;
