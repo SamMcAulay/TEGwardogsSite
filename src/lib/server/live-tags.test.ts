@@ -11,12 +11,12 @@ describe('factionTag', () => {
     expect(factionTag('Lonestar', 'Valkyra')).toBe('imposter');
     expect(factionTag('Lonestar', 'Manticore')).toBe('imposter');
   });
-  test('a Lonestar main on another side is a Blue Lover', () => {
+  test('a Lonestar main is a Blue Lover on any side', () => {
+    expect(factionTag('Lonestar', 'Lonestar')).toBe('lover');
     expect(factionTag('Valkyra', 'Lonestar')).toBe('lover');
     expect(factionTag('Manticore', 'Lonestar')).toBe('lover');
   });
-  test('playing your own main, or no main at all, is no tag', () => {
-    expect(factionTag('Lonestar', 'Lonestar')).toBeNull();
+  test('a Valkyra or Manticore main off Lonestar, or no main at all, is no tag', () => {
     expect(factionTag('Valkyra', 'Valkyra')).toBeNull();
     expect(factionTag('Valkyra', 'Manticore')).toBeNull();
     expect(factionTag('Lonestar', null)).toBeNull();
