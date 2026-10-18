@@ -28,8 +28,10 @@ for await (const line of createInterface({ input: process.stdin })) {
   if (!/^\d{17}$/.test(steamId)) throw new Error(`bad line ${n + 1}: ${line.slice(0, 40)}`);
   const p = JSON.parse(line.slice(tab + 1));
   // A profile shows five rivals; fifty is plenty to take season one off an all-time top five.
-  p.victims = p.victims.slice(0, RIVALS);
-  p.nemeses = p.nemeses.slice(0, RIVALS);
+  for (const part of [p, p.current].filter(Boolean)) {
+    part.victims = part.victims.slice(0, RIVALS);
+    part.nemeses = part.nemeses.slice(0, RIVALS);
+  }
   put.run(steamId, deflateRawSync(JSON.stringify(p)));
   for (const [serverId, ...nums] of p.servers) putBoard.run(serverId, steamId, ...nums.map((v) => Math.round(Number(v) || 0)));
   n++;

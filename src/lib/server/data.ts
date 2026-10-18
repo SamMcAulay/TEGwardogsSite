@@ -7,7 +7,7 @@ import { TTL, type KillKind } from './warcon/api';
 import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
-import { seasonOne, seasonOneBoard, seasonView, type Season, type SeasonView } from './seasons';
+import { seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
@@ -464,8 +464,7 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
   // SERVER_IDS hides servers everywhere, including a player's history on them.
   const shown = (serverId: string) => nameOf.has(serverId);
   const group = (g: { key: string; matches: number; wins: number; kills: number; deaths: number }) => ({ key: g.key, matches: g.matches, wins: g.wins, kills: g.kills, deaths: g.deaths });
-  return loaded(
-    {
+  const profile: PlayerProfile = {
       steamId,
       name: d.name,
       avatarUrl: d.steam?.avatar || null,
@@ -493,9 +492,12 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       maps: c.maps.map(group),
       factions: c.factions.map(group),
       recentKills: (d.combat?.recent ?? []).filter((k) => shown(k.serverId)).map((k) => killRow(k, k.serverId, shortNameOf(k.serverName))),
-    },
-    dossier.stale || career.stale,
-  );
+  };
+  // Warcon no longer counts the deleted retired servers: put their season one back into all time.
+  const s1 = seasonOne(steamId);
+  const full = s1 === 'unavailable' ? profile : withRetired(profile, s1);
+  if (full !== profile) [full.victims, full.nemeses] = await Promise.all([withAvatars(full.victims), withAvatars(full.nemeses)]);
+  return loaded(full, dossier.stale || career.stale);
 }
 
 /** One season's slice of a profile (see seasons.ts); 'unavailable' without the season-one snapshot. */
