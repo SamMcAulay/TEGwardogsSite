@@ -310,7 +310,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
 
         <Panel title="Busiest times" action="Average players · last 30 days">
           <Section loaded={history}>
-            {(h) => <BusyTimes points={h.points} bucketSeconds={h.bucketSeconds} />}
+            {(h) => <BusyTimes month={h.month} week={h.week} />}
           </Section>
         </Panel>
 
