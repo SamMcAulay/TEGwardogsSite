@@ -38,15 +38,11 @@ export interface ProfileCustom {
 }
 
 /**
- * The site's accent tokens (globals.css) re-pointed at a profile colour, for a wrapper around that
- * profile page: stat highlights, meters, badges, link hovers and accent buttons take the colour.
+ * The site's accent tokens re-pointed at a profile colour, for a wrapper around that profile page:
+ * stat highlights, meters, badges, link hovers and accent buttons take the colour. The wrapper also
+ * needs the `profile-theme` class; globals.css does the re-pointing, per light or dark.
  * Every palette colour is bright enough for the site's dark accent ink on it.
  */
 export function profileThemeStyle(hex: string): CSSProperties {
-  return {
-    '--accent': hex,
-    '--accent-soft': `color-mix(in srgb, ${hex} 12%, transparent)`,
-    '--accent-ink': '#0b0d10',
-    '--line-strong': `color-mix(in srgb, ${hex} 28%, #29313c)`,
-  } as CSSProperties;
+  return { '--profile': hex } as CSSProperties;
 }

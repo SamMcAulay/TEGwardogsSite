@@ -2,9 +2,11 @@
 
 /*
  * Brand tokens. Everything on the site reads colour from here, so re-skinning to a different
- * palette is a change to this block only.
+ * palette is a change to these blocks only. Dark is the default; <html data-theme> picks (see
+ * src/lib/theme.ts), and a data-theme on any element re-themes just that element (the picker's previews).
  */
-:root {
+:root,
+[data-theme='dark'] {
   --bg: #07090c;
   --surface: #0d1015;
   --surface-2: #12161c;
@@ -39,6 +41,58 @@
   --pink-2: #ffb3dd;
   --pink-3: #d68cff;
   color-scheme: dark;
+}
+
+/* Light: the same roles, darkened where colour sits on white so text keeps its contrast. */
+[data-theme='light'] {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-3: #e7eaef;
+  --line: #dfe3e9;
+  --line-strong: #c6cdd6;
+  --text: #11151b;
+  --muted: #4f5a68;
+  --dim: #6b7583;
+  --accent: #b87700;
+  --accent-ink: #ffffff;
+  --accent-soft: rgb(184 119 0 / 0.1);
+  --good: #1e9a5d;
+  --bad: #d4343a;
+  --valkyra: #c94a4a;
+  --lonestar: #3f7cc4;
+  --manticore: #4f9a3a;
+  --premium: #b8860b;
+  --premium-hi: #dcaa3c;
+  --premium-deep: #7a5208;
+  --verified: #2f6fd0;
+  --pearl-1: #2f6fd0;
+  --pearl-2: #7258d6;
+  --pearl-3: #1a9583;
+  --aurora-1: #0f9e6e;
+  --aurora-2: #0a8ab3;
+  --aurora-3: #6a4fe0;
+  --pink-1: #d6337f;
+  --pink-2: #c2408a;
+  --pink-3: #9d45d0;
+  color-scheme: light;
+}
+
+/*
+ * A Premium or staff profile's colour (--profile, set by profileThemeStyle) re-points the accent
+ * tokens. On light it's darkened so it still reads as text on white.
+ */
+.profile-theme {
+  --accent: var(--profile);
+  --accent-soft: color-mix(in srgb, var(--profile) 12%, transparent);
+  --accent-ink: #0b0d10;
+  --line-strong: color-mix(in srgb, var(--profile) 28%, #29313c);
+}
+[data-theme='light'] .profile-theme {
+  --accent: color-mix(in srgb, var(--profile) 62%, #000);
+  --accent-soft: color-mix(in srgb, var(--profile) 14%, transparent);
+  --accent-ink: #ffffff;
+  --line-strong: color-mix(in srgb, var(--profile) 40%, #c6cdd6);
 }
 
 @theme inline {
@@ -115,8 +169,8 @@ body {
   /* Hairline grid used behind hero sections. */
   .grid-bg {
     background-image:
-      linear-gradient(to right, rgb(255 255 255 / 0.028) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(255 255 255 / 0.028) 1px, transparent 1px);
+      linear-gradient(to right, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px);
     background-size: 48px 48px;
   }
 
@@ -268,6 +322,9 @@ a:hover > * > .name-pink,
 a:hover > * > .name-premium,
 a:hover > * > .name-verified {
   filter: brightness(1.25);
+}
+[data-theme='light'] :is(.link:hover, a:hover) :is(.name-aurora, .name-pink, .name-premium, .name-verified) {
+  filter: brightness(0.85);
 }
 
 @keyframes name-shine {
