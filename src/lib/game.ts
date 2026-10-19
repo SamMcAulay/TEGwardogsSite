@@ -68,6 +68,30 @@ export function rotationView(
   };
 }
 
+/** King of the Hill's winning score. The server doesn't report it; every finished round has ended at 100. */
+export const KOTH_CAP = 100;
+
+/**
+ * Finished rounds ran about 1.1x (points scored x scoreTick): the hill sits contested or empty some of
+ * the time (100/83/67 took 1h52m and 100/46/37 took 1h21m at a 24 s tick, ~26.7 s a point).
+ */
+const TICK_SLACK = 1.1;
+
+/**
+ * About how long until someone reaches the cap, in seconds. Only the team holding the hill scores, so
+ * points arrive at about one per tick across all teams and the leader takes its share of them. The
+ * share is smoothed so a 3-0 start doesn't read as a sure thing. Null before anyone has scored.
+ */
+export function roundEta(scores: number[], tickSeconds: number | null, cap: number | null): number | null {
+  if (!tickSeconds || tickSeconds <= 0 || !cap || !scores.length) return null;
+  const lead = Math.max(...scores);
+  const total = scores.reduce((a, s) => a + s, 0);
+  if (total <= 0) return null;
+  if (lead >= cap) return 0;
+  const share = (lead + 1) / (total + scores.length);
+  return Math.round(((cap - lead) / share) * tickSeconds * TICK_SLACK);
+}
+
 export const FACTIONS: Record<string, { color: string; short: string }> = {
   Valkyra: { color: '#D86060', short: 'VAL' },
   Lonestar: { color: '#5B95D8', short: 'LON' },

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
-import { ago, clock, metres } from '@/lib/format';
+import { ago, clock, duration, metres } from '@/lib/format';
 import { causeInfo, factionColor, lightingName, mapArt, mapName, REGION_NAMES, type RotationStop, rotationView } from '@/lib/game';
 import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
 
@@ -243,7 +243,7 @@ function WeatherIcon({ weather }: { weather: Weather }) {
 
 const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next' } as const;
 
-function RotationCard({ stop, role }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL }) {
+function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL; eta?: number | null }) {
   const weather = weatherOf(stop?.lighting ?? null);
   const art = stop && mapArt(stop.map, stop.lighting);
   const now = role === 'now';
@@ -268,6 +268,7 @@ function RotationCard({ stop, role }: { stop: RotationStop | null; role: keyof t
           )}
         >
           {STOP_LABEL[role]}
+          {eta != null && <span className="normal-case tracking-normal"> · ≈{eta < 120 ? '1m' : duration(eta)}</span>}
         </span>
         {stop?.slot != null && (
           <span className="num absolute top-2 right-2 font-mono text-[10px] text-muted">#{stop.slot + 1}</span>
@@ -294,7 +295,8 @@ function RotationCard({ stop, role }: { stop: RotationStop | null; role: keyof t
 }
 
 /** Previous, current and next map, with where the server is in the rotation. */
-export function MapRotation({ status }: { status: ServerStatus }) {
+/** eta: rough seconds until the round ends (roundEta), shown on the next map. */
+export function MapRotation({ status, eta }: { status: ServerStatus; eta?: number | null }) {
   const view = rotationView(status);
   if (!view) return null;
   const { prev, now, next, length } = view;
@@ -303,7 +305,7 @@ export function MapRotation({ status }: { status: ServerStatus }) {
       <div className="grid grid-cols-[1fr_1.35fr_1fr] items-end gap-2 sm:gap-3">
         <RotationCard stop={prev} role="prev" />
         <RotationCard stop={now} role="now" />
-        <RotationCard stop={next} role="next" />
+        <RotationCard stop={next} role="next" eta={eta} />
       </div>
       <ol className="mt-4 flex gap-1" aria-label="Rotation">
         {Array.from({ length }, (_, i) => (
