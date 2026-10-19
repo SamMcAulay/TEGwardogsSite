@@ -154,7 +154,9 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   const st = server.status;
   // The server doesn't report match time any more; the round in progress started when its match did.
   const liveRound = server.online && !(matches instanceof Error) ? matches.data.rows.find((m) => m.endedAt == null) : undefined;
-  const elapsed = st?.matchSeconds ?? (liveRound ? now - liveRound.startedAt : null);
+  // An empty server's round sits open for hours with nobody scoring: no clock for that.
+  const waiting = !!st && server.playerCount === 0 && st.factionScores.every((f) => f.score === 0);
+  const elapsed = waiting ? null : (st?.matchSeconds ?? (liveRound ? now - liveRound.startedAt : null));
   const eta = st ? roundEta(st.factionScores.map((f) => f.score), st.scoreTick, st.scoreCap) : null;
   const factions = st?.factionScores.map((f) => f.name) ?? ['Valkyra', 'Lonestar', 'Manticore'];
 
@@ -211,7 +213,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           <Stat
             label="Match time"
             value={elapsed != null ? clock(elapsed) : '—'}
-            sub={eta != null ? `≈ ${eta < 120 ? 'a minute or two' : duration(eta)} left` : 'King of the Hill'}
+            sub={waiting ? 'Waiting for players' : eta != null ? `≈ ${eta < 120 ? 'a minute or two' : duration(eta)} left` : 'King of the Hill'}
           />
           <Section loaded={totals}>
             {(t) => (
