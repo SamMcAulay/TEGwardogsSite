@@ -2,7 +2,8 @@
 // snapshot of its database (DATA_DIR/season-one.db, built by scripts/season-one.sql) and season
 // two is all time minus season one. Totals, maps, factions and servers subtract exactly; weapons
 // and rivals can only be taken off Warcon's all-time top lists; a season-two best (longest kill,
-// kill streak) is only known when it beat season one's.
+// kill streak) is only known when it beat season one's. Warcon's all time also leaves out servers
+// deleted from it (the retired ones, 16 October 2026), so withRetired puts their season one back first.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,14 +21,21 @@ export const parseSeason = (v: unknown): Season => (SEASONS.includes(v as Season
 type Group = [key: string, matches: number, wins: number, kills: number, deaths: number];
 type Round = [matchId: number, serverId: string, map: string | null, startedAt: number, endedAt: number | null, faction: string | null, result: PlayerMatchRow['result'], kills: number, deaths: number, seconds: number];
 
-/** One player's season one, as scripts/season-one.sql writes it. */
-export interface SeasonOne {
+/** Season one's numbers on some set of servers. */
+interface SeasonOnePart {
   kills: number; deaths: number; headshots: number; seconds: number; matches: number; wins: number; losses: number; draws: number;
   vehicleKills: number; longest: number | null; killStreak: number; teamKills: number; suicides: number;
-  maps: Group[]; factions: Group[]; rounds: Round[];
+  maps: Group[]; factions: Group[];
   weapons: [cause: string, kills: number][];
   victims: [steamId: string, name: string, kills: number][];
   nemeses: [steamId: string, name: string, deaths: number][];
+}
+
+/** One player's season one, as scripts/season-one.sql writes it. */
+export interface SeasonOne extends SeasonOnePart {
+  rounds: Round[];
+  /** the same on the servers Warcon still had when the snapshot was made; absent in older files */
+  current?: SeasonOnePart;
   /** then deaths, headshots, matches, wins, losses, draws, cash: the board's numbers (see SeasonOneBoardRow) */
   servers: [serverId: string, seconds: number, kills: number, ...rest: number[]][];
 }
@@ -110,6 +118,58 @@ const EMPTY: SeasonOne = {
 
 const group = ([key, matches, wins, kills, deaths]: Group) => ({ key, matches, wins, kills, deaths });
 const minus = (a: number, b: number) => Math.max(0, a - b);
+
+/**
+ * All time with deleted servers' season one put back: Warcon's numbers plus what season one had
+ * beyond the servers Warcon still counts. Unchanged without the snapshot's `current` part.
+ */
+export function withRetired(player: PlayerProfile, s1: SeasonOne | null): PlayerProfile {
+  const cur = s1?.current;
+  if (!s1 || !cur) return player;
+  const t = player.totals;
+  const gone = (k: keyof SeasonOnePart) => minus(s1[k] as number, cur[k] as number);
+  const addGroups = <T extends { key: string; matches: number; wins: number; kills: number; deaths: number }>(rows: T[], all: Group[], kept: Group[]) => {
+    const keptBy = new Map(kept.map((g) => [g[0], g]));
+    const out = new Map<string, { key: string; matches: number; wins: number; kills: number; deaths: number }>(rows.map((r) => [r.key, { ...r }]));
+    for (const [key, matches, wins, kills, deaths] of all) {
+      const k = keptBy.get(key);
+      const extra = { matches: minus(matches, k?.[1] ?? 0), wins: minus(wins, k?.[2] ?? 0), kills: minus(kills, k?.[3] ?? 0), deaths: minus(deaths, k?.[4] ?? 0) };
+      if (!extra.matches && !extra.kills && !extra.deaths) continue;
+      const r = out.get(key) ?? { key, matches: 0, wins: 0, kills: 0, deaths: 0 };
+      out.set(key, { ...r, matches: r.matches + extra.matches, wins: r.wins + extra.wins, kills: r.kills + extra.kills, deaths: r.deaths + extra.deaths });
+    }
+    return [...out.values()].sort((a, b) => b.matches - a.matches || a.key.localeCompare(b.key));
+  };
+  const addCounts = (rows: Map<string, number>, all: [string, number][], kept: [string, number][]) => {
+    const keptBy = new Map(kept);
+    for (const [key, n] of all) {
+      const extra = minus(n, keptBy.get(key) ?? 0);
+      if (extra) rows.set(key, (rows.get(key) ?? 0) + extra);
+    }
+    return [...rows].sort((a, b) => b[1] - a[1]);
+  };
+  const rivals = (rows: Rival[], all: [string, string, number][], kept: [string, string, number][]): Rival[] => {
+    const known = new Map(rows.map((r) => [r.steamId, r]));
+    for (const [id, name] of all) if (!known.has(id)) known.set(id, { steamId: id, name, avatarUrl: null, count: 0 });
+    const counts = addCounts(new Map(rows.map((r) => [r.steamId, r.count])), all.map(([id, , n]) => [id, n]), kept.map(([id, , n]) => [id, n]));
+    return counts.slice(0, 5).map(([id, count]) => ({ ...known.get(id)!, count }));
+  };
+  return {
+    ...player,
+    totals: {
+      kills: t.kills + gone('kills'), deaths: t.deaths + gone('deaths'), headshots: t.headshots + gone('headshots'),
+      suicides: t.suicides + gone('suicides'), teamkills: t.teamkills + gone('teamKills'), playtime: t.playtime + gone('seconds'),
+      longest: Math.max(t.longest, s1.longest ?? 0), matches: t.matches + gone('matches'), wins: t.wins + gone('wins'),
+      losses: t.losses + gone('losses'), draws: t.draws + gone('draws'), vehicleKills: t.vehicleKills + gone('vehicleKills'),
+      killStreak: Math.max(t.killStreak, s1.killStreak),
+    },
+    weapons: addCounts(new Map(player.weapons.map((w) => [w.cause, w.kills])), s1.weapons, cur.weapons).map(([cause, kills]) => ({ cause, kills })),
+    victims: rivals(player.victims, s1.victims, cur.victims),
+    nemeses: rivals(player.nemeses, s1.nemeses, cur.nemeses),
+    maps: addGroups(player.maps, s1.maps, cur.maps),
+    factions: addGroups(player.factions, s1.factions, cur.factions),
+  };
+}
 
 /** servers: the visible ones, full and short names; others (retired servers) are left out. */
 export function seasonView(

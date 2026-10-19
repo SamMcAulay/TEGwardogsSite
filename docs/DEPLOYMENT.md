@@ -227,7 +227,13 @@ season one (everything before 2026-10-14 00:00 UTC) is a frozen snapshot of its 
 `season-one.db` beside `accounts.db`, and season two is all time minus it. Without the file the
 season tabs and the Season 2 leaderboard say the stats aren't available; nothing else changes.
 The Season 2 leaderboard is each current server's all-time board less its season one (the file's
-`boards` table), added up; play on retired servers after the cutoff isn't counted. It only needs making once,
+`boards` table), added up; play on retired servers after the cutoff isn't counted.
+
+Warcon leaves servers deleted from it out of a player's all time (the retired ones were deleted on
+16 October 2026). So each player's entry also holds `current`, season one on the servers Warcon
+still had when the file was made: profiles show all time as Warcon's numbers plus season one
+beyond `current`, and season two as all time less season one. **Rebuild the file whenever a server
+is deleted from Warcon**, or season two on profiles drops towards zero again. It is otherwise made once,
 from a machine with the deploy key (the query reads Warcon's database and changes nothing; ~20 s):
 
 ```sh

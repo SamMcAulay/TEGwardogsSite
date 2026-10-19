@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { afterAll, describe, expect, test } from 'vitest';
-import { openSeasonOne, parseSeason, SEASON_TWO_START, seasonOne, seasonView, type SeasonOne } from './seasons';
+import { openSeasonOne, parseSeason, SEASON_TWO_START, seasonOne, seasonView, withRetired, type SeasonOne } from './seasons';
 import type { PlayerProfile } from './views';
 
 const S2 = SEASON_TWO_START;
@@ -107,6 +107,50 @@ describe('season one: the snapshot', () => {
     const none = seasonView(player(), null, 's1', servers);
     expect(none.profile.totals.kills).toBe(0);
     expect(none.profile.matches).toEqual([]);
+  });
+});
+
+describe('servers deleted from Warcon', () => {
+  // Warcon now counts eu2 only: 'old-eu1' was deleted, taking its season one out of all time.
+  // Season one had 100 kills, 75 of them on eu2; all time on eu2 is 120 (so 45 in season two).
+  const s1: SeasonOne = {
+    ...one,
+    current: {
+      kills: 75, deaths: 50, headshots: 15, seconds: 25_000, matches: 12, wins: 6, losses: 6, draws: 0, vehicleKills: 4,
+      longest: 300, killStreak: 7, teamKills: 1, suicides: 1,
+      maps: [['Ozeti', 12, 6, 75, 50]], factions: [['Valkyra', 12, 6, 75, 50]],
+      weapons: [['AK', 60], ['Knife', 15]], victims: [['v1', 'V1', 7], ['v2', 'V2', 1]], nemeses: [['n1', 'N1', 2]],
+    },
+  };
+  const warcon = (): PlayerProfile => {
+    const p = player();
+    return {
+      ...p,
+      totals: { ...p.totals, kills: 120, deaths: 70, headshots: 25, suicides: 3, teamkills: 1, playtime: 31_000, longest: 350, matches: 17, wins: 10, losses: 7, vehicleKills: 4 },
+      weapons: [{ cause: 'AK', kills: 90 }, { cause: 'Knife', kills: 15 }],
+      maps: [{ key: 'Ozeti', matches: 17, wins: 10, kills: 120, deaths: 70 }],
+      factions: [{ key: 'Lonestar', matches: 5, wins: 4, kills: 45, deaths: 20 }, { key: 'Valkyra', matches: 12, wins: 6, kills: 75, deaths: 50 }],
+    };
+  };
+  const all = withRetired(warcon(), s1);
+
+  test('all time gets the deleted servers back', () => {
+    expect(all.totals).toMatchObject({ kills: 145, deaths: 90, headshots: 30, playtime: 36_000, matches: 20, wins: 12, losses: 8, suicides: 3, teamkills: 2, longest: 400 });
+    expect(all.weapons).toEqual([{ cause: 'AK', kills: 110 }, { cause: 'Knife', kills: 20 }, { cause: 'Pistol', kills: 1 }]);
+    expect(all.factions).toEqual([{ key: 'Valkyra', matches: 15, wins: 8, kills: 100, deaths: 70 }, { key: 'Lonestar', matches: 5, wins: 4, kills: 45, deaths: 20 }]);
+    expect(all.victims.map((r) => [r.steamId, r.count])).toEqual([['v1', 13], ['v2', 4]]);
+  });
+
+  test('season two is only what was played since, not zero', () => {
+    const v = seasonView(all, s1, 's2', servers);
+    expect(v.profile.totals).toMatchObject({ kills: 45, deaths: 20, headshots: 10, playtime: 6_000, matches: 5, wins: 4, losses: 1 });
+    expect(v.profile.factions).toEqual([{ key: 'Lonestar', matches: 5, wins: 4, kills: 45, deaths: 20 }]);
+    expect(v.profile.weapons).toEqual([{ cause: 'AK', kills: 30 }]);
+  });
+
+  test('an older snapshot without the current part changes nothing', () => {
+    expect(withRetired(warcon(), one)).toEqual(warcon());
+    expect(withRetired(warcon(), null)).toEqual(warcon());
   });
 });
 

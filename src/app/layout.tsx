@@ -75,6 +75,9 @@ function linkingOn(): boolean {
   }
 }
 
+/** A heads-up shown under the header on every page; null takes it down. */
+const SITE_NOTICE: string | null = null;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
@@ -105,6 +108,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </Container>
         </header>
+        {SITE_NOTICE && (
+          <div role="note" className="border-b border-accent/30 bg-accent-soft">
+            <Container className="py-2 text-[13px] leading-snug text-text/90">
+              <span className="mr-2 font-display text-xs font-semibold uppercase tracking-[0.1em] text-accent">Heads up</span>
+              {SITE_NOTICE}
+            </Container>
+          </div>
+        )}
         <main id="main" className="flex-1">
           {children}
         </main>
