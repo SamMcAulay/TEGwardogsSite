@@ -14,6 +14,14 @@ export function withParams(
   return s ? `${path}?${s}` : path;
 }
 
+/**
+ * A server's address: its short name, lower case, letters and digits only. "EU#1 - TEG.gg" -> "eu1",
+ * "NA-East" -> "naeast". Takes a full or short Warcon name.
+ */
+export const serverSlug = (name: string) => name.split(' - ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+
+export const serverPath = (name: string) => `/servers/${serverSlug(name)}`;
+
 /** A page number from the query: floored, at least 1, at most 1000 (pages clamp further to their count). */
 export function pageParam(v: unknown): number {
   const n = Math.floor(Number(v));

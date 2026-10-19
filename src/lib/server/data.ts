@@ -1,5 +1,6 @@
 // Page-facing reads: Warcon's answers turned into the view types in views.ts. Every function
 // is async and says whether its data is stale and which servers failed (Loaded<T>).
+import { serverSlug } from '@/lib/url';
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
@@ -56,6 +57,7 @@ function serverRow(s: { id: string; name: string }, live: WLive | null, unknown 
   const shortName = shortNameOf(s.name);
   return {
     id: s.id,
+    slug: serverSlug(s.name),
     name: s.name,
     shortName,
     region: regionOf(shortName),
@@ -70,6 +72,7 @@ function serverRow(s: { id: string; name: string }, live: WLive | null, unknown 
       players: { current: st.playerCount, max: st.maxPlayers },
       scoreCap: st.scoreCap,
       factionScores: st.scores,
+      rotation: { now: st.rotationNow ?? null, next: st.rotationNext ?? null },
     },
     players: (live?.players ?? []).map((p) => ({ name: p.name, steamId: p.steamId, faction: p.faction ?? '', kills: p.kills, deaths: p.deaths, cash: p.cash })),
     playerCount: st?.playerCount ?? 0,
@@ -85,10 +88,12 @@ export async function getServers(): Promise<Loaded<ServerRow[]>> {
   return loaded(rows, stale || r.stale, r.failed);
 }
 
-export async function getServer(id: string): Promise<Loaded<ServerRow> | null> {
+/** By page address ("eu1") or Warcon id; the id still works so older links keep resolving. */
+export async function getServer(slugOrId: string): Promise<Loaded<ServerRow> | null> {
   const { list } = await serverList();
-  const s = list.find((x) => x.id === id);
+  const s = list.find((x) => serverSlug(x.name) === slugOrId) ?? list.find((x) => x.id === slugOrId);
   if (!s) return null;
+  const id = s.id;
   try {
     const live = await warcon().live(id);
     return loaded(serverRow(s, live.value), live.stale);

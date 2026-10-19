@@ -11,6 +11,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const servers = await getServers().then((l) => l.data, () => []);
   return [
     ...PAGES.map((p) => ({ url: siteUrl + p, changeFrequency: 'hourly' as const })),
-    ...servers.map((s) => ({ url: `${siteUrl}/servers/${s.id}`, changeFrequency: 'always' as const })),
+    ...servers.map((s) => ({ url: `${siteUrl}/servers/${s.slug}`, changeFrequency: 'always' as const })),
   ];
 }

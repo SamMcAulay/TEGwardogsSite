@@ -37,6 +37,9 @@ const live = z.object({
       playerCount: z.number(),
       maxPlayers: z.number(),
       scoreCap: z.number().nullable(),
+      /** slots in the map rotation; -1 now: an admin put on a map that isn't in it */
+      rotationNow: z.number().int().nullable().optional(),
+      rotationNext: z.number().int().nullable().optional(),
       scores: z.array(z.object({ name: z.string(), colorHex: z.string(), score: z.number() })),
     })
     .nullable(),

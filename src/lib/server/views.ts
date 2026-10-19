@@ -37,6 +37,8 @@ export interface ServerStatus {
   /** points to win the round, when Warcon reports one */
   scoreCap: number | null;
   factionScores: FactionScore[];
+  /** rotation slots (0-based) as the server reports them; null when it doesn't */
+  rotation: { now: number | null; next: number | null };
 }
 
 /** No ping: the public site never shows one. */
@@ -44,6 +46,8 @@ export interface LivePlayer { name: string; steamId: string; faction: string; ki
 
 export interface ServerRow {
   id: string;
+  /** the page address, from the short name: "eu1", "naeast" (lib/url.ts) */
+  slug: string;
   /** Warcon's full name */
   name: string;
   /** the part before the first " - ", e.g. "EU#1" */

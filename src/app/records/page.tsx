@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { serverPath } from '@/lib/url';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
 import { Container, Empty, PageHeader, Panel, RankCell } from '@/components/ui';
@@ -73,7 +74,7 @@ export default async function RecordsPage() {
                           <td className="hidden max-w-48 truncate text-muted md:table-cell">{s.victim}</td>
                           <td className="r hidden text-dim sm:table-cell">
                             {date(s.ts)} ·{' '}
-                            <Link prefetch={false} href={`/servers/${s.serverId}`} className="link text-dim">
+                            <Link prefetch={false} href={serverPath(s.serverName)} className="link text-dim">
                               {s.serverName}
                             </Link>
                           </td>
