@@ -1,12 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { NavLinks, SearchBox } from '@/components/client';
+import { ThemePrompt, ThemeToggle } from '@/components/theme';
 import { Container, StatusDot } from '@/components/ui';
 import { int } from '@/lib/format';
 import { safe } from '@/components/section';
 import { accountsEnv } from '@/lib/server/accounts/env';
 import { getServers } from '@/lib/server/data';
+import { parseTheme, THEME_CHROME, THEME_COOKIE } from '@/lib/theme';
 import './globals.css';
 
 // Every page reads live data from Warcon (cached briefly in memory).
@@ -28,7 +31,14 @@ export const metadata: Metadata = {
   metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined,
 };
 
-export const viewport: Viewport = { themeColor: '#07090c' };
+/** The visitor's saved theme, or null before they've picked one. */
+async function savedTheme() {
+  return parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  return { themeColor: THEME_CHROME[(await savedTheme()) ?? 'dark'] };
+}
 
 function Logo() {
   return (
@@ -78,9 +88,10 @@ function linkingOn(): boolean {
 /** A heads-up shown under the header on every page; null takes it down. */
 const SITE_NOTICE: string | null = null;
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = await savedTheme();
   return (
-    <html lang="en" className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
+    <html lang="en" data-theme={theme ?? 'dark'} className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
       <body className="flex min-h-screen flex-col">
         <a
           href="#main"
@@ -106,8 +117,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 </Link>
               )}
             </div>
+            {/* Always on show, mobile included: sits beside the menu button there. */}
+            <ThemeToggle initial={theme ?? 'dark'} className="-ml-3" />
           </Container>
         </header>
+        {!theme && <ThemePrompt />}
         {SITE_NOTICE && (
           <div role="note" className="border-b border-accent/30 bg-accent-soft">
             <Container className="py-2 text-[13px] leading-snug text-text/90">

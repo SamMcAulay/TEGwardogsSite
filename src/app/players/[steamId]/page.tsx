@@ -107,7 +107,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
 
   return (
     // A Premium or staff member's colour re-themes their whole profile, not just the header.
-    <div style={colour ? profileThemeStyle(colour) : undefined}>
+    <div className={colour ? 'profile-theme' : undefined} style={colour ? profileThemeStyle(colour) : undefined}>
       <header className="grid-bg relative border-b border-line" style={colour ? { borderBottomColor: colour } : undefined}>
         {colour && (
           // A custom profile colour washes the header from the left.
