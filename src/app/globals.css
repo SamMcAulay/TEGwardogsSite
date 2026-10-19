@@ -40,6 +40,10 @@
   --pink-1: #ff6fb5;
   --pink-2: #ffb3dd;
   --pink-3: #d68cff;
+  /* time-of-day tints behind the map rotation banners; the same in both themes */
+  --sky-rain: #5f6f7d;
+  --sky-dawn: #e0874a;
+  --sky-clear: #4f98d8;
   color-scheme: dark;
 }
 
@@ -218,6 +222,29 @@ body {
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* Map rotation banners: a sky for the time of day, fading into the card. */
+.sky-rain,
+.sky-dawn,
+.sky-clear {
+  background: linear-gradient(170deg, color-mix(in srgb, var(--sky) 55%, var(--surface-3)), var(--surface-2) 85%);
+}
+.sky-rain {
+  --sky: var(--sky-rain);
+}
+.sky-dawn {
+  --sky: var(--sky-dawn);
+}
+.sky-clear {
+  --sky: var(--sky-clear);
+}
+.rain {
+  background-image: repeating-linear-gradient(
+    105deg,
+    transparent 0 7px,
+    color-mix(in srgb, var(--text) 9%, transparent) 7px 8px
+  );
 }
 
 @keyframes pulse-dot {

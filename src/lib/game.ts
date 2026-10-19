@@ -13,6 +13,55 @@ export function mapName(map: string | null | undefined): string {
   return MAPS[map] ?? map;
 }
 
+/**
+ * TEG's map rotation, the same on every server, in the order the Warcon panel lists it. The server
+ * only reports slot numbers, so a change to the rotation in the panel needs this list changed too.
+ */
+export const ROTATION: readonly { map: string; lighting: string }[] = [
+  { map: 'Bakurani', lighting: 'DayLateRain' },
+  { map: 'Ozeti', lighting: 'DayStartClear' },
+  { map: 'Zestafona', lighting: 'DayClear' },
+  { map: 'Ozeti', lighting: 'DayLateRain' },
+  { map: 'Zestafona', lighting: 'DayStartClear' },
+  { map: 'Bakurani', lighting: 'DayClear' },
+  { map: 'Zestafona', lighting: 'DayLateRain' },
+  { map: 'Bakurani', lighting: 'DayStartClear' },
+  { map: 'Ozeti', lighting: 'DayClear' },
+];
+
+export interface RotationStop {
+  map: string;
+  lighting: string | null;
+  /** 0-based slot in ROTATION; null: not a rotation map (an admin's pick) */
+  slot: number | null;
+}
+
+/**
+ * The previous, current and next maps. Current is always what the server says is on, even if the
+ * panel's rotation has drifted from ROTATION; previous and next come from the slot numbers.
+ * Null when the server reports no rotation at all.
+ */
+export function rotationView(
+  live: { map: string; lighting: string | null; rotation: { now: number | null; next: number | null } },
+  list: readonly { map: string; lighting: string }[] = ROTATION,
+): { prev: RotationStop | null; now: RotationStop; next: RotationStop | null; length: number } | null {
+  const n = list.length;
+  const { now, next } = live.rotation;
+  const inList = (i: number | null): i is number => i != null && Number.isInteger(i) && i >= 0;
+  if (!n || (!inList(now) && !inList(next))) return null;
+  const at = (i: number): RotationStop => {
+    const slot = ((i % n) + n) % n;
+    return { ...list[slot], slot };
+  };
+  return {
+    // Off rotation, nothing says which slot came before.
+    prev: inList(now) ? at(now - 1) : null,
+    now: { map: live.map, lighting: live.lighting, slot: inList(now) ? now % n : null },
+    next: inList(next) ? at(next) : inList(now) ? at(now + 1) : null,
+    length: n,
+  };
+}
+
 export const FACTIONS: Record<string, { color: string; short: string }> = {
   Valkyra: { color: '#D86060', short: 'VAL' },
   Lonestar: { color: '#5B95D8', short: 'LON' },

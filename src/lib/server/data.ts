@@ -70,6 +70,7 @@ function serverRow(s: { id: string; name: string }, live: WLive | null, unknown 
       players: { current: st.playerCount, max: st.maxPlayers },
       scoreCap: st.scoreCap,
       factionScores: st.scores,
+      rotation: { now: st.rotationNow ?? null, next: st.rotationNext ?? null },
     },
     players: (live?.players ?? []).map((p) => ({ name: p.name, steamId: p.steamId, faction: p.faction ?? '', kills: p.kills, deaths: p.deaths, cash: p.cash })),
     playerCount: st?.playerCount ?? 0,

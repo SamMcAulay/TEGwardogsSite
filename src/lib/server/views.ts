@@ -37,6 +37,8 @@ export interface ServerStatus {
   /** points to win the round, when Warcon reports one */
   scoreCap: number | null;
   factionScores: FactionScore[];
+  /** rotation slots (0-based) as the server reports them; null when it doesn't */
+  rotation: { now: number | null; next: number | null };
 }
 
 /** No ping: the public site never shows one. */

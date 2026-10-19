@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mainFaction } from './game';
+import { mainFaction, ROTATION, rotationView } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
@@ -13,5 +13,58 @@ describe('mainFaction', () => {
     expect(mainFaction([])).toBeNull();
     expect(mainFaction([{ key: 'Valkyra', matches: 0 }])).toBeNull();
     expect(mainFaction([{ key: 'Pirates', matches: 90 }, { key: 'Valkyra', matches: 10 }])).toBeNull();
+  });
+});
+
+describe('rotationView', () => {
+  const list = [
+    { map: 'A', lighting: 'DayClear' },
+    { map: 'B', lighting: 'DayLateRain' },
+    { map: 'C', lighting: 'DayStartClear' },
+  ];
+  const live = (now: number | null, next: number | null, map = 'B', lighting: string | null = 'DayLateRain') => ({
+    map,
+    lighting,
+    rotation: { now, next },
+  });
+
+  it('reads previous, current and next from the slots', () => {
+    expect(rotationView(live(1, 2), list)).toEqual({
+      prev: { map: 'A', lighting: 'DayClear', slot: 0 },
+      now: { map: 'B', lighting: 'DayLateRain', slot: 1 },
+      next: { map: 'C', lighting: 'DayStartClear', slot: 2 },
+      length: 3,
+    });
+  });
+
+  it('wraps round at both ends', () => {
+    const v = rotationView(live(0, 1, 'A', 'DayClear'), list)!;
+    expect(v.prev?.slot).toBe(2);
+    expect(rotationView(live(2, 0, 'C', 'DayStartClear'), list)!.next?.slot).toBe(0);
+  });
+
+  it("keeps the server's own map as current", () => {
+    expect(rotationView(live(0, 1, 'Ozeti', 'DayClear'), list)!.now).toEqual({ map: 'Ozeti', lighting: 'DayClear', slot: 0 });
+  });
+
+  it('shows an off-rotation map with no previous', () => {
+    const v = rotationView(live(-1, 1, 'Z', null), list)!;
+    expect(v.prev).toBeNull();
+    expect(v.now.slot).toBeNull();
+    expect(v.next?.map).toBe('B');
+  });
+
+  it('falls back to the slot after current when next is missing', () => {
+    expect(rotationView(live(1, null), list)!.next?.slot).toBe(2);
+  });
+
+  it('is null without any rotation data', () => {
+    expect(rotationView(live(null, null), list)).toBeNull();
+    expect(rotationView(live(-1, -1), list)).toBeNull();
+  });
+
+  it('lists TEG’s nine-map rotation', () => {
+    expect(ROTATION).toHaveLength(9);
+    expect(ROTATION[0]).toEqual({ map: 'Bakurani', lighting: 'DayLateRain' });
   });
 });

@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
 import { ago, clock, metres } from '@/lib/format';
-import { causeInfo, factionColor, mapName, REGION_NAMES } from '@/lib/game';
-import type { FactionScore, KillRow, ServerRow } from '@/lib/server/views';
+import { causeInfo, factionColor, lightingName, mapName, REGION_NAMES, type RotationStop, rotationView } from '@/lib/game';
+import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
 
 import { PlayerName } from './tier';
 import { cx, StatusDot } from './ui';
@@ -215,6 +215,105 @@ export function KillList({ kills, showServer }: { kills: KillRow[]; showServer?:
       {kills.map((k) => (
         <KillLine key={k.eventId} k={k} showServer={showServer} now={now} />
       ))}
+    </div>
+  );
+}
+
+type Weather = 'rain' | 'dawn' | 'clear';
+
+const weatherOf = (lighting: string | null): Weather =>
+  lighting && /rain/i.test(lighting) ? 'rain' : lighting && /start/i.test(lighting) ? 'dawn' : 'clear';
+
+function WeatherIcon({ weather }: { weather: Weather }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.5" className="shrink-0">
+      {weather === 'rain' ? (
+        <path d="M4.5 9.5a3 3 0 0 1 .4-6 4 4 0 0 1 7.4 1.2A2.5 2.5 0 0 1 12 9.5zM5.5 12l-1 2M8.5 12l-1 2M11.5 12l-1 2" strokeLinejoin="round" />
+      ) : weather === 'dawn' ? (
+        <path d="M1.5 12.5h13M4.5 12.5a3.5 3.5 0 0 1 7 0M8 3.5V6M3.4 6.4l1.2 1.2M12.6 6.4l-1.2 1.2" />
+      ) : (
+        <>
+          <circle cx="8" cy="8" r="3" />
+          <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next' } as const;
+
+function RotationCard({ stop, role }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL }) {
+  const weather = weatherOf(stop?.lighting ?? null);
+  const now = role === 'now';
+  return (
+    <div className={cx('min-w-0 border bg-surface-2', now ? 'border-accent' : 'border-line', role === 'prev' && 'opacity-60')}>
+      {/* Banner: the map's contours over its time of day; rain gets streaks. */}
+      <div className={cx('relative aspect-[4/3] overflow-hidden sm:aspect-[16/7]', `sky-${weather}`)}>
+        {stop && <MapBackdrop map={stop.map} className="text-text/60" />}
+        {weather === 'rain' && <div className="rain absolute inset-0" />}
+        <div className="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/30 to-transparent" />
+        <span
+          className={cx(
+            'absolute top-2 left-2 px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.12em]',
+            now ? 'bg-accent text-accent-ink' : 'bg-bg/80 text-muted',
+          )}
+        >
+          {STOP_LABEL[role]}
+        </span>
+        {stop?.slot != null && (
+          <span className="num absolute top-2 right-2 font-mono text-[10px] text-muted">#{stop.slot + 1}</span>
+        )}
+      </div>
+      <div className="px-2.5 pt-1 pb-2.5 sm:px-3">
+        <div className={cx('display truncate leading-tight', now ? 'text-lg sm:text-2xl' : 'text-sm sm:text-lg')}>
+          {stop ? mapName(stop.map) : '—'}
+        </div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted sm:text-xs">
+          {stop ? (
+            <>
+              <WeatherIcon weather={weather} />
+              <span className="truncate">{lightingName(stop.lighting) || 'Day'}</span>
+              {now && stop.slot == null && <span className="truncate text-accent">· off rotation</span>}
+            </>
+          ) : (
+            <span>Off rotation</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Previous, current and next map, with where the server is in the rotation. */
+export function MapRotation({ status }: { status: ServerStatus }) {
+  const view = rotationView(status);
+  if (!view) return null;
+  const { prev, now, next, length } = view;
+  return (
+    <div>
+      <div className="grid grid-cols-[1fr_1.35fr_1fr] items-end gap-2 sm:gap-3">
+        <RotationCard stop={prev} role="prev" />
+        <RotationCard stop={now} role="now" />
+        <RotationCard stop={next} role="next" />
+      </div>
+      <ol className="mt-4 flex gap-1" aria-label="Rotation">
+        {Array.from({ length }, (_, i) => (
+          <li
+            key={i}
+            title={`#${i + 1}${i === now.slot ? ' · now playing' : i === next?.slot ? ' · up next' : ''}`}
+            className={cx(
+              'h-1 flex-1',
+              i === now.slot ? 'bg-accent' : i === next?.slot ? 'bg-accent/40' : 'bg-line-strong',
+            )}
+          >
+            <span className="sr-only">
+              Map {i + 1}
+              {i === now.slot ? ', now playing' : i === next?.slot ? ', up next' : ''}
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }

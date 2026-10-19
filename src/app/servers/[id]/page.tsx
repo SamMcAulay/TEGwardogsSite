@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AreaChart } from '@/components/charts';
 import { AutoRefresh, CopyButton } from '@/components/client';
-import { FactionScores, KillList, MapBackdrop } from '@/components/game';
+import { FactionScores, KillList, MapBackdrop, MapRotation } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import {
   Badge,
@@ -20,7 +20,7 @@ import {
   StatusDot,
 } from '@/components/ui';
 import { ago, clock, compact, dateTime, duration, int, kd, money } from '@/lib/format';
-import { factionColor, lightingName, mapName, REGION_NAMES } from '@/lib/game';
+import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, rotationView } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServer, leaderboard, listMatches, liveTags, population, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
@@ -217,6 +217,15 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             )}
           </Section>
         </StatGrid>
+
+        {st && rotationView(st) && (
+          <Panel
+            title="Map rotation"
+            action={st.rotation.now != null && st.rotation.now >= 0 ? `Map ${(st.rotation.now % ROTATION.length) + 1} of ${ROTATION.length}` : 'Off rotation'}
+          >
+            <MapRotation status={st} />
+          </Panel>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Current round" className="relative overflow-hidden">
