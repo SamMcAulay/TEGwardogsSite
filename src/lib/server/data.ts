@@ -2,6 +2,7 @@
 // is async and says whether its data is stale and which servers failed (Loaded<T>).
 import { serverSlug } from '@/lib/url';
 import { KOTH_CAP } from '@/lib/game';
+import { playedSeconds } from './rounds';
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
@@ -748,6 +749,14 @@ export async function records(): Promise<Loaded<Records>> {
 export async function endedRounds(): Promise<import('./rounds').EndedRound[]> {
   const { list } = await serverList();
   const r = await fanOut(list.map((s) => s.id), (id) => warcon().matches(id, 1));
+  // Population, for each round's time played; without it a round posts its start-to-end time.
+  const pop = await fanOut(r.ok.map((o) => o.id), (id) => warcon().analytics(id, '7d'));
+  const playedIn = (id: string, startedAt: number, endedAt: number) => {
+    const a = pop.ok.find((o) => o.id === id)?.value;
+    if (!a) return null;
+    const points = a.population.filter((p) => p.avg != null).map((p) => ({ ts: sec(p.ts)!, players: p.avg! }));
+    return playedSeconds(startedAt, endedAt, points, a.bucketSeconds);
+  };
   return r.ok.flatMap(({ id, value }) =>
     value.matches
       .filter((m) => m.endedAt)
@@ -761,6 +770,7 @@ export async function endedRounds(): Promise<import('./rounds').EndedRound[]> {
         peakPlayers: m.peakPlayers ?? 0,
         winner: m.winner ?? null,
         scores: (m.finalScores ?? []).map((f) => ({ name: f.name, score: f.score })),
+        playedSeconds: playedIn(id, sec(m.startedAt)!, sec(m.endedAt)!),
       })),
   );
 }

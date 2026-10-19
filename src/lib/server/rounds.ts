@@ -1,7 +1,7 @@
 // Round results to a Discord channel: every couple of minutes, rounds that have just ended are
-// posted by the bot (over REST, no gateway), once each. The first run on a server records what has
+// posted by the bot (over REST, no gateway), once each, with the time actually played as their length. The first run on a server records what has
 // already ended without posting, so switching it on doesn't flood the channel.
-import { mapName } from '@/lib/game';
+import { KOTH_CAP, mapName } from '@/lib/game';
 import { plainName } from './accounts/interactions';
 import type { Store } from './accounts/store';
 
@@ -9,6 +9,10 @@ import type { Store } from './accounts/store';
 export const MIN_PEAK_PLAYERS = 10;
 /** Rounds that ended longer ago than this are recorded but not posted (the site was down, say). */
 export const MAX_AGE_S = 6 * 3600;
+/** A round nobody won that scored fewer points than this in all was never really played (a restart, an empty map). */
+export const MIN_POINTS = 20;
+/** Population at or above this counts as the round being played. */
+const PLAYING_AT = 2;
 
 export interface EndedRound {
   serverId: string;
@@ -20,7 +24,37 @@ export interface EndedRound {
   peakPlayers: number;
   winner: string | null;
   scores: { name: string; score: number }[];
+  /** seconds with people on (playedSeconds); null when the population history isn't to hand */
+  playedSeconds?: number | null;
 }
+
+/**
+ * How much of a round was played: its time with at least PLAYING_AT on, from population buckets.
+ * Servers empty overnight with the round still open, so start-to-end can be 15 hours for one hour's
+ * play. Time past the last bucket counts as played: the history lags, and a round ends with people on.
+ */
+export function playedSeconds(
+  startedAt: number,
+  endedAt: number,
+  population: { ts: number; players: number }[],
+  bucketSeconds: number,
+): number | null {
+  if (!population.length || bucketSeconds <= 0) return null;
+  let played = 0;
+  let covered = startedAt;
+  for (const p of population) {
+    const from = Math.max(p.ts, startedAt);
+    const to = Math.min(p.ts + bucketSeconds, endedAt);
+    if (to <= from) continue;
+    if (p.players >= PLAYING_AT) played += to - from;
+    covered = Math.max(covered, to);
+  }
+  return played + Math.max(0, endedAt - covered);
+}
+
+/** Whether anything happened: someone won, or the teams scored a fair few points between them. */
+export const wasPlayed = (r: Pick<EndedRound, 'winner' | 'scores'>) =>
+  r.scores.some((s) => s.score >= KOTH_CAP) || r.scores.reduce((a, s) => a + s.score, 0) >= MIN_POINTS;
 
 export interface RoundDetail {
   colours: Record<string, string | null>;
@@ -51,7 +85,7 @@ export function roundMessage(r: EndedRound, d: RoundDetail | null, siteUrl: stri
         color: hex(r.winner ? d?.colours[r.winner] : null),
         fields: [
           ...awards.map((a) => ({ name: plainName(a.label), value: `${plainName(a.name)} · ${plainName(a.value)}`, inline: true })),
-          { name: 'Length', value: duration(r.endedAt - r.startedAt), inline: true },
+          { name: 'Length', value: duration(r.playedSeconds ?? r.endedAt - r.startedAt), inline: true },
           { name: 'Players', value: `${r.peakPlayers} at peak`, inline: true },
         ],
         footer: { text: plainName(r.serverName) },
@@ -82,7 +116,7 @@ export async function announceRounds(deps: AnnounceDeps): Promise<{ posted: numb
   let skipped = 0;
   for (const r of rounds) {
     if (deps.store.isAnnounced(r.serverId, r.matchId)) continue;
-    if (firstSight.has(r.serverId) || r.peakPlayers < MIN_PEAK_PLAYERS || now - r.endedAt > MAX_AGE_S) {
+    if (firstSight.has(r.serverId) || r.peakPlayers < MIN_PEAK_PLAYERS || now - r.endedAt > MAX_AGE_S || !wasPlayed(r)) {
       deps.store.markAnnounced(r.serverId, r.matchId);
       skipped++;
       continue;

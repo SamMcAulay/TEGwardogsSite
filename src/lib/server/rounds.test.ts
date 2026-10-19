@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { openStore } from './accounts/store';
-import { announceRounds, botPoster, MAX_AGE_S, MIN_PEAK_PLAYERS, roundMessage, type EndedRound } from './rounds';
+import { announceRounds, botPoster, MAX_AGE_S, MIN_PEAK_PLAYERS, playedSeconds, roundMessage, wasPlayed, type EndedRound } from './rounds';
 
 const NOW = 1_800_000_000;
 const SITE = 'https://stats.example.com';
@@ -63,6 +63,17 @@ describe('announceRounds', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
+  test('a round nobody won with hardly any points is recorded, not posted', async () => {
+    const { deps } = setup([round(1)]);
+    await announceRounds(deps);
+    deps.ended.mockResolvedValue([
+      round(2, { winner: null, scores: [] }),
+      round(3, { winner: null, scores: [{ name: 'Valkyra', score: 9 }, { name: 'Lonestar', score: 4 }] }),
+      round(4, { winner: null, scores: [{ name: 'Valkyra', score: 66 }, { name: 'Lonestar', score: 19 }] }),
+    ]);
+    expect(await announceRounds(deps)).toEqual({ posted: 1, skipped: 2 });
+  });
+
   test('a failed post leaves that round for the next pass', async () => {
     const { store, deps } = setup([round(1)]);
     await announceRounds(deps);
@@ -101,5 +112,40 @@ describe('botPoster', () => {
     await expect(botPoster(env, denied)({})).rejects.toThrow(/View Channel, Send Messages and Embed Links/);
     const busy = vi.fn(async () => Response.json({ retry_after: 1 }, { status: 429 })) as unknown as typeof fetch;
     await expect(botPoster(env, busy)({})).rejects.toThrow(/429/);
+  });
+});
+
+describe('played time', () => {
+  const H = 3600;
+  const half = 1800;
+  // A round from 03:00 to 18:00: busy 03:00-04:00, empty overnight, busy again 17:00-18:00.
+  const start = NOW - 15 * H;
+  const pop = Array.from({ length: 30 }, (_, i) => ({ ts: start + i * half, players: i < 2 || i >= 28 ? 90 : i === 10 ? 1 : 0 }));
+
+  test('counts only the buckets with people on', () => {
+    expect(playedSeconds(start, start + 15 * H, pop, half)).toBe(2 * H);
+  });
+
+  test('counts part buckets at the edges', () => {
+    expect(playedSeconds(start + 900, start + H, pop, half)).toBe(H - 900);
+  });
+
+  test('time past the last bucket counts as played', () => {
+    expect(playedSeconds(start, start + 15 * H + 600, pop, half)).toBe(2 * H + 600);
+  });
+
+  test('null without population', () => {
+    expect(playedSeconds(start, start + H, [], half)).toBeNull();
+  });
+
+  test('the post shows time played, not start to end', () => {
+    const msg = roundMessage(round(1, { startedAt: start, endedAt: start + 15 * H, playedSeconds: 2 * H }), null, SITE);
+    expect(msg.embeds[0].fields.find((f) => f.name === 'Length')?.value).toBe('2 h 0 min');
+  });
+
+  test('a won round, or a fair few points, was played', () => {
+    expect(wasPlayed({ winner: 'Lonestar', scores: [{ name: 'Lonestar', score: 100 }] })).toBe(true);
+    expect(wasPlayed({ winner: null, scores: [{ name: 'Lonestar', score: 15 }, { name: 'Valkyra', score: 7 }] })).toBe(true);
+    expect(wasPlayed({ winner: null, scores: [{ name: 'Lonestar', score: 0 }] })).toBe(false);
   });
 });
