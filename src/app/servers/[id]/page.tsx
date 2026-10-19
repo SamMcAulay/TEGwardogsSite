@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { withParams } from '@/lib/url';
 import { notFound, permanentRedirect } from 'next/navigation';
-import { AreaChart } from '@/components/charts';
+import { AreaChart, BusyTimes } from '@/components/charts';
 import { AutoRefresh, CopyButton } from '@/components/client';
 import { FactionScores, KillList, MapBackdrop, MapRotation } from '@/components/game';
 import { PlayerLink } from '@/components/player';
@@ -21,9 +21,9 @@ import {
   StatusDot,
 } from '@/components/ui';
 import { ago, clock, compact, dateTime, duration, int, kd, money } from '@/lib/format';
-import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, rotationView } from '@/lib/game';
+import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationView } from '@/lib/game';
 import { Section, safe } from '@/components/section';
-import { getServer, leaderboard, listMatches, liveTags, population, recentKills, serverTotals } from '@/lib/server/data';
+import { getServer, leaderboard, listMatches, liveTags, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
 import type { LivePlayer } from '@/lib/server/views';
 
@@ -141,8 +141,9 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   if (id !== server.slug) permanentRedirect(withParams(`/servers/${server.slug}`, sp, {}));
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
-  const [pop, totals, matches, top, kills, tags] = await Promise.all([
+  const [pop, history, totals, matches, top, kills, tags] = await Promise.all([
     safe(population(server.id, range)),
+    safe(populationHistory(server.id)),
     safe(serverTotals(server.id)),
     safe(listMatches({ serverId: server.id, limit: 8 })),
     safe(leaderboard({ metric: 'kills', period: '7d', serverId: server.id })),
@@ -151,6 +152,10 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
     liveTags(server.players).catch(() => ({})),
   ]);
   const st = server.status;
+  // The server doesn't report match time any more; the round in progress started when its match did.
+  const liveRound = server.online && !(matches instanceof Error) ? matches.data.rows.find((m) => m.endedAt == null) : undefined;
+  const elapsed = st?.matchSeconds ?? (liveRound ? now - liveRound.startedAt : null);
+  const eta = st ? roundEta(st.factionScores.map((f) => f.score), st.scoreTick, st.scoreCap) : null;
   const factions = st?.factionScores.map((f) => f.name) ?? ['Valkyra', 'Lonestar', 'Manticore'];
 
   return (
@@ -205,8 +210,8 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           <Stat label="Map" value={st ? mapName(st.map) : '—'} sub={st ? lightingName(st.lighting) : undefined} />
           <Stat
             label="Match time"
-            value={st?.matchSeconds != null ? clock(st.matchSeconds) : '—'}
-            sub="King of the Hill"
+            value={elapsed != null ? clock(elapsed) : '—'}
+            sub={eta != null ? `≈ ${eta < 120 ? 'a minute or two' : duration(eta)} left` : 'King of the Hill'}
           />
           <Section loaded={totals}>
             {(t) => (
@@ -226,7 +231,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             title="Map rotation"
             action={st.rotation.now != null && st.rotation.now >= 0 ? `Map ${(st.rotation.now % ROTATION.length) + 1} of ${ROTATION.length}` : 'Off rotation'}
           >
-            <MapRotation status={st} />
+            <MapRotation status={st} eta={eta} />
           </Panel>
         )}
 
@@ -299,6 +304,12 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           ) : (
             <Empty>No one is playing right now.</Empty>
           )}
+        </Panel>
+
+        <Panel title="Busiest times" action="Average players · last 30 days">
+          <Section loaded={history}>
+            {(h) => <BusyTimes points={h.points} bucketSeconds={h.bucketSeconds} />}
+          </Section>
         </Panel>
 
         <div className="grid gap-4 lg:grid-cols-5">

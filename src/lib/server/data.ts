@@ -1,6 +1,7 @@
 // Page-facing reads: Warcon's answers turned into the view types in views.ts. Every function
 // is async and says whether its data is stale and which servers failed (Loaded<T>).
 import { serverSlug } from '@/lib/url';
+import { KOTH_CAP } from '@/lib/game';
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
@@ -70,7 +71,8 @@ function serverRow(s: { id: string; name: string }, live: WLive | null, unknown 
       lighting: st.lighting || null,
       matchSeconds: st.matchSeconds ?? undefined,
       players: { current: st.playerCount, max: st.maxPlayers },
-      scoreCap: st.scoreCap,
+      scoreCap: st.scoreCap ?? KOTH_CAP,
+      scoreTick: st.scoreTick ?? null,
       factionScores: st.scores,
       rotation: { now: st.rotationNow ?? null, next: st.rotationNext ?? null },
     },
@@ -157,6 +159,14 @@ export async function population(serverId: string | null, range: '24h' | '7d'): 
     }
   }
   return loaded([...byTs.values()].sort((a, b) => a.ts - b.ts), r.stale, r.failed);
+}
+
+/** One server's average players over the last 30 days, in Warcon's buckets (2 h at that range). */
+export async function populationHistory(serverId: string): Promise<Loaded<{ bucketSeconds: number; points: PopulationPoint[] }>> {
+  if (!(await visibleIds(serverId)).length) return loaded({ bucketSeconds: 0, points: [] });
+  const { value, stale } = await warcon().analytics(serverId, '30d');
+  const points = value.population.filter((p) => p.avg != null).map((p) => ({ ts: sec(p.ts)!, players: p.avg!, max: p.cap ?? 0 }));
+  return loaded({ bucketSeconds: value.bucketSeconds, points }, stale);
 }
 
 function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes: number; matches: number; wins: number; losses: number; draws: number; cash: number }) {

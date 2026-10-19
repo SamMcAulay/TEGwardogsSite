@@ -88,7 +88,7 @@ describe('getServers', () => {
 describe('networkSummary', () => {
   const row = (id: string, online: boolean | null, players: number): ServerRow => ({
     id, slug: id, name: id, shortName: id, region: 'EU', online, updatedAt: null, players: [], playerCount: players, joinCode: null, startedAt: null,
-    status: online ? { serverName: id, map: 'M', experiences: [], lighting: null, players: { current: players, max: 64 }, scoreCap: null, factionScores: [], rotation: { now: null, next: null } } : null,
+    status: online ? { serverName: id, map: 'M', experiences: [], lighting: null, players: { current: players, max: 64 }, scoreCap: null, scoreTick: null, factionScores: [], rotation: { now: null, next: null } } : null,
   });
 
   test('servers with unknown status are left out of online counts and listed as missing', async () => {

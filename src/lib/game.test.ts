@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mainFaction, mapArt, ROTATION, rotationView } from './game';
+import { mainFaction, mapArt, ROTATION, roundEta, rotationView } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
@@ -79,5 +79,31 @@ describe('mapArt', () => {
   it('points at files that exist', async () => {
     const { existsSync } = await import('node:fs');
     for (const r of ROTATION) expect(existsSync(`public${mapArt(r.map, r.lighting)}`), `${r.map} ${r.lighting}`).toBe(true);
+  });
+});
+
+describe('roundEta', () => {
+  it('is the points still needed over the leader\u2019s share of the scoring', () => {
+    // 40 of 44 points so far: about 60 more for the leader at ~0.87 of 24 s ticks, with slack
+    expect(roundEta([0, 40, 4], 24, 100)).toBe(Math.round((60 / (41 / 47)) * 24 * 1.1));
+  });
+
+  it('runs longer when the hill keeps changing hands', () => {
+    expect(roundEta([30, 30, 30], 24, 100)!).toBeGreaterThan(roundEta([60, 0, 0], 24, 100)! * 2);
+  });
+
+  it('roughly matches finished rounds', () => {
+    // a 100/46/37 round took 81 minutes; from 50/23/18 about half of it remains
+    const eta = roundEta([50, 23, 18], 24, 100)! / 60;
+    expect(eta).toBeGreaterThan(30);
+    expect(eta).toBeLessThan(55);
+  });
+
+  it('is 0 at the cap and null with nothing to go on', () => {
+    expect(roundEta([100, 20, 3], 24, 100)).toBe(0);
+    expect(roundEta([0, 0, 0], 24, 100)).toBeNull();
+    expect(roundEta([10, 2, 0], null, 100)).toBeNull();
+    expect(roundEta([10, 2, 0], 24, null)).toBeNull();
+    expect(roundEta([], 24, 100)).toBeNull();
   });
 });

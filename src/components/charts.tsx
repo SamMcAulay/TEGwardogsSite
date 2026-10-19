@@ -1,6 +1,7 @@
 'use client';
 
-import { useId, useMemo, useState, type PointerEvent } from 'react';
+import { useId, useMemo, useState, useSyncExternalStore, type PointerEvent } from 'react';
+import { cx } from './ui';
 
 export interface Point {
   t: number;
@@ -227,6 +228,90 @@ export function BarChart({
       <div className="mt-1.5 flex justify-between text-[10px] text-dim">
         <span>{bars[0]?.label}</span>
         <span>{bars[bars.length - 1]?.label}</span>
+      </div>
+    </div>
+  );
+}
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const noop = () => () => {};
+
+/**
+ * Average players by weekday and hour, from population buckets (each spread over the hours it covers).
+ * utcOffsetMinutes: the viewer's offset, so the grid reads in their own time. Cells with no data are null.
+ */
+export function weekGrid(
+  points: { ts: number; players: number }[],
+  bucketSeconds: number,
+  utcOffsetMinutes: number,
+): (number | null)[][] {
+  const sum = DAYS.map(() => Array<number>(24).fill(0));
+  const n = DAYS.map(() => Array<number>(24).fill(0));
+  const hours = Math.max(1, Math.round(bucketSeconds / 3600));
+  for (const p of points) {
+    for (let h = 0; h < hours; h++) {
+      const d = new Date((p.ts + h * 3600 + utcOffsetMinutes * 60) * 1000);
+      const day = (d.getUTCDay() + 6) % 7; // Monday first
+      sum[day][d.getUTCHours()] += p.players;
+      n[day][d.getUTCHours()] += 1;
+    }
+  }
+  return sum.map((row, d) => row.map((v, h) => (n[d][h] ? v / n[d][h] : null)));
+}
+
+/** When a server is usually busy: a weekday x hour grid in the viewer's timezone (UTC until hydrated). */
+export function BusyTimes({ points, bucketSeconds }: { points: { ts: number; players: number }[]; bucketSeconds: number }) {
+  // The server renders UTC; the browser swaps in its own offset after hydration.
+  const offset = useSyncExternalStore(noop, () => -new Date().getTimezoneOffset(), () => 0);
+  const local = useSyncExternalStore(noop, () => true, () => false);
+  const grid = useMemo(() => weekGrid(points, bucketSeconds, offset), [points, bucketSeconds, offset]);
+  const max = Math.max(1, ...grid.flat().map((v) => v ?? 0));
+  const [hover, setHover] = useState<{ d: number; h: number } | null>(null);
+  const shown = hover && grid[hover.d][hover.h];
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+  return (
+    <div>
+      <div className="grid grid-cols-[2.25rem_1fr] gap-x-2">
+        <div />
+        <div className="mb-1 grid grid-cols-[repeat(24,1fr)] text-[10px] text-dim">
+          {Array.from({ length: 24 }, (_, h) => (
+            <span key={h} className="num">
+              {h % 6 === 0 ? hh(h).slice(0, 2) : ''}
+            </span>
+          ))}
+        </div>
+        {grid.map((row, d) => (
+          <div key={d} className="contents">
+            <span className="font-display text-[11px] leading-[1.1rem] font-semibold uppercase tracking-[0.1em] text-dim">
+              {DAYS[d]}
+            </span>
+            <div className="mb-px grid grid-cols-[repeat(24,1fr)] gap-px" onPointerLeave={() => setHover(null)}>
+              {row.map((v, h) => (
+                <span
+                  key={h}
+                  onPointerEnter={() => setHover({ d, h })}
+                  title={`${DAYS[d]} ${hh(h)} · ${v == null ? 'no data' : `~${Math.round(v)} players`}`}
+                  className={cx('h-[1.1rem]', v == null ? 'bg-surface-2' : 'bg-accent', hover?.d === d && hover.h === h && 'outline outline-1 outline-text')}
+                  style={v == null ? undefined : { opacity: 0.08 + 0.92 * (v / max) }}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <span className="num">
+          {hover
+            ? `${DAYS[hover.d]} ${hh(hover.h)} · ${shown == null ? 'no data' : `about ${Math.round(shown)} players`}`
+            : local
+              ? `Your time (${Intl.DateTimeFormat().resolvedOptions().timeZone})`
+              : 'UTC'}
+        </span>
+        <span className="flex items-center gap-1.5">
+          Quiet
+          <span className="flex h-2 w-16 bg-gradient-to-r from-accent/10 to-accent" />
+          Busy
+        </span>
       </div>
     </div>
   );

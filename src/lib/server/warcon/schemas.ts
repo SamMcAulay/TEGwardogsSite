@@ -37,6 +37,8 @@ const live = z.object({
       playerCount: z.number(),
       maxPlayers: z.number(),
       scoreCap: z.number().nullable(),
+      /** seconds between points for the team holding the hill */
+      scoreTick: z.number().nullable().optional(),
       /** slots in the map rotation; -1 now: an admin put on a map that isn't in it */
       rotationNow: z.number().int().nullable().optional(),
       rotationNext: z.number().int().nullable().optional(),

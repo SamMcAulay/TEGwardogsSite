@@ -36,6 +36,8 @@ export interface ServerStatus {
   players: { current: number; max: number };
   /** points to win the round, when Warcon reports one */
   scoreCap: number | null;
+  /** seconds between points for the team holding the hill, when reported */
+  scoreTick: number | null;
   factionScores: FactionScore[];
   /** rotation slots (0-based) as the server reports them; null when it doesn't */
   rotation: { now: number | null; next: number | null };

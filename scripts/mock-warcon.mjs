@@ -101,7 +101,7 @@ const routes = [
     if (id === 'srv-6') return { ok: false, live: null, error: { message: 'Not observed yet.' } }; // an offline server
     const players = PLAYERS.slice(0, 24).map((p) => ({ ...p, faction: pick(FACTIONS).name, kills: int(0, 20), deaths: int(0, 15), cash: int(0, 5000), ping: int(20, 140) }));
     return { ok: true, live: { serverId: id, ok: true, error: '', tier: 'hot', build: '1.0.0', gameServerId: `JOIN-${id}`, startedAt: iso(now() - 7_200_000), reservedSlots: 2, throttledUntil: null,
-      status: { serverName: s.name, map: 'Bakurani', experiences: ['Bakurani_KOTH_02'], lighting: 'DayLateRain', alternator: '', scoreTick: null, scoreTickMin: null, scoreTickMax: null, scoreCap: 500, matchSeconds: 900, playerCount: players.length, maxPlayers: 64, scores: FACTIONS.map((f) => ({ ...f, score: int(0, 300) })), rotationNow: 0, rotationNext: 1 },
+      status: { serverName: s.name, map: 'Bakurani', experiences: ['Bakurani_KOTH_02'], lighting: 'DayLateRain', alternator: '', scoreTick: 24, scoreTickMin: 18, scoreTickMax: 30, scoreCap: null, matchSeconds: null, playerCount: players.length, maxPlayers: 64, scores: FACTIONS.map((f) => ({ ...f, score: int(0, 300) })), rotationNow: 0, rotationNext: 1 },
       players, statusAt: iso(now()), playersAt: iso(now()), observedAt: iso(now()) } };
   }],
   [/^\/api\/servers\/([^/]+)\/leaderboard$/, (q) => {
