@@ -76,8 +76,7 @@ function linkingOn(): boolean {
 }
 
 /** A heads-up shown under the header on every page; null takes it down. */
-const SITE_NOTICE: string | null =
-  'Kill feeds from our game servers are down. Until they are restored, weapons, headshots, longest kills, kill streaks and kill lists may be missing or skewed. Kills, deaths, rounds and playtime are unaffected.';
+const SITE_NOTICE: string | null = null;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

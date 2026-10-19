@@ -324,9 +324,11 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
             </div>
           </div>
 
-          {view?.topListsOnly && (
+          {season !== 's1' && (
             <p className="text-xs text-dim">
-              Season 2 weapons, targets and nemeses are counted from the all-time top lists, so a rare one can be missing.
+              Kill feeds were down from 14 to 20 October 2026, so weapons, headshots, longest kills, streaks and kill lists from
+              those days are missing. Kills, deaths and rounds are complete.
+              {view?.topListsOnly && ' Season 2 weapons, targets and nemeses are counted from the all-time top lists, so a rare one can be missing.'}
             </p>
           )}
 
