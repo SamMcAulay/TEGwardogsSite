@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { serverPath } from '@/lib/url';
 import { notFound } from 'next/navigation';
 import { AutoRefresh } from '@/components/client';
 import { FactionScores, KillList, MapBackdrop } from '@/components/game';
@@ -168,7 +169,7 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
                 Matches
               </Link>
               <span className="mx-2 text-dim">/</span>
-              <Link href={`/servers/${match.serverId}`} className="link text-muted">
+              <Link href={serverPath(match.serverName)} className="link text-muted">
                 {match.serverName}
               </Link>
             </div>

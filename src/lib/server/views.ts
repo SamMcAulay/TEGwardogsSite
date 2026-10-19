@@ -46,6 +46,8 @@ export interface LivePlayer { name: string; steamId: string; faction: string; ki
 
 export interface ServerRow {
   id: string;
+  /** the page address, from the short name: "eu1", "naeast" (lib/url.ts) */
+  slug: string;
   /** Warcon's full name */
   name: string;
   /** the part before the first " - ", e.g. "EU#1" */

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { withParams } from '@/lib/url';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { AreaChart } from '@/components/charts';
 import { AutoRefresh, CopyButton } from '@/components/client';
 import { FactionScores, KillList, MapBackdrop, MapRotation } from '@/components/game';
@@ -136,6 +137,8 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   }
   if (!loadedServer) notFound();
   const server = loadedServer.data;
+  // An old link by Warcon id: send it to the short address.
+  if (id !== server.slug) permanentRedirect(withParams(`/servers/${server.slug}`, sp, {}));
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
   const [pop, totals, matches, top, kills, tags] = await Promise.all([

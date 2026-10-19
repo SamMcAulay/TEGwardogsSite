@@ -139,6 +139,7 @@ export function ThemePrompt() {
                 {t === 'dark' ? <Moon /> : <Sun />}
                 {t}
               </span>
+              {t === 'light' && <span className="mt-0.5 block px-0.5 text-[11px] text-dim italic">For special eyes</span>}
             </button>
           ))}
         </div>

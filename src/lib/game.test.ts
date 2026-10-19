@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mainFaction, ROTATION, rotationView } from './game';
+import { mainFaction, mapArt, ROTATION, rotationView } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
@@ -66,5 +66,18 @@ describe('rotationView', () => {
   it('lists TEG’s nine-map rotation', () => {
     expect(ROTATION).toHaveLength(9);
     expect(ROTATION[0]).toEqual({ map: 'Bakurani', lighting: 'DayLateRain' });
+  });
+});
+
+describe('mapArt', () => {
+  it('has a picture for every rotation map, and none for anything else', () => {
+    expect(mapArt('Ozeti', 'DayLateRain')).toBe('/maps/Ozeti-DayLateRain.webp');
+    expect(mapArt('Ozeti', 'Night')).toBeNull();
+    expect(mapArt('Ozeti', null)).toBeNull();
+  });
+
+  it('points at files that exist', async () => {
+    const { existsSync } = await import('node:fs');
+    for (const r of ROTATION) expect(existsSync(`public${mapArt(r.map, r.lighting)}`), `${r.map} ${r.lighting}`).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
+import { serverPath } from '@/lib/url';
 import { notFound } from 'next/navigation';
 import { CopyButton } from '@/components/client';
 import { KillList } from '@/components/game';
@@ -137,7 +138,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   {player.onlineOn ? (
-                    <Link href={`/servers/${player.onlineOn.serverId}`}>
+                    <Link href={serverPath(player.onlineOn.serverName)}>
                       <Badge tone="good">
                         <StatusDot online /> Playing on {player.onlineOn.serverName}
                       </Badge>
@@ -243,7 +244,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                 {servers.map((s) => (
                   <li key={s.serverId} className="px-4 py-3">
                     <div className="mb-1.5 flex items-baseline justify-between text-sm">
-                      <Link href={`/servers/${s.serverId}`} className="link font-medium">
+                      <Link href={serverPath(s.name)} className="link font-medium">
                         {s.name}
                       </Link>
                       <span className="num text-muted">

@@ -29,6 +29,12 @@ export const ROTATION: readonly { map: string; lighting: string }[] = [
   { map: 'Ozeti', lighting: 'DayClear' },
 ];
 
+/** Screenshots in public/maps for each rotation map and time of day. */
+export function mapArt(map: string, lighting: string | null): string | null {
+  const known = ROTATION.some((r) => r.map === map && r.lighting === lighting);
+  return known ? `/maps/${map}-${lighting}.webp` : null;
+}
+
 export interface RotationStop {
   map: string;
   lighting: string | null;

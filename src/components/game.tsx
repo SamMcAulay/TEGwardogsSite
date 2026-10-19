@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
 import { ago, clock, metres } from '@/lib/format';
-import { causeInfo, factionColor, lightingName, mapName, REGION_NAMES, type RotationStop, rotationView } from '@/lib/game';
+import { causeInfo, factionColor, lightingName, mapArt, mapName, REGION_NAMES, type RotationStop, rotationView } from '@/lib/game';
 import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
 
 import { PlayerName } from './tier';
@@ -84,7 +84,7 @@ export function ServerCard({ server }: { server: ServerRow }) {
   const fill = max ? pop / max : 0;
   return (
     <Link
-      href={`/servers/${server.id}`}
+      href={`/servers/${server.slug}`}
       className="group panel relative block overflow-hidden transition-colors hover:border-line-strong"
     >
       <div className="relative h-28 overflow-hidden border-b border-line bg-surface-2 text-accent/60">
@@ -245,13 +245,21 @@ const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next' } as 
 
 function RotationCard({ stop, role }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL }) {
   const weather = weatherOf(stop?.lighting ?? null);
+  const art = stop && mapArt(stop.map, stop.lighting);
   const now = role === 'now';
   return (
     <div className={cx('min-w-0 border bg-surface-2', now ? 'border-accent' : 'border-line', role === 'prev' && 'opacity-60')}>
-      {/* Banner: the map's contours over its time of day; rain gets streaks. */}
+      {/* Banner: a screenshot of the map at that time of day, or failing one, its contours over a sky. */}
       <div className={cx('relative aspect-[4/3] overflow-hidden sm:aspect-[16/7]', `sky-${weather}`)}>
-        {stop && <MapBackdrop map={stop.map} className="text-text/60" />}
-        {weather === 'rain' && <div className="rain absolute inset-0" />}
+        {art ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={art} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          <>
+            {stop && <MapBackdrop map={stop.map} className="text-text/60" />}
+            {weather === 'rain' && <div className="rain absolute inset-0" />}
+          </>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/30 to-transparent" />
         <span
           className={cx(

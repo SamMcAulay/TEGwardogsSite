@@ -62,7 +62,7 @@ export default async function ServersPage() {
                       return (
                         <Link
                           key={s.id}
-                          href={`/servers/${s.id}`}
+                          href={`/servers/${s.slug}`}
                           className="panel group grid overflow-hidden transition-colors hover:border-line-strong md:grid-cols-[280px_1fr_1.2fr]"
                         >
                           <div className="relative min-h-32 overflow-hidden border-b border-line bg-surface-2 p-4 text-accent/50 md:border-r md:border-b-0">
