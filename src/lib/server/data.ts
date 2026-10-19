@@ -7,7 +7,7 @@ import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
 import { TTL, type KillKind } from './warcon/api';
-import type { WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
+import type { WAnalytics, WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
 import { seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
@@ -162,12 +162,21 @@ export async function population(serverId: string | null, range: '24h' | '7d'): 
   return loaded([...byTs.values()].sort((a, b) => a.ts - b.ts), r.stale, r.failed);
 }
 
-/** One server's average players over the last 30 days, in Warcon's buckets (2 h at that range). */
-export async function populationHistory(serverId: string): Promise<Loaded<{ bucketSeconds: number; points: PopulationPoint[] }>> {
-  if (!(await visibleIds(serverId)).length) return loaded({ bucketSeconds: 0, points: [] });
-  const { value, stale } = await warcon().analytics(serverId, '30d');
-  const points = value.population.filter((p) => p.avg != null).map((p) => ({ ts: sec(p.ts)!, players: p.avg!, max: p.cap ?? 0 }));
-  return loaded({ bucketSeconds: value.bucketSeconds, points }, stale);
+interface PopulationSeries { bucketSeconds: number; points: PopulationPoint[] }
+
+/**
+ * One server's average players: over 30 days in Warcon's 2 h buckets (the weekly pattern), and over
+ * the last 7 days in its 30 min buckets (a single day in detail).
+ */
+export async function populationHistory(serverId: string): Promise<Loaded<{ month: PopulationSeries; week: PopulationSeries }>> {
+  const none = { bucketSeconds: 0, points: [] };
+  if (!(await visibleIds(serverId)).length) return loaded({ month: none, week: none });
+  const series = (a: WAnalytics): PopulationSeries => ({
+    bucketSeconds: a.bucketSeconds,
+    points: a.population.filter((p) => p.avg != null).map((p) => ({ ts: sec(p.ts)!, players: p.avg!, max: p.cap ?? 0 })),
+  });
+  const [month, week] = await Promise.all([warcon().analytics(serverId, '30d'), warcon().analytics(serverId, '7d')]);
+  return loaded({ month: series(month.value), week: series(week.value) }, month.stale || week.stale);
 }
 
 function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes: number; matches: number; wins: number; losses: number; draws: number; cash: number }) {
