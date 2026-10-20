@@ -13,6 +13,7 @@ import type { Link as AccountLink } from '@/lib/server/accounts/store';
 import { playerName } from '@/lib/server/data';
 import { one } from '@/lib/url';
 import { clearProfile, recheckAccount, setNameStyle, unlinkAccount } from './actions';
+import { AdminNav } from './nav';
 
 // Staff only, and linked from nowhere: everyone else gets the ordinary 404.
 export const metadata: Metadata = { title: 'Admin', robots: { index: false, follow: false } };
@@ -144,6 +145,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
     <>
       <PageHeader eyebrow="Staff" title="Admin" description={`Signed in as ${gate.admin.name}. Linked accounts and their queue tiers.`} />
       <Container className="mt-8 space-y-4">
+        <AdminNav active="accounts" />
         {done && (
           <p
             role="status"
@@ -226,23 +228,30 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
               <ul className="divide-y divide-line text-sm">
                 {log.map((e, i) => (
                   <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5">
-                    <span>
-                      <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
-                      <span className={e.action === 'unlink' ? 'text-bad' : 'text-text'}>
-                        {e.action === 'unlink'
-                          ? 'unlinked'
-                          : e.action === 'style'
-                            ? 'changed the name style of'
-                            : e.action === 'profile'
-                              ? 'moderated the profile of'
-                              : 're-checked'}
-                      </span>{' '}
-                      <Link prefetch={false} href={`/admin?q=${e.targetDiscordId}`} className="link">
-                        {e.targetName ?? <span className="font-mono text-xs">{e.targetDiscordId}</span>}
-                      </Link>
-                      {e.targetSteamId && <span className="font-mono text-xs text-dim"> (Steam {e.targetSteamId})</span>}
-                      {e.detail && <span className="text-muted"> {e.action === 'style' ? 'to ' : '· '}{e.detail}</span>}
-                    </span>
+                    {e.action === 'export' ? (
+                      <span>
+                        <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
+                        downloaded the linked-accounts CSV{e.detail && <span className="text-muted"> · {e.detail}</span>}
+                      </span>
+                    ) : (
+                      <span>
+                        <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
+                        <span className={e.action === 'unlink' ? 'text-bad' : 'text-text'}>
+                          {e.action === 'unlink'
+                            ? 'unlinked'
+                            : e.action === 'style'
+                              ? 'changed the name style of'
+                              : e.action === 'profile'
+                                ? 'moderated the profile of'
+                                : 're-checked'}
+                        </span>{' '}
+                        <Link prefetch={false} href={`/admin?q=${e.targetDiscordId}`} className="link">
+                          {e.targetName ?? <span className="font-mono text-xs">{e.targetDiscordId}</span>}
+                        </Link>
+                        {e.targetSteamId && <span className="font-mono text-xs text-dim"> (Steam {e.targetSteamId})</span>}
+                        {e.detail && <span className="text-muted"> {e.action === 'style' ? 'to ' : '· '}{e.detail}</span>}
+                      </span>
+                    )}
                     <span className="text-xs text-muted">{ts(e.at)}</span>
                   </li>
                 ))}

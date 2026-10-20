@@ -4,6 +4,7 @@ import { tierFor, type Tier } from '@/lib/tiers';
 import { DiscordError, member } from './discord';
 import type { AccountsEnv } from './env';
 import type { Store } from './store';
+import { jobRan } from '../jobs';
 
 /** How old a tier may get before a sweep asks Discord again */
 export const TIER_MAX_AGE = 10 * 60;
@@ -46,6 +47,7 @@ export function startTierSync(env: AccountsEnv, store: Store, intervalMs = 2 * 6
     try {
       const r = await sweep(env, store);
       if (r.error) console.error(`[accounts] tier sync stopped after ${r.checked}: ${r.error}`);
+      jobRan('tierSync', { error: r.error, note: `checked ${r.checked}` });
     } finally {
       running = false;
     }

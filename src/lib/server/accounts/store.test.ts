@@ -78,6 +78,7 @@ describe('accounts store', () => {
     expect(s.recent(10).map((l) => l.discordId)).toEqual([D2, D1]);
     expect(s.recent(1, 1).map((l) => l.discordId)).toEqual([D1]);
     expect(s.counts()).toEqual({ total: 2, 1: 1, 2: 0, 3: 0, none: 1 });
+    expect(s.all().map((l) => l.discordId)).toEqual([D1, D2]);
   });
 
   test('announced rounds: per server, each once', () => {

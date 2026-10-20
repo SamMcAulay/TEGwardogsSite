@@ -60,7 +60,7 @@ const toLink = (r: Row): Link => ({
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export type AdminAction = 'unlink' | 'recheck' | 'style' | 'profile';
+export type AdminAction = 'unlink' | 'recheck' | 'style' | 'profile' | 'export';
 
 export interface AdminLogEntry {
   at: number;
@@ -161,6 +161,7 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     due: db.prepare('SELECT * FROM links WHERE checked_at IS NULL OR checked_at < ? ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?'),
     tiered: db.prepare('SELECT steam_id, tier, linked_at FROM links WHERE tier IS NOT NULL ORDER BY tier, linked_at, steam_id'),
     recent: db.prepare('SELECT * FROM links ORDER BY linked_at DESC, discord_id LIMIT ? OFFSET ?'),
+    all: db.prepare('SELECT * FROM links ORDER BY linked_at, discord_id'),
     steamIds: db.prepare('SELECT steam_id FROM links'),
     announced: db.prepare('SELECT 1 FROM announced_rounds WHERE server_id = ? AND match_id = ?'),
     anyAnnounced: db.prepare('SELECT 1 FROM announced_rounds WHERE server_id = ? LIMIT 1'),
@@ -212,6 +213,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     linkedSteamIds: () => new Set((q.steamIds.all() as unknown as { steam_id: string }[]).map((r) => r.steam_id)),
     /** Newest links first. */
     recent: (limit: number, offset = 0) => (q.recent.all(limit, offset) as unknown as Row[]).map(toLink),
+    /** Every link, oldest first. */
+    all: () => (q.all.all() as unknown as Row[]).map(toLink),
     /** How many links hold each tier; `none` counts linked accounts with no tier. */
     counts() {
       const out = { total: 0, 1: 0, 2: 0, 3: 0, none: 0 };
