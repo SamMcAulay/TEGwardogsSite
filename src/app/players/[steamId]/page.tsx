@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { FriendButton } from '@/components/friends';
 import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { serverPath } from '@/lib/url';
@@ -174,6 +175,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>
                   <CopyButton value={steamId} label="Copy ID" />
+                  <FriendButton steamId={steamId} />
                   <a
                     href={`https://steamcommunity.com/profiles/${steamId}`}
                     target="_blank"

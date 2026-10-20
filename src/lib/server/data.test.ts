@@ -14,7 +14,7 @@ const api = {
   seen: vi.fn(),
   steamProfiles: vi.fn(async () => ({})),
 };
-const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []) };
+const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []), hit: vi.fn(async (_id: string): Promise<unknown> => null) };
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => index }));
 const bans = { orgBannedIds: vi.fn() };
 vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
@@ -26,7 +26,7 @@ vi.mock('./seasons', async (original) => ({
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
+import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, friendsStatus, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -82,6 +82,30 @@ describe('getServers', () => {
     const r = await getServers();
     expect(r.data.map((s) => s.online)).toEqual([false, false]);
     expect(r.missing).toEqual([]);
+  });
+});
+
+describe('friendsStatus', () => {
+  test('online friends say where; the rest when last seen; junk and repeats are dropped', async () => {
+    api.live.mockImplementation(async (id: string) =>
+      fresh(
+        id === 's1'
+          ? {
+              ok: true, gameServerId: 'J1', startedAt: '2026-10-04T10:00:00Z', observedAt: '2026-10-04T12:00:00Z',
+              status: { serverName: 'x', map: 'M', experiences: [], lighting: 'Day', matchSeconds: 5, playerCount: 1, maxPlayers: 64, scoreCap: 500, scores: [] },
+              players: [{ name: 'LiveName', steamId: '76561198000000001', faction: 'Valkyra', kills: 7, deaths: 2, cash: 0 }],
+            }
+          : null,
+      ),
+    );
+    index.hit.mockImplementation(async (id: string) => (id === '76561198000000002' ? { steamId: id, name: 'Board', minutes: 5, kills: 1, lastSeen: '2026-10-04T09:00:00Z' } : null));
+    api.steamProfiles.mockResolvedValue({ '76561198000000002': { avatar: 'https://avatars.steamstatic.com/x.jpg' } } as never);
+    const r = await friendsStatus(['76561198000000001', '76561198000000002', '76561198000000002', '76561198000000003', 'nope']);
+    expect(r.data.map((f) => f.steamId)).toEqual(['76561198000000001', '76561198000000002', '76561198000000003']);
+    expect(r.data[0]).toMatchObject({ name: 'LiveName', online: { serverId: 's1', serverName: 'EU#1', faction: 'Valkyra', kills: 7, deaths: 2 } });
+    expect(r.data[1]).toEqual({ steamId: '76561198000000002', name: 'Board', avatarUrl: 'https://avatars.steamstatic.com/x.jpg', online: null, lastSeen: Date.parse('2026-10-04T09:00:00Z') / 1000 });
+    expect(r.data[2]).toMatchObject({ name: null, online: null, lastSeen: null });
+    expect(api.dossier).not.toHaveBeenCalled();
   });
 });
 

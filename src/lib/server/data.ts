@@ -13,7 +13,7 @@ import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags
 import { seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
-  PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
+  PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow, FriendStatus,
 } from './views';
 import { RECORD_CAUSES } from '@/lib/weapon-classes';
 import { clanTag } from '@/lib/clans';
@@ -419,6 +419,40 @@ export async function clan(tag: string, period: Period): Promise<Loaded<{ clan: 
       .map((p) => ({ ...p, serverId: s.id, serverName: s.shortName, serverSlug: s.slug })),
   );
   return loaded({ clan: found, rank: i + 1, of: all.length, avatars, online }, stale || !!servers?.stale);
+}
+
+/** Friends looked up at once, at most: a list longer than this is cut. */
+export const MAX_FRIENDS = 50;
+
+/**
+ * Where each friend is: playing now (from the cached live server list) or when last seen (from the
+ * in-memory player list). Costs Warcon nothing per friend; Steam pictures come from their own cache.
+ */
+export async function friendsStatus(steamIds: string[]): Promise<Loaded<FriendStatus[]>> {
+  const ids = [...new Set(steamIds.filter((id) => /^\d{17}$/.test(id)))].slice(0, MAX_FRIENDS);
+  const [servers, profiles] = await Promise.all([getServers().catch(() => null), warcon().steamProfiles(ids).catch(() => ({}) as Record<string, { avatar?: string }>)]);
+  const onlineAt = new Map<string, FriendStatus['online'] & { name: string }>();
+  for (const s of servers?.data ?? []) {
+    for (const p of s.players) {
+      onlineAt.set(p.steamId, { serverId: s.id, serverName: s.shortName, serverSlug: s.slug, faction: p.faction, kills: p.kills, deaths: p.deaths, name: p.name });
+    }
+  }
+  const index = searchIndex(async () => (await serverList()).list[0].id);
+  const rows = await Promise.all(
+    ids.map(async (steamId): Promise<FriendStatus> => {
+      const live = onlineAt.get(steamId);
+      const hit = await index.hit(steamId).catch(() => null);
+      const { name: liveName, ...online } = live ?? { name: null };
+      return {
+        steamId,
+        name: liveName ?? hit?.name ?? null,
+        avatarUrl: (profiles as Record<string, { avatar?: string }>)[steamId]?.avatar || null,
+        online: live ? (online as FriendStatus['online']) : null,
+        lastSeen: live ? Math.floor(Date.now() / 1000) : sec(hit?.lastSeen),
+      };
+    }),
+  );
+  return loaded(rows, !servers || servers.stale, servers ? [] : ['servers']);
 }
 
 /** Warcon's floor for the career rank: players with less time on are not ranked. */
