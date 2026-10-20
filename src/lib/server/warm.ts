@@ -1,6 +1,7 @@
 // Keeps the most visited pages' data warm so the first visitor after a refresh never waits on
 // Warcon. Each touch is a cache hit until the data expires; then it starts the background refresh
 // (TtlCache serve-stale), so the cost to Warcon is one load per refresh interval, not per minute.
+import { jobRan } from './jobs';
 import { factionWins, getServers, leaderboard, networkSummary, population, recentKills, records, warmSearchIndex } from './data';
 
 const quietly = (p: Promise<unknown>) => p.then(
@@ -28,6 +29,7 @@ export async function warmCommonPages(): Promise<void> {
     quietly(warmSearchIndex()),
     quietly(records()),
   ]);
+  jobRan('warmer');
 }
 
 const g = globalThis as unknown as { __warmer?: ReturnType<typeof setInterval> };

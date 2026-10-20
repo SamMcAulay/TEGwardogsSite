@@ -4,6 +4,7 @@
 import { KOTH_CAP, mapName } from '@/lib/game';
 import { plainName } from './accounts/interactions';
 import type { Store } from './accounts/store';
+import { jobRan } from './jobs';
 
 /** Rounds that never had this many players (empty servers idling overnight) aren't posted. */
 export const MIN_PEAK_PLAYERS = 10;
@@ -159,8 +160,10 @@ export function startRoundAnnouncer(deps: Omit<AnnounceDeps, 'nowSec'>, interval
     try {
       const r = await announceRounds(deps);
       if (r.posted) console.log(`[rounds] posted ${r.posted} round result(s)`);
+      jobRan('rounds', { note: `posted ${r.posted}, skipped ${r.skipped}` });
     } catch (e) {
       console.error('[rounds] stopped; next pass retries:', e instanceof Error ? e.message : e);
+      jobRan('rounds', { error: e instanceof Error ? e.message : String(e) });
     } finally {
       running = false;
     }

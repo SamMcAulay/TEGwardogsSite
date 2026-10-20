@@ -793,3 +793,57 @@ export async function roundDetail(serverId: string, matchId: number): Promise<im
     awards: m.data.awards.map((a) => ({ key: a.key, label: a.label, name: a.name, value: a.value })),
   };
 }
+
+/** Team kills are searched this many pages of 200 back per server; more than that is reported as cut off. */
+export const TEAMKILL_PAGES = 5;
+const TEAMKILL_TTL = 2 * 60_000;
+
+/**
+ * Every team kill on every server in the last `days`, newest first, for the staff team-kill
+ * watch. `capped` names servers with more team kills in the window than the search reaches.
+ */
+export async function teamKills(days: 1 | 7, nowSec = Math.floor(Date.now() / 1000)): Promise<Loaded<{ rows: KillRow[]; capped: string[] }>> {
+  const { list } = await serverList();
+  const since = nowSec - days * 86_400;
+  const missing: string[] = [];
+  const capped: string[] = [];
+  let stale = false;
+  const lists = await Promise.all(
+    list.map(async (s) => {
+      const rows: KillRow[] = [];
+      let before: { ts: string; eventTime: number } | null = null;
+      try {
+        for (let p = 0; p < TEAMKILL_PAGES; p++) {
+          const r = await warcon().kills(s.id, { limit: 200, kind: 'teamKill', before }, { ttl: TEAMKILL_TTL });
+          stale ||= r.stale;
+          const page = r.value.kills;
+          for (const k of page) if (k.teamKill && sec(k.ts)! >= since) rows.push(killRow(k, s.id, shortNameOf(s.name)));
+          const last = page.at(-1);
+          if (page.length < 200 || !last || sec(last.ts)! < since) return rows;
+          before = { ts: last.ts, eventTime: last.eventTime };
+        }
+        capped.push(shortNameOf(s.name));
+      } catch {
+        missing.push(s.id);
+      }
+      return rows;
+    }),
+  );
+  return loaded({ rows: mergeNewest(lists, (k) => k.ts, Infinity), capped }, stale, missing);
+}
+
+/** When each server's kill feed last delivered a batch (unix seconds; null: never), for the staff health panel. */
+export async function killFeeds(): Promise<Loaded<{ serverId: string; shortName: string; feedAt: number | null; newestKill: number | null }[]>> {
+  const { list } = await serverList();
+  const r = await fanOut(list.map((s) => s.id), (id) => warcon().kills(id, { limit: 1 }));
+  return loaded(
+    r.ok.map(({ id, value }) => ({
+      serverId: id,
+      shortName: shortNameOf(list.find((s) => s.id === id)!.name),
+      feedAt: sec(value.feedAt),
+      newestKill: sec(value.kills[0]?.ts),
+    })),
+    r.stale,
+    r.failed,
+  );
+}

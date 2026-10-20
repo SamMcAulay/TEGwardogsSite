@@ -26,7 +26,7 @@ vi.mock('./seasons', async (original) => ({
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf } from './data';
+import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -312,6 +312,59 @@ describe('recentKills', () => {
     });
     const r = await recentKills({ limit: 1 });
     expect(r.data.map((x) => x.eventId)).toEqual(['a']);
+    expect(r.missing).toEqual(['s2']);
+  });
+});
+
+describe('teamKills', () => {
+  const NOW = Date.parse('2026-10-20T12:00:00Z') / 1000;
+  const tk = (id: string, hoursAgo: number) => ({
+    eventId: id, ts: new Date((NOW - hoursAgo * 3600) * 1000).toISOString(), map: 'M', eventTime: hoursAgo,
+    killer: { steamId: '76561198000000002', name: 'K', faction: null }, victim: { steamId: '76561198000000001', name: 'V', faction: null },
+    cause: null, distanceM: null, headshot: false, suicide: false, teamKill: true, tags: [],
+  });
+
+  test('asks for team kills only and keeps those inside the window, newest first', async () => {
+    api.kills.mockImplementation(async (id: string) => fresh({ ok: true, total: null, kills: id === 's1' ? [tk('a', 1), tk('b', 30)] : [tk('c', 2)] }));
+    const r = await teamKills(1, NOW);
+    expect(api.kills).toHaveBeenCalledWith('s1', expect.objectContaining({ kind: 'teamKill', limit: 200, before: null }), expect.anything());
+    expect(r.data.rows.map((k) => k.eventId)).toEqual(['a', 'c']);
+    expect(r.data.capped).toEqual([]);
+  });
+
+  test('pages back until it passes the window start, and says when it ran out of pages', async () => {
+    const full = (hoursAgo: number) => Array.from({ length: 200 }, (_, i) => tk(`${hoursAgo}-${i}`, hoursAgo));
+    api.kills.mockImplementation(async (id: string, q: { before: { ts: string } | null }) => {
+      if (id === 's2') throw new Error('down');
+      // s1 is busy: every page is full and still inside the 7 days
+      return fresh({ ok: true, total: null, kills: full(q.before ? 5 : 1) });
+    });
+    const r = await teamKills(7, NOW);
+    const s1 = api.kills.mock.calls.filter(([id]) => id === 's1');
+    expect(s1).toHaveLength(TEAMKILL_PAGES);
+    expect(s1[1][1].before).toEqual({ ts: tk('x', 1).ts, eventTime: 1 });
+    expect(r.data.rows).toHaveLength(TEAMKILL_PAGES * 200);
+    expect(r.data.capped).toEqual(['EU#1']);
+    expect(r.missing).toEqual(['s2']);
+  });
+
+  test('stops at the first page that reaches back past the window', async () => {
+    api.kills.mockImplementation(async () => fresh({ ok: true, total: null, kills: [...Array.from({ length: 199 }, (_, i) => tk(`n${i}`, 1)), tk('old', 48)] }));
+    const r = await teamKills(1, NOW);
+    expect(api.kills).toHaveBeenCalledTimes(2);
+    expect(r.data.rows).toHaveLength(2 * 199);
+    expect(r.data.capped).toEqual([]);
+  });
+});
+
+describe('killFeeds', () => {
+  test("each server's last feed batch and newest kill; a failed server is named", async () => {
+    api.kills.mockImplementation(async (id: string) => {
+      if (id === 's2') throw new Error('down');
+      return fresh({ ok: true, total: null, feedAt: '2026-10-20T11:59:00Z', kills: [{ eventId: 'a', ts: '2026-10-20T11:58:00Z', map: 'M', eventTime: 1, killer: null, victim: { steamId: '76561198000000001', name: 'V', faction: null }, cause: null, distanceM: null, headshot: false, suicide: false, teamKill: false, tags: [] }] });
+    });
+    const r = await killFeeds();
+    expect(r.data).toEqual([{ serverId: 's1', shortName: 'EU#1', feedAt: Date.parse('2026-10-20T11:59:00Z') / 1000, newestKill: Date.parse('2026-10-20T11:58:00Z') / 1000 }]);
     expect(r.missing).toEqual(['s2']);
   });
 });

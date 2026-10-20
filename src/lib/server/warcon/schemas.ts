@@ -128,7 +128,13 @@ const kill = z.object({
   tags: z.array(z.string()),
 });
 export type WKill = z.infer<typeof kill>;
-export const killsBody = z.object({ ok: z.literal(true), kills: z.array(kill), total: z.number().nullable() });
+export const killsBody = z.object({
+  ok: z.literal(true),
+  kills: z.array(kill),
+  total: z.number().nullable(),
+  /** when the server's kill feed last delivered a batch (staff health panel); null: never */
+  feedAt: iso.nullable().optional(),
+});
 export type WKills = z.infer<typeof killsBody>;
 
 const combat = z.object({

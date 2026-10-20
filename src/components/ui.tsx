@@ -171,10 +171,13 @@ export function Segmented({
   items,
   active,
   label,
+  prefetch,
 }: {
   items: { key: string; label: ReactNode; href: string }[];
   active: string;
   label?: string;
+  /** false: don't pre-load the targets (heavy pages) */
+  prefetch?: false;
 }) {
   return (
     <nav aria-label={label} className="inline-flex border border-line-strong bg-surface">
@@ -183,6 +186,7 @@ export function Segmented({
           key={it.key}
           href={it.href}
           scroll={false}
+          prefetch={prefetch}
           aria-current={it.key === active ? 'page' : undefined}
           className={cx(
             'px-3 py-1.5 font-display text-[12px] font-semibold uppercase tracking-[0.1em] transition-colors',
