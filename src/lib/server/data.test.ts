@@ -106,6 +106,16 @@ describe('friendsStatus', () => {
     expect(r.data[1]).toEqual({ steamId: '76561198000000002', name: 'Board', avatarUrl: 'https://avatars.steamstatic.com/x.jpg', online: null, lastSeen: Date.parse('2026-10-04T09:00:00Z') / 1000 });
     expect(r.data[2]).toMatchObject({ name: null, online: null, lastSeen: null });
     expect(api.dossier).not.toHaveBeenCalled();
+    // Steam pictures only for players the site knows: online, or in the player list
+    expect(api.steamProfiles).toHaveBeenCalledWith(['76561198000000001', '76561198000000002']);
+  });
+
+  test('ids nobody knows cost no Steam lookup at all', async () => {
+    api.live.mockResolvedValue(fresh(null));
+    index.hit.mockResolvedValue(null);
+    const r = await friendsStatus(['76561198000000111', '76561198000000222']);
+    expect(r.data.map((f) => f.name)).toEqual([null, null]);
+    expect(api.steamProfiles).not.toHaveBeenCalled();
   });
 });
 

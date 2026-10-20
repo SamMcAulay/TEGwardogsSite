@@ -6,7 +6,7 @@ import { playedSeconds } from './rounds';
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
-import { TTL, type KillKind } from './warcon/api';
+import { TTL, type KillKind, type WarconApi } from './warcon/api';
 import type { WAnalytics, WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
@@ -430,28 +430,31 @@ export const MAX_FRIENDS = 50;
  */
 export async function friendsStatus(steamIds: string[]): Promise<Loaded<FriendStatus[]>> {
   const ids = [...new Set(steamIds.filter((id) => /^\d{17}$/.test(id)))].slice(0, MAX_FRIENDS);
-  const [servers, profiles] = await Promise.all([getServers().catch(() => null), warcon().steamProfiles(ids).catch(() => ({}) as Record<string, { avatar?: string }>)]);
-  const onlineAt = new Map<string, FriendStatus['online'] & { name: string }>();
+  const servers = await getServers().catch(() => null);
+  const onlineAt = new Map<string, NonNullable<FriendStatus['online']> & { name: string }>();
   for (const s of servers?.data ?? []) {
     for (const p of s.players) {
       onlineAt.set(p.steamId, { serverId: s.id, serverName: s.shortName, serverSlug: s.slug, faction: p.faction, kills: p.kills, deaths: p.deaths, name: p.name });
     }
   }
   const index = searchIndex(async () => (await serverList()).list[0].id);
-  const rows = await Promise.all(
-    ids.map(async (steamId): Promise<FriendStatus> => {
-      const live = onlineAt.get(steamId);
-      const hit = await index.hit(steamId).catch(() => null);
-      const { name: liveName, ...online } = live ?? { name: null };
-      return {
-        steamId,
-        name: liveName ?? hit?.name ?? null,
-        avatarUrl: (profiles as Record<string, { avatar?: string }>)[steamId]?.avatar || null,
-        online: live ? (online as FriendStatus['online']) : null,
-        lastSeen: live ? Math.floor(Date.now() / 1000) : sec(hit?.lastSeen),
-      };
-    }),
-  );
+  const hits = new Map(await Promise.all(ids.map(async (id) => [id, await index.hit(id).catch(() => null)] as const)));
+  // Steam pictures only for players the site already knows: anyone can call this with any ids,
+  // and an unknown one would cost a Steam lookup and push a real player's picture out of the cache.
+  const known = ids.filter((id) => onlineAt.has(id) || hits.get(id));
+  const profiles = known.length ? await warcon().steamProfiles(known).catch(() => ({}) as Awaited<ReturnType<WarconApi['steamProfiles']>>) : {};
+  const rows = ids.map((steamId): FriendStatus => {
+    const live = onlineAt.get(steamId);
+    const hit = hits.get(steamId);
+    const { name: liveName, ...online } = live ?? { name: null };
+    return {
+      steamId,
+      name: liveName ?? hit?.name ?? null,
+      avatarUrl: profiles[steamId]?.avatar || null,
+      online: live ? (online as FriendStatus['online']) : null,
+      lastSeen: live ? Math.floor(Date.now() / 1000) : sec(hit?.lastSeen),
+    };
+  });
   return loaded(rows, !servers || servers.stale, servers ? [] : ['servers']);
 }
 
