@@ -16,6 +16,8 @@ import type {
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
 } from './views';
 import { RECORD_CAUSES } from '@/lib/weapon-classes';
+import { clanTag } from '@/lib/clans';
+import { groupClans, type Clan, type ClanSort } from './clans';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
 const loaded = <T>(data: T, stale = false, missing: string[] = []): Loaded<T> => ({ data, stale, missing });
@@ -373,6 +375,46 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     lastSeen: sec(r.lastSeen),
   }));
   return loaded({ rows, total, pageSize }, board.stale || banned.stale);
+}
+
+/**
+ * Every player on the network's board for a period, org-banned players removed: the same cached
+ * export the default (kills) leaderboard reads, so it costs Warcon nothing more. Throws when the
+ * export or the ban list is unavailable.
+ */
+async function orgBoard(period: Period): Promise<{ rows: WBoardRow[]; stale: boolean }> {
+  const ids = await visibleIds(null);
+  if (!ids.length) return { rows: [], stale: false };
+  const banned = await orgBannedIds();
+  const board =
+    period === 's2'
+      ? await keptSeasonTwo(ids, 'kills', banned.ids)
+      : await keptFromExport(ids[0], { scope: 'org', range: period, sort: 'kills' }, banned.ids);
+  return { rows: board.kept, stale: board.stale || banned.stale };
+}
+
+/** The clan table for a period: tags carried by MIN_CLAN_SIZE or more players, best first. */
+export async function clans(period: Period, sort: ClanSort = 'kills'): Promise<Loaded<Clan[]>> {
+  const { rows, stale } = await orgBoard(period);
+  return loaded(groupClans(rows, sort), stale);
+}
+
+/** One clan for a period, its members' Steam pictures, and which of them are playing now. Null: no such clan. */
+export async function clan(tag: string, period: Period): Promise<Loaded<{ clan: Clan; rank: number; of: number; avatars: Record<string, string | null>; online: (LivePlayer & { serverId: string; serverName: string; serverSlug: string })[] }> | null> {
+  const [{ rows, stale }, servers] = await Promise.all([orgBoard(period), getServers().catch(() => null)]);
+  const all = groupClans(rows, 'kills');
+  const i = all.findIndex((c) => c.tag === tag);
+  if (i < 0) return null;
+  const found = all[i];
+  const ids = new Set(found.members.map((m) => m.steamId));
+  const profiles = await warcon().steamProfiles(found.members.slice(0, 100).map((m) => m.steamId));
+  const avatars = Object.fromEntries(found.members.map((m) => [m.steamId, profiles[m.steamId]?.avatar || null]));
+  const online = (servers?.data ?? []).flatMap((s) =>
+    s.players
+      .filter((p) => ids.has(p.steamId) || clanTag(p.name) === tag)
+      .map((p) => ({ ...p, serverId: s.id, serverName: s.shortName, serverSlug: s.slug })),
+  );
+  return loaded({ clan: found, rank: i + 1, of: all.length, avatars, online }, stale || !!servers?.stale);
 }
 
 /** Warcon's floor for the career rank: players with less time on are not ranked. */

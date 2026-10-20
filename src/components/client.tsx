@@ -37,6 +37,7 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
 const NAV = [
   { href: '/servers', label: 'Servers' },
   { href: '/leaderboards', label: 'Leaderboards' },
+  { href: '/clans', label: 'Clans' },
   { href: '/records', label: 'Records' },
   { href: '/players', label: 'Players' },
   { href: '/matches', label: 'Matches' },
