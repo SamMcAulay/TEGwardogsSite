@@ -152,6 +152,15 @@ describe('members hiding where they play', () => {
     expect(r.data.map((x) => [x.eventId, x.killerName, x.killerSteamId])).toEqual([['new', 'Hidden player', null], ['old', 'Hid', H]]);
   });
 
+  test("a feed of one hidden player's kills leaves out their recent ones altogether", async () => {
+    presence.hidden = new Set([H]);
+    const now = Date.now();
+    const k = (id: string, ms: number) => ({ eventId: id, ts: new Date(now - ms).toISOString(), map: 'M', eventTime: 1, killer: { steamId: H, name: 'Hid', faction: 'A' }, victim: { steamId: '76561198000000001', name: 'V', faction: 'B' }, cause: null, distanceM: null, headshot: false, suicide: false, teamKill: false, tags: [] });
+    api.kills.mockImplementation(async (id: string) => fresh({ ok: true, total: null, kills: id === 's1' ? [k('new', 60_000), k('old', 5 * 3600_000)] : [] }));
+    const r = await recentKills({ limit: 10, steamId: H });
+    expect(r.data.map((x) => x.eventId)).toEqual(['old']);
+  });
+
   test('a running round hides them by name and in its awards', async () => {
     presence.hidden = new Set([H]);
     api.match.mockResolvedValue(fresh({

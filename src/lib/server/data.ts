@@ -19,7 +19,7 @@ import { RECORD_CAUSES } from '@/lib/weapon-classes';
 import { clanTag } from '@/lib/clans';
 import { accounts, presenceHidden } from './accounts';
 import { MAX_FRIENDS } from './accounts/store';
-import { maskAward, maskKill, maskLine, maskLive, recentRound } from './presence';
+import { maskAward, maskKill, maskLine, maskLive, RECENT_S, recentRound } from './presence';
 import { momentum } from '@/lib/momentum';
 import { groupClans, type Clan, type ClanSort } from './clans';
 
@@ -685,7 +685,11 @@ export async function recentKills(q: { serverId?: string | null; steamId?: strin
   const lists = r.ok.map(({ id, value }) => value.kills.map((k) => killRow(k, id, shortNameOf(list.find((s) => s.id === id)!.name))));
   const hidden = presenceHidden();
   const now = Math.floor(Date.now() / 1000);
-  return loaded(mergeNewest(lists, (k) => k.ts, limit).map((k) => maskKill(k, hidden, now)), r.stale, r.failed);
+  const rows = mergeNewest(lists, (k) => k.ts, limit);
+  // One hidden player's own feed would say where they are even with their name masked: leave out
+  // their last RECENT_S entirely (no caller filters by player today; this keeps any future one safe).
+  if (q.steamId && hidden.has(q.steamId)) return loaded(rows.filter((k) => now - k.ts > RECENT_S), r.stale, r.failed);
+  return loaded(rows.map((k) => maskKill(k, hidden, now)), r.stale, r.failed);
 }
 
 function matchRow(m: WMatchSummary, serverId: string, serverName: string, colours: Map<string, string | null>): MatchRow {
