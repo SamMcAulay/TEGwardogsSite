@@ -5,6 +5,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { NavLinks } from '@/components/client';
 import { ThemePrompt, ThemeToggle } from '@/components/theme';
+import { InstallLink, InstallPrompt } from '@/components/install';
 import { Container, StatusDot } from '@/components/ui';
 import { int } from '@/lib/format';
 import { safe } from '@/components/section';
@@ -31,7 +32,16 @@ export const metadata: Metadata = {
   description:
     'Live server status, player profiles, match history and leaderboards for The Employed Gamers WARDOGS servers.',
   metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined,
+  // Installed on an iPhone's home screen: open full screen, named WARDOGS under the icon.
+  appleWebApp: { capable: true, title: 'WARDOGS', statusBarStyle: 'black-translucent' },
 };
+
+/**
+ * Android can say the site is installable before the page's scripts load; keep that offer for the
+ * install prompt (components/install.tsx) instead of losing it.
+ */
+const KEEP_INSTALL_OFFER =
+  "addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installOffer=e})";
 
 /** The visitor's saved theme, or null before they've picked one. */
 async function savedTheme() {
@@ -97,6 +107,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" data-theme={theme ?? 'dark'} className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
       <body className="flex min-h-screen flex-col">
+        <script dangerouslySetInnerHTML={{ __html: KEEP_INSTALL_OFFER }} />
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-ink"
@@ -138,6 +149,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </Container>
         </header>
         {!theme && <ThemePrompt />}
+        {/* Never on top of the theme question: a first visit gets that, the next one this. */}
+        <InstallPrompt auto={!!theme} />
         {SITE_NOTICE && (
           <div role="note" className="border-b border-accent/30 bg-accent-soft">
             <Container className="py-2 text-[13px] leading-snug text-text/90">
@@ -182,6 +195,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link className="link text-muted" href="/api-docs">
                 Public API
               </Link>
+              <InstallLink />
               {linkingOn() && (
                 <Link className="link text-muted" href="/account">
                   Link Discord &amp; Steam
