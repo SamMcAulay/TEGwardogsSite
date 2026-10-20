@@ -331,9 +331,9 @@ async function keptSeasonTwo(serverIds: string[], sort: Metric, banned: Readonly
  * when the export fails. Throws if the ban list has never loaded, so the page shows "unavailable"
  * rather than banned players. Boards stop at page MAX_BOARD_PAGE.
  */
-export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number; members?: Set<string> }) {
+export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number; members?: Set<string>; me?: string | null }) {
   const anchor = (await visibleIds(q.serverId))[0];
-  if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE });
+  if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE, mine: null as { rank: number; page: number | null } | null });
   const banned = await orgBannedIds();
   const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
   let board: Kept;
@@ -356,6 +356,9 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   }
   const { kept, pageSize } = board;
   const total = Math.min(board.total, MAX_BOARD_PAGE * pageSize);
+  // The viewer's own place: their rank, and the page it's on while that's within the boards' depth.
+  const myIndex = q.me ? kept.findIndex((r) => r.steamId === q.me) : -1;
+  const mine = myIndex < 0 ? null : { rank: myIndex + 1, page: myIndex < total ? Math.floor(myIndex / pageSize) + 1 : null };
 
   const start = (page - 1) * pageSize;
   const slice = kept.slice(start, start + pageSize);
@@ -375,7 +378,7 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     value: metricValue(q.metric, r),
     lastSeen: sec(r.lastSeen),
   }));
-  return loaded({ rows, total, pageSize }, board.stale || banned.stale);
+  return loaded({ rows, total, pageSize, mine }, board.stale || banned.stale);
 }
 
 /**

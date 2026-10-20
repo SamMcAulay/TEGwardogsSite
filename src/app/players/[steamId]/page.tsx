@@ -17,7 +17,7 @@ import { classKills } from '@/lib/weapon-classes';
 import { milestones } from '@/lib/milestones';
 import { PROFILE_COLOURS, profileThemeStyle } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
-import { lookOfSteam } from '@/lib/server/accounts';
+import { lookOfSteam, viewer } from '@/lib/server/accounts';
 import { getPlayer, playerSeason } from '@/lib/server/data';
 import { parseSeason, SEASON_LABELS, SEASONS } from '@/lib/server/seasons';
 
@@ -99,6 +99,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   const servers = [...p.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
   const look = lookOfSteam(steamId);
+  const me = await viewer();
   const tier = look?.tier ?? null;
   const custom = look?.custom ?? null;
   const colour = custom?.colour ? PROFILE_COLOURS[custom.colour].hex : undefined;
@@ -182,6 +183,11 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                     Steam profile ↗
                   </a>
                   <span className="text-xs">First seen {player.firstSeen ? <LocalTime ts={player.firstSeen} dateOnly /> : '—'}</span>
+                  {me?.steamId === steamId && (
+                    <Link href="/account" className="link text-xs text-accent">
+                      This is you · Account settings
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>

@@ -3,12 +3,13 @@ import { TimezoneNote } from '@/components/local-time';
 import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
-import { NavLinks, SearchBox } from '@/components/client';
+import { NavLinks } from '@/components/client';
 import { ThemePrompt, ThemeToggle } from '@/components/theme';
 import { Container, StatusDot } from '@/components/ui';
 import { int } from '@/lib/format';
 import { safe } from '@/components/section';
 import { accountsEnv } from '@/lib/server/accounts/env';
+import { viewer } from '@/lib/server/accounts';
 import { getServers } from '@/lib/server/data';
 import { parseTheme, THEME_CHROME, THEME_COOKIE } from '@/lib/theme';
 import './globals.css';
@@ -91,6 +92,8 @@ const SITE_NOTICE: string | null = null;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const theme = await savedTheme();
+  const me = linkingOn() ? await viewer() : null;
+  const account = !linkingOn() ? null : me?.steamId ? { href: `/players/${me.steamId}`, label: 'My profile' } : { href: '/account', label: 'Account' };
   return (
     <html lang="en" data-theme={theme ?? 'dark'} className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
       <body className="flex min-h-screen flex-col">
@@ -103,18 +106,30 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur">
           <Container className="relative flex h-14 items-center gap-6">
             <Logo />
-            <NavLinks />
-            <div className="ml-auto hidden items-center gap-3 lg:flex">
-              <div className="w-60 xl:w-72">
-                <SearchBox />
+            <NavLinks account={account} />
+            {/* Wide screens only; narrower ones have all of this in the menu. The online count needs
+                the room of a 2xl screen; search is the players page, a click away. */}
+            <div className="ml-auto hidden items-center gap-3 xl:flex">
+              <Link
+                href="/players"
+                aria-label="Search players"
+                className="flex size-8 items-center justify-center border border-line-strong text-muted transition-colors hover:border-accent hover:text-text"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <circle cx="7" cy="7" r="5" />
+                  <path d="M11 11l3.5 3.5" />
+                </svg>
+              </Link>
+              <div className="hidden 2xl:flex">
+                <OnlinePill />
               </div>
-              <OnlinePill />
-              {linkingOn() && (
+              {account && (
                 <Link
-                  href="/account"
-                  className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em] text-muted transition-colors hover:border-accent hover:text-text"
+                  href={account.href}
+                  prefetch={false}
+                  className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold whitespace-nowrap uppercase tracking-[0.1em] text-muted transition-colors hover:border-accent hover:text-text"
                 >
-                  Account
+                  {account.label}
                 </Link>
               )}
             </div>

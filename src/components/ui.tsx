@@ -189,7 +189,7 @@ export function Segmented({
           prefetch={prefetch}
           aria-current={it.key === active ? 'page' : undefined}
           className={cx(
-            'px-3 py-1.5 font-display text-[12px] font-semibold uppercase tracking-[0.1em] transition-colors',
+            'px-3 py-1.5 font-display text-[12px] font-semibold whitespace-nowrap uppercase tracking-[0.1em] transition-colors',
             it.key === active ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
           )}
         >

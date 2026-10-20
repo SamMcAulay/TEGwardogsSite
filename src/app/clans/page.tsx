@@ -55,11 +55,13 @@ export default async function ClansPage({ searchParams }: PageProps<'/clans'>) {
               items={CLAN_SORTS.map((s) => ({ key: s, label: CLAN_SORT_LABELS[s], href: withParams('/clans', sp, { sort: s === 'kills' ? null : s }) }))}
             />
           </div>
-          <Segmented
+          <div>
+            <Segmented
             label="Period"
             active={period}
             items={PERIODS.map((p) => ({ key: p, label: PERIOD_LABELS[p], href: withParams('/clans', sp, { period: p === '30d' ? null : p }) }))}
           />
+          </div>
         </div>
       </PageHeader>
 

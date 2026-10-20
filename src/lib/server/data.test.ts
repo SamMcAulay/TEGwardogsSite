@@ -273,6 +273,14 @@ describe('leaderboard from the whole-board export', () => {
     expect(p2.data.total).toBe(98);
   });
 
+  test("the viewer's own rank and page; past the boards' depth, a rank with no page; absent, nothing", async () => {
+    exportOf(3000);
+    expect((await leaderboard({ metric: 'kills', period: '30d', me: row(130).steamId })).data.mine).toEqual({ rank: 130, page: 3 });
+    expect((await leaderboard({ metric: 'kills', period: '30d', me: row(2500).steamId })).data.mine).toEqual({ rank: 2500, page: null });
+    expect((await leaderboard({ metric: 'kills', period: '30d', me: '76561198099999999' })).data.mine).toBeNull();
+    expect((await leaderboard({ metric: 'kills', period: '30d' })).data.mine).toBeNull();
+  });
+
   test('boards stop at page 20 (the top 1,000)', async () => {
     exportOf(3000);
     const r = await leaderboard({ metric: 'kills', period: 'all', page: 999 });
