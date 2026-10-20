@@ -18,7 +18,8 @@ import { classKills } from '@/lib/weapon-classes';
 import { milestones } from '@/lib/milestones';
 import { PROFILE_COLOURS, profileThemeStyle } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
-import { lookOfSteam, viewer } from '@/lib/server/accounts';
+import { lookOfSteam, standing, viewer } from '@/lib/server/accounts';
+import { withoutPresence } from '@/lib/server/presence';
 import { getPlayer, playerSeason } from '@/lib/server/data';
 import { parseSeason, SEASON_LABELS, SEASONS } from '@/lib/server/seasons';
 
@@ -89,7 +90,10 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
       </Container>
     );
   }
-  const player = loadedPlayer.data;
+  const me = await viewer();
+  const stand = standing(steamId, me);
+  // A member hiding where they play: only they and their friends see it (lib/server/presence.ts).
+  const player = stand.seesPresence ? loadedPlayer.data : withoutPresence(loadedPlayer.data, nowSec());
   const view = season === 'all' ? null : await playerSeason(player, season);
   // The header is always all time; everything under the tabs is the chosen season.
   const p = view && view !== 'unavailable' ? view.profile : player;
@@ -100,7 +104,6 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   const servers = [...p.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
   const look = lookOfSteam(steamId);
-  const me = await viewer();
   const tier = look?.tier ?? null;
   const custom = look?.custom ?? null;
   const colour = custom?.colour ? PROFILE_COLOURS[custom.colour].hex : undefined;
@@ -146,9 +149,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                         <StatusDot online /> Playing on {player.onlineOn.serverName}
                       </Badge>
                     </Link>
-                  ) : (
+                  ) : stand.seesPresence ? (
                     <Badge>Last seen {player.lastSeen ? ago(player.lastSeen, now) : '—'}</Badge>
-                  )}
+                  ) : null}
                   {tier && <TierBadge tier={tier} />}
                 </div>
                 <h1 className="display truncate text-4xl leading-none sm:text-5xl">
@@ -175,7 +178,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>
                   <CopyButton value={steamId} label="Copy ID" />
-                  <FriendButton steamId={steamId} />
+                  {stand.linked && stand.relation !== 'self' && (
+                    <FriendButton steamId={steamId} relation={stand.relation} signedIn={!!me?.steamId} />
+                  )}
                   <a
                     href={`https://steamcommunity.com/profiles/${steamId}`}
                     target="_blank"

@@ -13,6 +13,7 @@ import { nameStyleFor } from '@/lib/name-styles';
 import { TIERS, type Tier } from '@/lib/tiers';
 import { one } from '@/lib/url';
 import { signOut, unlinkSteam } from './actions';
+import { setHidePresence } from '../friends/actions';
 
 export const metadata: Metadata = { title: 'Account', robots: { index: false } };
 
@@ -155,6 +156,36 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
           )}
           {link?.tier && (
             <Customise link={link} name={playerName ?? session!.name} totals={totals} status={one(sp.profile)} />
+          )}
+          {link && (
+            <Panel title="Privacy">
+              <form action={setHidePresence} className="flex flex-wrap items-center justify-between gap-3">
+                <input type="hidden" name="hide" value={link.hidePresence ? 'no' : 'yes'} />
+                <input type="hidden" name="back" value="/account" />
+                <p className="max-w-xl text-sm text-muted">
+                  {link.hidePresence ? (
+                    <>
+                      <span className="font-semibold text-text">Where you&rsquo;re playing is hidden.</span> Only your{' '}
+                      <Link href="/friends" className="link text-accent">
+                        friends
+                      </Link>{' '}
+                      see which server you&rsquo;re on; everyone else sees &ldquo;Hidden player&rdquo; for 3 hours.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-text">Everyone can see where you&rsquo;re playing.</span> Hide it and only your{' '}
+                      <Link href="/friends" className="link text-accent">
+                        friends
+                      </Link>{' '}
+                      will.
+                    </>
+                  )}
+                </p>
+                <button className={buttonClass(link.hidePresence ? 'secondary' : 'primary')}>
+                  {link.hidePresence ? 'Show to everyone' : 'Hide where I’m playing'}
+                </button>
+              </form>
+            </Panel>
           )}
         </div>
         <Panel title="Queue priority">

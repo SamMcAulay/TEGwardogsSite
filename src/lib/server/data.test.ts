@@ -16,6 +16,8 @@ const api = {
 };
 const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []), hit: vi.fn<(id: string) => Promise<unknown>>(async () => null) };
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => index }));
+const presence = { hidden: new Set<string>() };
+vi.mock('./accounts', () => ({ presenceHidden: () => presence.hidden, accounts: () => null }));
 const bans = { orgBannedIds: vi.fn() };
 vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 const seasonBoards: { byServer: Record<string, Map<string, object>> | 'unavailable' } = { byServer: {} };
@@ -38,6 +40,7 @@ const SERVERS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  presence.hidden = new Set();
   api.servers.mockResolvedValue(fresh(SERVERS));
   bans.orgBannedIds.mockResolvedValue({ ids: new Set<string>(), stale: false });
   // The export path is covered in its own tests; elsewhere it fails, exercising the page fallback.
@@ -116,6 +119,50 @@ describe('friendsStatus', () => {
     const r = await friendsStatus(['76561198000000111', '76561198000000222']);
     expect(r.data.map((f) => f.name)).toEqual([null, null]);
     expect(api.steamProfiles).not.toHaveBeenCalled();
+  });
+});
+
+describe('members hiding where they play', () => {
+  const H = '76561198000000009';
+  const live = {
+    ok: true, gameServerId: 'J1', startedAt: '2026-10-04T10:00:00Z', observedAt: '2026-10-04T12:00:00Z',
+    status: { serverName: 'x', map: 'M', experiences: [], lighting: 'Day', matchSeconds: 5, playerCount: 2, maxPlayers: 64, scoreCap: 500, scores: [] },
+    players: [
+      { name: 'Hid', steamId: H, faction: 'A', kills: 3, deaths: 0, cash: 0 },
+      { name: 'Bob', steamId: '76561198000000001', faction: 'A', kills: 1, deaths: 0, cash: 0 },
+    ],
+  };
+
+  test('live scoreboards say Hidden player; /friends reads them unmasked', async () => {
+    presence.hidden = new Set([H]);
+    api.live.mockResolvedValue(fresh(live));
+    const masked = await getServers();
+    expect(masked.data[0].players.map((p) => [p.name, p.steamId])).toEqual([['Hidden player', ''], ['Bob', '76561198000000001']]);
+    expect(masked.data[0].playerCount).toBe(2);
+    const raw = await getServers({ unmasked: true });
+    expect(raw.data[0].players[0].name).toBe('Hid');
+  });
+
+  test("a recent kill feed hides them; an old one doesn't", async () => {
+    presence.hidden = new Set([H]);
+    const now = Date.now();
+    const k = (id: string, ms: number) => ({ eventId: id, ts: new Date(now - ms).toISOString(), map: 'M', eventTime: 1, killer: { steamId: H, name: 'Hid', faction: 'A' }, victim: { steamId: '76561198000000001', name: 'V', faction: 'B' }, cause: null, distanceM: null, headshot: false, suicide: false, teamKill: false, tags: [] });
+    api.kills.mockImplementation(async (id: string) => fresh({ ok: true, total: null, kills: id === 's1' ? [k('new', 60_000), k('old', 5 * 3600_000)] : [] }));
+    const r = await recentKills({ limit: 10 });
+    expect(r.data.map((x) => [x.eventId, x.killerName, x.killerSteamId])).toEqual([['new', 'Hidden player', null], ['old', 'Hid', H]]);
+  });
+
+  test('a running round hides them by name and in its awards', async () => {
+    presence.hidden = new Set([H]);
+    api.match.mockResolvedValue(fresh({
+      match: { id: 9, startedAt: new Date(Date.now() - 600_000).toISOString(), endedAt: null, map: 'M', experiences: null, lighting: null, peakPlayers: 2, players: 2, finalScores: null, winner: null },
+      factions: [], lines: [{ steamId: H, name: 'Hid', faction: 'A', kills: 3, deaths: 0, headshots: 0, longestM: null, cashDelta: 0, seconds: 60, killStreak: 3 }],
+      timeline: [], awards: [{ key: 'kills', label: 'Most kills', steamId: H, name: 'Hid', value: '3' }], kills: 0, hasFeed: true,
+    }));
+    api.kills.mockResolvedValue(fresh({ ok: true, total: null, kills: [] }));
+    const r = await getMatch('s1', 9);
+    expect(r?.data.lines[0]).toMatchObject({ steamId: '', name: 'Hidden player' });
+    expect(r?.data.awards[0]).toMatchObject({ steamId: '', name: 'Hidden player' });
   });
 });
 

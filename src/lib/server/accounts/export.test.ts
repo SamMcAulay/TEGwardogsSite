@@ -12,6 +12,7 @@ const link = (o: Partial<Link>): Link => ({
   bio: null,
   colour: null,
   featured: [],
+  hidePresence: false,
   linkedAt: 1_760_000_000,
   ...o,
 });

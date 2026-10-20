@@ -163,8 +163,8 @@ function TeamTable({ name, rows, winner }: { name: string; rows: MatchPlayerRow[
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.steamId}>
+            {rows.map((r, i) => (
+              <tr key={r.steamId || `hidden-${i}`}>
                 <td className="max-w-40">
                   <PlayerLink steamId={r.steamId} name={r.name} avatar={false} />
                 </td>

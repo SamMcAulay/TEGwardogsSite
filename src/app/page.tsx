@@ -8,7 +8,8 @@ import { Container, Meter, Panel, PanelLink, RankCell, Stat, StatGrid } from '@/
 import { Section, safe } from '@/components/section';
 import { compact, int, kd, pct } from '@/lib/format';
 import { factionColor } from '@/lib/game';
-import { factionWins, getServers, leaderboard, networkSummary, population, recentKills } from '@/lib/server/data';
+import { factionWins, friendsPage, getServers, leaderboard, networkSummary, population, recentKills } from '@/lib/server/data';
+import { viewer } from '@/lib/server/accounts';
 import type { LeaderRow, Loaded } from '@/lib/server/views';
 
 function MiniBoard({
@@ -42,8 +43,16 @@ function MiniBoard({
   );
 }
 
+/** The signed-in member's friends with where they are; empty for everyone else. */
+async function friendsOfViewer() {
+  const me = await viewer();
+  if (!me?.steamId) return [];
+  return (await friendsPage(me.discordId).catch(() => null))?.friends.map((f) => f.status) ?? [];
+}
+
 export default async function Home() {
   const servers = await safe(getServers());
+  const myFriends = await friendsOfViewer();
   const [summary, pop, kills, kdBoard, feed, wins] = await Promise.all([
     // Without the server list there is no summary to give; never a row of zeros.
     servers instanceof Error ? servers : safe(networkSummary(servers.data)),
@@ -113,7 +122,7 @@ export default async function Home() {
       </section>
 
       <Container className="mt-10 space-y-10">
-        <FriendsOnline />
+        {myFriends.length > 0 && <FriendsOnline friends={myFriends} />}
         <section>
           <div className="mb-4 flex items-end justify-between">
             <h2 className="display text-2xl">Live servers</h2>

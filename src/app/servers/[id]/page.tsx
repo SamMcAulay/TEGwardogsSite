@@ -96,8 +96,8 @@ function Scoreboard({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((p) => (
-              <tr key={p.steamId}>
+            {sorted.map((p, i) => (
+              <tr key={p.steamId || `hidden-${i}`}>
                 <td className="max-w-56">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <PlayerLink steamId={p.steamId} name={p.name} avatar={false} className="max-w-40" />

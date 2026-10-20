@@ -125,7 +125,9 @@ const routes = [
     const p = PLAYERS.find((x) => x.steamId === steamId);
     const recent = kills.get(id).slice(0, 10).map((k) => ({ ...k, serverId: id, serverName: SERVERS.find((s) => s.id === id).name }));
     return { ok: true, dossier: {
-      steamId, name: p?.name ?? steamId, names: p ? [p.name, `${p.name}_old`] : [], online: null, steamEnabled: true,
+      steamId, name: p?.name ?? steamId, names: p ? [p.name, `${p.name}_old`] : [],
+      // the first 24 players are on every live scoreboard; their profile says the first server
+      online: p && PLAYERS.indexOf(p) < 24 ? { serverId: SERVERS[0].id, serverName: SERVERS[0].name } : null, steamEnabled: true,
       steam: p ? { persona: p.name, avatar: '', profileUrl: '', public: true, vacBans: 1 } : null,
       risk: { level: 'high' }, watch: { watched: true, reason: 'PRIVATE-WATCH-REASON', updatedByName: 'mod', updatedAt: null },
       bannedOn: [], orgServerCount: 6, orgLists: { ban: null, reserve: null, canBan: false, canReserve: false },

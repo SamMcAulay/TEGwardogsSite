@@ -6,7 +6,7 @@ import { canCustomise, FEATURED_MAX, isProfileColour, type ProfileCustom } from 
 import type { Tier } from '@/lib/tiers';
 import { accountsEnv, type AccountsEnv } from './env';
 import { readSession, SESSION_COOKIE, type Session } from './session';
-import { store, type Store } from './store';
+import { store, type Relation, type Store } from './store';
 
 export interface Accounts {
   env: AccountsEnv;
@@ -77,6 +77,36 @@ export async function viewer(): Promise<{ discordId: string; steamId: string | n
   } catch (e) {
     console.error('[accounts] viewer lookup failed:', e instanceof Error ? e.message : e);
     return null;
+  }
+}
+
+/** Steam accounts whose members hide where they're playing (lib/server/presence.ts); empty when linking is off. Never throws. */
+export function presenceHidden(): ReadonlySet<string> {
+  try {
+    return accounts()?.store.presenceHidden() ?? new Set();
+  } catch (e) {
+    console.error('[accounts] hidden list failed:', e instanceof Error ? e.message : e);
+    return new Set();
+  }
+}
+
+/**
+ * Where `viewer` stands with the linked player on `steamId`, for their profile: whether that
+ * player is linked (and so can be friended), how they stand, and whether the viewer may see where
+ * they're playing (not hidden, or it's the viewer themself, or they're friends). Never throws.
+ */
+export function standing(steamId: string, viewer: { discordId: string; steamId: string | null } | null): { linked: boolean; relation: Relation | 'self'; seesPresence: boolean } {
+  try {
+    const store = accounts()?.store;
+    const them = store?.bySteam(steamId);
+    if (!store || !them) return { linked: false, relation: 'none', seesPresence: true };
+    if (viewer?.discordId === them.discordId) return { linked: true, relation: 'self', seesPresence: true };
+    const relation = viewer?.steamId ? store.relation(viewer.discordId, them.discordId) : 'none';
+    return { linked: true, relation, seesPresence: !them.hidePresence || relation === 'friends' };
+  } catch (e) {
+    console.error('[accounts] standing failed:', e instanceof Error ? e.message : e);
+    // Fail closed for a hidden player: show nothing about where they are.
+    return { linked: false, relation: 'none', seesPresence: false };
   }
 }
 

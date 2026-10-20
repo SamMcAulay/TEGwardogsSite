@@ -132,6 +132,80 @@ describe('accounts store', () => {
   });
 });
 
+describe('friends and privacy', () => {
+  const D3 = '333333333333333333';
+  const S3 = '76561198000000003';
+  const store = () => {
+    const s = openStore(':memory:');
+    s.link(D1, S1);
+    s.link(D2, S2);
+    s.link(D3, S3);
+    return s;
+  };
+
+  test('a request, accepted, makes friends both ways; either side can end it', () => {
+    const s = store();
+    expect(s.requestFriend(D1, D2, 10)).toBe('outgoing');
+    expect([s.relation(D1, D2), s.relation(D2, D1)]).toEqual(['outgoing', 'incoming']);
+    expect(s.incoming(D2)).toEqual([{ other: D1, since: 10 }]);
+    expect(s.answerFriend(D2, D1, true, 20)).toBe(true);
+    expect([s.relation(D1, D2), s.relation(D2, D1)]).toEqual(['friends', 'friends']);
+    expect(s.friendsOf(D1)).toEqual([{ other: D2, since: 20 }]);
+    expect(s.friendsOf(D2)).toEqual([{ other: D1, since: 20 }]);
+    s.removeFriend(D2, D1);
+    expect(s.relation(D1, D2)).toBe('none');
+  });
+
+  test('asking someone who already asked you makes you friends', () => {
+    const s = store();
+    s.requestFriend(D1, D2);
+    expect(s.requestFriend(D2, D1)).toBe('friends');
+    expect(s.incoming(D2)).toEqual([]);
+  });
+
+  test('a denied request still looks pending to the sender, and cannot be sent again', () => {
+    const s = store();
+    s.requestFriend(D1, D2);
+    expect(s.answerFriend(D2, D1, false)).toBe(true);
+    expect(s.relation(D1, D2)).toBe('outgoing');
+    expect(s.relation(D2, D1)).toBe('none');
+    expect(s.incoming(D2)).toEqual([]);
+    expect(s.requestFriend(D1, D2)).toBe('outgoing');
+    expect(s.incoming(D2)).toEqual([]);
+    // the denier can still ask them later
+    expect(s.requestFriend(D2, D1)).toBe('outgoing');
+    expect(s.answerFriend(D1, D2, false)).toBe(true);
+    // taking back a request doesn't undo a denial the other way
+    s.removeFriend(D2, D1);
+    expect(s.relation(D1, D2)).toBe('outgoing');
+  });
+
+  test('answering a request that is not there; asking yourself', () => {
+    const s = store();
+    expect(s.answerFriend(D2, D1, true)).toBe(false);
+    expect(s.requestFriend(D1, D1)).toBe('none');
+  });
+
+  test('unlinking ends friendships and requests', () => {
+    const s = store();
+    s.requestFriend(D1, D2);
+    s.answerFriend(D2, D1, true);
+    s.requestFriend(D3, D1);
+    s.unlink(D1);
+    expect(s.friendsOf(D2)).toEqual([]);
+    expect(s.outgoing(D3)).toEqual([]);
+  });
+
+  test('hiding where you play', () => {
+    const s = store();
+    s.setHidePresence(D2, true);
+    expect(s.byDiscord(D2)?.hidePresence).toBe(true);
+    expect([...s.presenceHidden()]).toEqual([S2]);
+    s.setHidePresence(D2, false);
+    expect(s.presenceHidden().size).toBe(0);
+  });
+});
+
 describe('accounts.db on disk', () => {
   let dir: string;
   const fresh = () => (dir = mkdtempSync(join(tmpdir(), 'accounts-')));
@@ -282,6 +356,20 @@ describe('accounts.db on disk', () => {
     expect(s.removeAlerts(D1, a.id)).toBe(1);
     expect(s.removeAlerts(D1)).toBe(2);
     expect(s.allAlerts().map((x) => x.discordId)).toEqual([D2]);
+  });
+
+  test('upgrading a v7 database (live since #42) keeps everything and adds friends and privacy', () => {
+    const file = join(fresh(), 'accounts.db');
+    const v7 = new DatabaseSync(file);
+    v7.exec(`${MIGRATIONS.slice(0, 7).join(';\n')}; PRAGMA user_version = 7;`);
+    v7.prepare("INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at, discord_name) VALUES (?, ?, 1, 50, 40, 'Jan')").run(D1, S1);
+    v7.prepare("INSERT INTO alerts (discord_id, kind, threshold, created_at) VALUES (?, 'players', 30, 1)").run(D1);
+    v7.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ tier: 1, discordName: 'Jan', hidePresence: false });
+    expect(s.alertsOf(D1)).toHaveLength(1);
+    expect(s.friendsOf(D1)).toEqual([]);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
   });
 
   test('upgrading the live v1 database keeps its links and adds the admin log', () => {

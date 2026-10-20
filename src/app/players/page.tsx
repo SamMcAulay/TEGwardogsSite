@@ -126,12 +126,16 @@ export default async function PlayersPage({ searchParams }: PageProps<'/players'
                     <div className="max-h-[640px] overflow-y-auto">
                       <table className="table">
                         <tbody>
-                          {playing.map((p) => (
-                            <tr key={p.steamId}>
+                          {playing.map((p, i) => (
+                            <tr key={p.steamId || `hidden-${i}`}>
                               <td className="max-w-40">
-                                <Link prefetch={false} href={`/players/${p.steamId}`} className="link block truncate font-medium">
-                                  {p.name}
-                                </Link>
+                                {p.steamId ? (
+                                  <Link prefetch={false} href={`/players/${p.steamId}`} className="link block truncate font-medium">
+                                    {p.name}
+                                  </Link>
+                                ) : (
+                                  <span className="block truncate text-muted">{p.name}</span>
+                                )}
                               </td>
                               <td>
                                 <FactionTag name={p.faction} />

@@ -17,6 +17,9 @@ import type {
 } from './views';
 import { RECORD_CAUSES } from '@/lib/weapon-classes';
 import { clanTag } from '@/lib/clans';
+import { accounts, presenceHidden } from './accounts';
+import { MAX_FRIENDS } from './accounts/store';
+import { maskAward, maskKill, maskLine, maskLive, recentRound } from './presence';
 import { momentum } from '@/lib/momentum';
 import { groupClans, type Clan, type ClanSort } from './clans';
 
@@ -57,7 +60,7 @@ async function visibleIds(serverId: string | null | undefined): Promise<string[]
 }
 
 /** live: Warcon's answer (null = it has never observed the server); unknown = the call failed. */
-function serverRow(s: { id: string; name: string }, live: WLive | null, unknown = false): ServerRow {
+function serverRow(s: { id: string; name: string }, live: WLive | null, unknown = false, hidden: ReadonlySet<string> = NO_ONE): ServerRow {
   const st = live?.status ?? null;
   const shortName = shortNameOf(s.name);
   return {
@@ -80,17 +83,24 @@ function serverRow(s: { id: string; name: string }, live: WLive | null, unknown 
       factionScores: st.scores,
       rotation: { now: st.rotationNow ?? null, next: st.rotationNext ?? null },
     },
-    players: (live?.players ?? []).map((p) => ({ name: p.name, steamId: p.steamId, faction: p.faction ?? '', kills: p.kills, deaths: p.deaths, cash: p.cash })),
+    players: (live?.players ?? []).map((p) => maskLive({ name: p.name, steamId: p.steamId, faction: p.faction ?? '', kills: p.kills, deaths: p.deaths, cash: p.cash }, hidden)),
     playerCount: st?.playerCount ?? 0,
     joinCode: live?.gameServerId || null,
     startedAt: sec(live?.startedAt),
   };
 }
 
-export async function getServers(): Promise<Loaded<ServerRow[]>> {
+const NO_ONE: ReadonlySet<string> = new Set();
+
+/**
+ * Every server's live status. Members who hide where they play show as "Hidden player" on the
+ * scoreboards; `unmasked` is for /friends only, which shows accepted friends where they are.
+ */
+export async function getServers(opts: { unmasked?: boolean } = {}): Promise<Loaded<ServerRow[]>> {
   const { list, stale } = await serverList();
   const r = await fanOut(list.map((s) => s.id), (id) => warcon().live(id));
-  const rows = list.map((s) => serverRow(s, r.ok.find((o) => o.id === s.id)?.value ?? null, r.failed.includes(s.id)));
+  const hidden = opts.unmasked ? NO_ONE : presenceHidden();
+  const rows = list.map((s) => serverRow(s, r.ok.find((o) => o.id === s.id)?.value ?? null, r.failed.includes(s.id), hidden));
   return loaded(rows, stale || r.stale, r.failed);
 }
 
@@ -102,7 +112,7 @@ export async function getServer(slugOrId: string): Promise<Loaded<ServerRow> | n
   const id = s.id;
   try {
     const live = await warcon().live(id);
-    return loaded(serverRow(s, live.value), live.stale);
+    return loaded(serverRow(s, live.value, false, presenceHidden()), live.stale);
   } catch {
     return loaded(serverRow(s, null, true), false, [id]);
   }
@@ -363,6 +373,7 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   const start = (page - 1) * pageSize;
   const slice = kept.slice(start, start + pageSize);
   const avatars = await warcon().steamProfiles(slice.map((r) => r.steamId));
+  const hidden = presenceHidden();
   const rows: LeaderRow[] = slice.map((r, i) => ({
     rank: start + i + 1,
     steamId: r.steamId,
@@ -376,7 +387,8 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     wins: r.wins,
     cash: r.cash,
     value: metricValue(q.metric, r),
-    lastSeen: sec(r.lastSeen),
+    // "Last seen just now" would say they're playing.
+    lastSeen: hidden.has(r.steamId) ? null : sec(r.lastSeen),
   }));
   return loaded({ rows, total, pageSize, mine }, board.stale || banned.stale);
 }
@@ -409,7 +421,8 @@ export async function clan(tag: string, period: Period): Promise<Loaded<{ clan: 
   const all = groupClans(rows, 'kills');
   const i = all.findIndex((c) => c.tag === tag);
   if (i < 0) return null;
-  const found = all[i];
+  const hidden = presenceHidden();
+  const found = { ...all[i], members: all[i].members.map((m) => (hidden.has(m.steamId) ? { ...m, lastSeen: null } : m)) };
   const ids = new Set(found.members.map((m) => m.steamId));
   const profiles = await warcon().steamProfiles(found.members.slice(0, 100).map((m) => m.steamId));
   const avatars = Object.fromEntries(found.members.map((m) => [m.steamId, profiles[m.steamId]?.avatar || null]));
@@ -421,8 +434,7 @@ export async function clan(tag: string, period: Period): Promise<Loaded<{ clan: 
   return loaded({ clan: found, rank: i + 1, of: all.length, avatars, online }, stale || !!servers?.stale);
 }
 
-/** Friends looked up at once, at most: a list longer than this is cut. */
-export const MAX_FRIENDS = 50;
+
 
 /**
  * Where each friend is: playing now (from the cached live server list) or when last seen (from the
@@ -430,7 +442,8 @@ export const MAX_FRIENDS = 50;
  */
 export async function friendsStatus(steamIds: string[]): Promise<Loaded<FriendStatus[]>> {
   const ids = [...new Set(steamIds.filter((id) => /^\d{17}$/.test(id)))].slice(0, MAX_FRIENDS);
-  const servers = await getServers().catch(() => null);
+  // Unmasked: these are the viewer's accepted friends, who may see where they are.
+  const servers = await getServers({ unmasked: true }).catch(() => null);
   const onlineAt = new Map<string, NonNullable<FriendStatus['online']> & { name: string }>();
   for (const s of servers?.data ?? []) {
     for (const p of s.players) {
@@ -456,6 +469,38 @@ export async function friendsStatus(steamIds: string[]): Promise<Loaded<FriendSt
     };
   });
   return loaded(rows, !servers || servers.stale, servers ? [] : ['servers']);
+}
+
+/** A member's friends page: accepted friends with where they are, and requests both ways. */
+export async function friendsPage(discordId: string): Promise<{
+  friends: { discordId: string; status: FriendStatus }[];
+  incoming: { discordId: string; steamId: string; name: string | null; since: number }[];
+  outgoing: { discordId: string; steamId: string; name: string | null; since: number }[];
+  stale: boolean;
+}> {
+  const store = accounts()?.store;
+  if (!store) return { friends: [], incoming: [], outgoing: [], stale: false };
+  const steamOf = (id: string) => store.byDiscord(id)?.steamId ?? null;
+  const people = async (rows: { other: string; since: number }[]) =>
+    Promise.all(
+      rows
+        .map((r) => ({ ...r, steamId: steamOf(r.other) }))
+        .filter((r): r is { other: string; since: number; steamId: string } => !!r.steamId)
+        .map(async (r) => ({ discordId: r.other, steamId: r.steamId, name: await playerName(r.steamId), since: r.since })),
+    );
+  const accepted = store.friendsOf(discordId).map((f) => ({ discordId: f.other, steamId: steamOf(f.other) })).filter((f): f is { discordId: string; steamId: string } => !!f.steamId);
+  const [status, incoming, outgoing] = await Promise.all([
+    accepted.length ? friendsStatus(accepted.map((f) => f.steamId)) : Promise.resolve(loaded<FriendStatus[]>([])),
+    people(store.incoming(discordId)),
+    people(store.outgoing(discordId)),
+  ]);
+  const byId = new Map(status.data.map((f) => [f.steamId, f]));
+  return {
+    friends: accepted.filter((f) => byId.has(f.steamId)).map((f) => ({ discordId: f.discordId, status: byId.get(f.steamId)! })),
+    incoming,
+    outgoing,
+    stale: status.stale,
+  };
 }
 
 /** Warcon's floor for the career rank: players with less time on are not ranked. */
@@ -524,8 +569,9 @@ export async function recentPlayers(limit = 30): Promise<Loaded<PlayerSearchRow[
   const { list } = await serverList();
   const r = await fanOut(list.map((s) => s.id), (id) => warcon().seen(id, { limit }));
   const seen = new Map<string, PlayerSearchRow>();
+  const hidden = presenceHidden();
   for (const p of mergeNewest(r.ok.map((o) => o.value), (p) => Date.parse(p.lastSeen), limit * list.length)) {
-    if (!seen.has(p.steamId)) seen.set(p.steamId, { steamId: p.steamId, name: p.name, avatarUrl: p.steam?.avatar || null, lastSeen: sec(p.lastSeen), matchedAlias: null });
+    if (!seen.has(p.steamId) && !hidden.has(p.steamId)) seen.set(p.steamId, { steamId: p.steamId, name: p.name, avatarUrl: p.steam?.avatar || null, lastSeen: sec(p.lastSeen), matchedAlias: null });
   }
   return loaded(await withAvatars([...seen.values()].slice(0, limit)), r.stale, r.failed);
 }
@@ -572,6 +618,8 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
   // SERVER_IDS hides servers everywhere, including a player's history on them.
   const shown = (serverId: string) => nameOf.has(serverId);
   const group = (g: { key: string; matches: number; wins: number; kills: number; deaths: number }) => ({ key: g.key, matches: g.matches, wins: g.wins, kills: g.kills, deaths: g.deaths });
+  const othersHidden = new Set([...presenceHidden()].filter((id) => id !== steamId));
+  const nowS = Math.floor(Date.now() / 1000);
   const profile: PlayerProfile = {
       steamId,
       name: d.name,
@@ -599,7 +647,8 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       })),
       maps: c.maps.map(group),
       factions: c.factions.map(group),
-      recentKills: (d.combat?.recent ?? []).filter((k) => shown(k.serverId)).map((k) => killRow(k, k.serverId, shortNameOf(k.serverName))),
+      // Other hidden members in their recent kills go unnamed; the profile page decides about them.
+      recentKills: (d.combat?.recent ?? []).filter((k) => shown(k.serverId)).map((k) => maskKill(killRow(k, k.serverId, shortNameOf(k.serverName)), othersHidden, nowS)),
   };
   // Warcon no longer counts the deleted retired servers: put their season one back into all time.
   const s1 = seasonOne(steamId);
@@ -634,7 +683,9 @@ export async function recentKills(q: { serverId?: string | null; steamId?: strin
     warcon().kills(id, { limit, before, player: q.steamId, kind: q.kind, cause: q.cause, minM: q.minM }),
   );
   const lists = r.ok.map(({ id, value }) => value.kills.map((k) => killRow(k, id, shortNameOf(list.find((s) => s.id === id)!.name))));
-  return loaded(mergeNewest(lists, (k) => k.ts, limit), r.stale, r.failed);
+  const hidden = presenceHidden();
+  const now = Math.floor(Date.now() / 1000);
+  return loaded(mergeNewest(lists, (k) => k.ts, limit).map((k) => maskKill(k, hidden, now)), r.stale, r.failed);
 }
 
 function matchRow(m: WMatchSummary, serverId: string, serverName: string, colours: Map<string, string | null>): MatchRow {
@@ -723,15 +774,19 @@ export async function getMatch(serverId: string, matchId: number) {
     steamId: l.steamId, name: l.name, faction: l.faction, kills: l.kills, deaths: l.deaths, headshots: l.headshots,
     longest: l.longestM ?? 0, cash: l.cashDelta, timePlayed: l.seconds, killStreak: l.killStreak,
   }));
-  const awards: MatchAward[] = v.awards;
+  // Hidden members aren't named in a round that's on or just ended (lib/server/presence.ts).
+  const hidden = presenceHidden();
+  const now = Math.floor(Date.now() / 1000);
+  const recent = recentRound(sec(v.match.endedAt), now);
+  const awards: MatchAward[] = recent ? v.awards.map((a) => maskAward(a, hidden)) : v.awards;
   return loaded(
     {
       match: matchRow(v.match, serverId, shortNameOf(server.name), colours),
-      lines,
+      lines: recent ? lines.map((l) => maskLine(l, hidden)) : lines,
       timeline: v.timeline,
       factions: v.factions,
       awards,
-      kills: killRows,
+      kills: killRows.map((k) => maskKill(k, hidden, now)),
       momentum: kills.value.kills.length ? flow : null,
       weapons: [...weaponCounts].map(([cause, n]) => ({ cause, kills: n })).sort((a, b) => b.kills - a.kills).slice(0, 8),
     },

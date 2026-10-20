@@ -16,6 +16,8 @@ export interface Link {
   discordName: string | null;
   /** a name style staff gave this account, shown while they hold a tier; null: the tier's own */
   nameStyle: string | null;
+  /** "hide where I'm playing": only accepted friends see their server and recent rounds */
+  hidePresence: boolean;
   /** custom profile, shown while they're Premium or staff (lib/profile-themes.ts) */
   bio: string | null;
   colour: string | null;
@@ -34,6 +36,7 @@ interface Row {
   bio: string | null;
   colour: string | null;
   featured: string | null;
+  hide_presence?: number;
 }
 
 function featuredList(json: string | null): string[] {
@@ -56,6 +59,7 @@ const toLink = (r: Row): Link => ({
   bio: r.bio ?? null,
   colour: r.colour ?? null,
   featured: featuredList(r.featured ?? null),
+  hidePresence: r.hide_presence === 1,
 });
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -178,7 +182,30 @@ export const MIGRATIONS: string[] = [
      created_at INTEGER NOT NULL
    );
    CREATE INDEX alerts_by_member ON alerts (discord_id);`,
+  // v8: friend requests between linked members, and "hide where I'm playing" (lib/server/presence.ts)
+  `ALTER TABLE links ADD COLUMN hide_presence INTEGER NOT NULL DEFAULT 0;
+   CREATE TABLE friendships (
+     from_discord TEXT NOT NULL,
+     to_discord   TEXT NOT NULL,
+     status       TEXT NOT NULL CHECK (status IN ('pending', 'accepted', 'denied')),
+     created_at   INTEGER NOT NULL,
+     updated_at   INTEGER NOT NULL,
+     PRIMARY KEY (from_discord, to_discord)
+   );
+   CREATE INDEX friendships_to ON friendships (to_discord);`,
 ];
+
+/** Friends one member may have, and requests they may have waiting on others at once. */
+export const MAX_FRIENDS = 100;
+export const MAX_PENDING_REQUESTS = 30;
+
+/**
+ * How another member stands with you. A request they denied still reads 'outgoing' to you: you
+ * aren't told, and can't send it again.
+ */
+export type Relation = 'none' | 'outgoing' | 'incoming' | 'friends';
+
+export class FriendLimitError extends Error {}
 
 /** Brings the file up to date; snapshots it first (`<file>.pre-v<n>`) when it already holds links. */
 function migrate(db: DatabaseSync, file: string, migrations: string[]) {
@@ -214,6 +241,17 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         steam_id = excluded.steam_id
     `),
     remove: db.prepare('DELETE FROM links WHERE discord_id = ?'),
+    dropFriendships: db.prepare('DELETE FROM friendships WHERE from_discord = ? OR to_discord = ?'),
+    setHide: db.prepare('UPDATE links SET hide_presence = ? WHERE discord_id = ?'),
+    hiddenSteam: db.prepare('SELECT steam_id FROM links WHERE hide_presence = 1'),
+    friendRow: db.prepare('SELECT status FROM friendships WHERE from_discord = ? AND to_discord = ?'),
+    friendInsert: db.prepare("INSERT INTO friendships (from_discord, to_discord, status, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)"),
+    friendSet: db.prepare('UPDATE friendships SET status = ?, updated_at = ? WHERE from_discord = ? AND to_discord = ?'),
+    friendDelete: db.prepare('DELETE FROM friendships WHERE from_discord = ? AND to_discord = ?'),
+    friendsOf: db.prepare(`SELECT CASE WHEN from_discord = ?1 THEN to_discord ELSE from_discord END AS other, updated_at AS since
+      FROM friendships WHERE status = 'accepted' AND (from_discord = ?1 OR to_discord = ?1) ORDER BY updated_at`),
+    incoming: db.prepare("SELECT from_discord AS other, created_at AS since FROM friendships WHERE to_discord = ? AND status = 'pending' ORDER BY created_at"),
+    outgoing: db.prepare("SELECT to_discord AS other, created_at AS since FROM friendships WHERE from_discord = ? AND status IN ('pending', 'denied') ORDER BY created_at"),
     // a null name (they left the server) keeps the last one seen
     setTier: db.prepare('UPDATE links SET tier = ?, checked_at = ?, discord_name = COALESCE(?, discord_name) WHERE discord_id = ?'),
     due: db.prepare('SELECT * FROM links WHERE checked_at IS NULL OR checked_at < ? ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?'),
@@ -251,7 +289,57 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       q.upsert.run(discordId, steamId, now());
       return one(q.byDiscord.get(discordId))!;
     },
-    unlink: (discordId: string) => void q.remove.run(discordId),
+    /** Unlinks, and ends their friendships and requests: they belonged to the linked player. */
+    unlink(discordId: string) {
+      q.remove.run(discordId);
+      q.dropFriendships.run(discordId, discordId);
+    },
+    setHidePresence: (discordId: string, hide: boolean) => void q.setHide.run(hide ? 1 : 0, discordId),
+    /** Steam accounts whose members hide where they're playing. */
+    presenceHidden: () => new Set((q.hiddenSteam.all() as unknown as { steam_id: string }[]).map((r) => r.steam_id)),
+    /** How `other` stands with `me` (Discord ids). */
+    relation(me: string, other: string): Relation {
+      const out = (q.friendRow.get(me, other) as { status: string } | undefined)?.status;
+      const inc = (q.friendRow.get(other, me) as { status: string } | undefined)?.status;
+      if (out === 'accepted' || inc === 'accepted') return 'friends';
+      if (inc === 'pending') return 'incoming';
+      if (out) return 'outgoing';
+      return 'none';
+    },
+    /**
+     * `me` asks `other` to be friends. If `other` already asked `me`, that makes them friends. A
+     * request `other` denied stays as it is. Throws FriendLimitError past the limits.
+     */
+    requestFriend(me: string, other: string, at = now()): Relation {
+      if (me === other) return 'none';
+      const rel = this.relation(me, other);
+      if (rel === 'friends' || rel === 'outgoing') return rel;
+      if (this.friendsOf(me).length >= MAX_FRIENDS) throw new FriendLimitError(`You can have up to ${MAX_FRIENDS} friends.`);
+      if (rel === 'incoming') {
+        q.friendSet.run('accepted', at, other, me);
+        return 'friends';
+      }
+      if (this.outgoing(me).length >= MAX_PENDING_REQUESTS) throw new FriendLimitError(`You can have up to ${MAX_PENDING_REQUESTS} requests waiting at once.`);
+      // A request of mine they denied long ago, or one I took back: start afresh.
+      q.friendDelete.run(me, other);
+      q.friendInsert.run(me, other, at, at);
+      return 'outgoing';
+    },
+    /** `me` accepts or denies `other`'s request; false when there was none. */
+    answerFriend(me: string, other: string, accept: boolean, at = now()): boolean {
+      if ((q.friendRow.get(other, me) as { status: string } | undefined)?.status !== 'pending') return false;
+      if (accept && this.friendsOf(me).length >= MAX_FRIENDS) throw new FriendLimitError(`You can have up to ${MAX_FRIENDS} friends.`);
+      q.friendSet.run(accept ? 'accepted' : 'denied', at, other, me);
+      return true;
+    },
+    /** Ends a friendship, or takes back `me`'s request. A request `me` denied stays denied. */
+    removeFriend(me: string, other: string) {
+      q.friendDelete.run(me, other);
+      if ((q.friendRow.get(other, me) as { status: string } | undefined)?.status === 'accepted') q.friendDelete.run(other, me);
+    },
+    friendsOf: (me: string) => q.friendsOf.all(me) as unknown as { other: string; since: number }[],
+    incoming: (me: string) => q.incoming.all(me) as unknown as { other: string; since: number }[],
+    outgoing: (me: string) => q.outgoing.all(me) as unknown as { other: string; since: number }[],
     setTier: (discordId: string, tier: Tier | null, at = now(), discordName: string | null = null) =>
       void q.setTier.run(tier, at, discordName, discordId),
     /** Links whose roles were last checked before `olderThan` (never-checked first). */

@@ -11,7 +11,8 @@ import { createHash } from 'node:crypto';
 import { milestones } from '@/lib/milestones';
 import { PROFILE_COLOURS } from '@/lib/profile-themes';
 import { classKills } from '@/lib/weapon-classes';
-import { lookOfSteam, type Look } from './accounts';
+import { lookOfSteam, presenceHidden, type Look } from './accounts';
+import { withoutPresence } from './presence';
 
 export interface CardModel {
   name: string;
@@ -45,13 +46,15 @@ export function cardVersion(custom: CardModel['custom']): string {
 export function cardModel(p: PlayerProfile, now = Date.now() / 1000, look: Look | null = null): CardModel {
   const t = p.totals;
   const main = [...p.servers].sort((a, b) => b.playtime - a.playtime)[0];
-  const seen = p.onlineOn ? `Playing now on ${shortNameOf(p.onlineOn.serverName)}` : `Last seen ${ago(p.lastSeen, now)}`;
+  // A member hiding where they play has neither (lib/server/presence.ts).
+  const seen = p.onlineOn ? `Playing now on ${shortNameOf(p.onlineOn.serverName)}` : p.lastSeen ? `Last seen ${ago(p.lastSeen, now)}` : null;
+  const where = main ? shortNameOf(main.name) : null;
   return {
     name: p.name,
     steamId: p.steamId,
     avatarUrl: p.avatarUrl,
     rank: typeof p.rank === 'number' ? `#${int(p.rank)} all-time` : null,
-    seen: main ? `${seen} · mostly ${shortNameOf(main.name)}` : seen,
+    seen: seen && where ? `${seen} · mostly ${where}` : (seen ?? (where ? `Mostly ${where}` : '')),
     stats: [
       { label: 'Kills', value: int(t.kills) },
       { label: 'K/D', value: kd(t.kills, t.deaths) },
@@ -112,11 +115,12 @@ export async function playerCard(steamId: string): Promise<Card> {
   try {
     // Keyed by the custom profile too, so a saved change draws a new card at once.
     const look = lookOfSteam(steamId);
-    const key = `${steamId}:${look?.custom ? createHash('sha1').update(JSON.stringify(look.custom)).digest('hex').slice(0, 8) : '0'}`;
+    const hidden = presenceHidden().has(steamId);
+    const key = `${steamId}:${look?.custom ? createHash('sha1').update(JSON.stringify(look.custom)).digest('hex').slice(0, 8) : '0'}:${hidden ? 'h' : ''}`;
     const { value } = await cards.get<ArrayBuffer | null>(key, HOUR, async () => {
       const loaded = await getPlayer(steamId);
       if (!loaded) return null;
-      const model = cardModel(loaded.data, Date.now() / 1000, look);
+      const model = cardModel(hidden ? withoutPresence(loaded.data, Date.now() / 1000) : loaded.data, Date.now() / 1000, look);
       const avatar = model.avatarUrl ? await fetchAvatar(model.avatarUrl) : null;
       return renderPng(PlayerCardImage({ model, avatar }));
     });

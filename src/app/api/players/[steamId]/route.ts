@@ -1,4 +1,6 @@
+import { presenceHidden } from '@/lib/server/accounts';
 import { getPlayer } from '@/lib/server/data';
+import { withoutPresence } from '@/lib/server/presence';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +13,8 @@ export async function GET(_req: Request, ctx: RouteContext<'/api/players/[steamI
   });
   if (loaded === undefined) return Response.json({ error: 'unavailable' }, { status: 503 });
   if (!loaded) return Response.json({ error: 'not_found' }, { status: 404 });
-  const p = loaded.data;
+  // A member who hides where they play is hidden here too: the API has no friends.
+  const p = presenceHidden().has(steamId) ? withoutPresence(loaded.data, Math.floor(Date.now() / 1000)) : loaded.data;
   return Response.json(
     {
       steamId: p.steamId, name: p.name, avatarUrl: p.avatarUrl, firstSeen: p.firstSeen, lastSeen: p.lastSeen,

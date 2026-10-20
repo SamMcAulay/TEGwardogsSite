@@ -36,6 +36,10 @@ beforeEach(() => {
 });
 
 describe('cardModel', () => {
+  test('a member hiding where they play: no last seen or server now, just where they mostly play', () => {
+    expect(cardModel({ ...profile(), onlineOn: null, lastSeen: null }, 1_000_000).seen).toBe('Mostly EU#1');
+  });
+
   test('headline stats, rank, last seen and the server they play most', () => {
     const m = cardModel(profile(), 1_000_000);
     expect(m).toMatchObject({ name: '[TEG] s k r u b', rank: '#1,580 all-time', seen: 'Last seen 3h ago · mostly EU#1' });
