@@ -14,7 +14,7 @@ const api = {
   seen: vi.fn(),
   steamProfiles: vi.fn(async () => ({})),
 };
-const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []), hit: vi.fn(async (_id: string): Promise<unknown> => null) };
+const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []), hit: vi.fn<(id: string) => Promise<unknown>>(async () => null) };
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => index }));
 const bans = { orgBannedIds: vi.fn() };
 vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
