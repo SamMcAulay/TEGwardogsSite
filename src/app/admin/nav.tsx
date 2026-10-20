@@ -15,10 +15,20 @@ export function AdminNav({ active }: { active: 'accounts' | 'teamkills' | 'healt
         ]}
       />
       {active === 'accounts' && (
-        // A plain link: the file downloads, and prefetching it would log an export nobody asked for.
-        <a href="/admin/links.csv" download className={buttonClass('secondary')}>
-          Download linked accounts (CSV)
-        </a>
+        // Plain links: the file downloads, and prefetching it would log an export nobody asked for.
+        <span className="flex flex-wrap items-center gap-3 text-sm">
+          <a href="/admin/links.xlsx" download className={buttonClass('secondary')}>
+            Download linked accounts (Excel)
+          </a>
+          <a
+            href="/admin/links.csv"
+            download
+            className="link text-muted"
+            title="For scripts; a spreadsheet rounds the long ids in a CSV"
+          >
+            CSV
+          </a>
+        </span>
       )}
     </div>
   );
