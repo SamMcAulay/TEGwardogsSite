@@ -1,8 +1,10 @@
 // Discord slash commands over HTTP: Discord POSTs each use of a command to
 // /api/discord/interactions and shows our JSON reply. No gateway connection, no bot process.
-// /lookup (staff: a member's linked stats profile, in the channel) and /link (anyone: how to link,
-// or what they're linked to, privately).
+// /lookup (staff: a member's linked stats profile, in the channel), /link (anyone: how to link,
+// or what they're linked to, privately) and /notify (anyone: DM alerts when a server fills up or a
+// map starts, privately).
 import { createPublicKey, verify } from 'node:crypto';
+import { ALERT_MAPS, ALERT_MAX_FAILURES, describeAlert, MAX_ALERTS } from '../alerts';
 import type { AccountsEnv } from './env';
 import type { Store } from './store';
 
@@ -29,6 +31,55 @@ export function verifyDiscordRequest(publicKeyHex: string, signatureHex: string 
   }
 }
 
+/** A server as /notify offers it. */
+export interface NotifyServer {
+  id: string;
+  shortName: string;
+  slug: string;
+}
+
+/** /notify's subcommands; `servers` become the server option's choices (Discord allows 25). */
+export function notifyCommand(servers: NotifyServer[]) {
+  const server = {
+    type: 3,
+    name: 'server',
+    description: 'Which server (leave out for any)',
+    required: false,
+    ...(servers.length ? { choices: servers.slice(0, 25).map((s) => ({ name: s.shortName, value: s.id })) } : {}),
+  };
+  return {
+    name: 'notify',
+    description: 'Get a DM when a WARDOGS server fills up or a map starts',
+    type: 1,
+    contexts: [0],
+    options: [
+      {
+        type: 1,
+        name: 'players',
+        description: 'DM me when a server reaches a number of players',
+        options: [{ type: 4, name: 'count', description: 'Players (5 to 100)', required: true, min_value: 5, max_value: 100 }, server],
+      },
+      {
+        type: 1,
+        name: 'map',
+        description: 'DM me when a map starts',
+        options: [
+          { type: 3, name: 'map', description: 'Which map', required: true, choices: ALERT_MAPS.map((m) => ({ name: m, value: m })) },
+          server,
+          { type: 4, name: 'min_players', description: 'Only if at least this many are playing (default 10)', required: false, min_value: 0, max_value: 100 },
+        ],
+      },
+      { type: 1, name: 'list', description: 'Show my alerts' },
+      {
+        type: 1,
+        name: 'stop',
+        description: 'Stop one alert, or all of them',
+        options: [{ type: 4, name: 'id', description: 'The alert number from /notify list (leave out for all)', required: false, min_value: 1 }],
+      },
+    ],
+  };
+}
+
 /** The commands the site registers in the TEG server. */
 export const COMMANDS = [
   {
@@ -46,24 +97,32 @@ export const COMMANDS = [
   },
 ];
 
-/** Replaces the guild's commands with COMMANDS (idempotent; safe on every start). */
-export async function registerCommands(env: AccountsEnv, f: typeof fetch = fetch): Promise<void> {
+/** Replaces the guild's commands with COMMANDS and /notify (idempotent; safe on every start). */
+export async function registerCommands(env: AccountsEnv, f: typeof fetch = fetch, servers: NotifyServer[] = []): Promise<void> {
   const res = await f(`${API}/applications/${env.discordClientId}/guilds/${env.discordGuildId}/commands`, {
     method: 'PUT',
     headers: { Authorization: `Bot ${env.discordBotToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(COMMANDS),
+    body: JSON.stringify([...COMMANDS, notifyCommand(servers)]),
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`registering slash commands failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
 }
 
+interface Option {
+  name: string;
+  value?: unknown;
+  options?: Option[];
+}
+
 interface Interaction {
   type: number;
   guild_id?: string;
+  /** for follow-up messages, valid 15 minutes */
+  token?: string;
   member?: { roles?: string[]; user?: { id?: string } };
   data?: {
     name?: string;
-    options?: { name: string; value: unknown }[];
+    options?: Option[];
     resolved?: { users?: Record<string, { username?: string; global_name?: string | null }>; members?: Record<string, { nick?: string | null }> };
   };
 }
@@ -89,10 +148,21 @@ const say = (content: string, privately = false) => ({
 /** The reply to one verified interaction. */
 export async function handleInteraction(
   i: Interaction,
-  deps: { env: AccountsEnv; store: Store; siteUrl: string; playerName: (steamId: string) => Promise<string | null>; nameBudgetMs?: number },
+  deps: {
+    env: AccountsEnv;
+    store: Store;
+    siteUrl: string;
+    playerName: (steamId: string) => Promise<string | null>;
+    nameBudgetMs?: number;
+    /** the servers /notify can name; quick (cached) */
+    servers?: () => Promise<NotifyServer[]>;
+    /** after a new alert: DM the member to check DMs reach them, and tell them if not. Not awaited. */
+    confirmAlert?: (discordId: string, interactionToken: string, text: string) => void;
+  },
 ): Promise<object> {
   if (i.type === 1) return { type: 1 }; // PING: Discord checking the endpoint
   if (i.type === 2 && i.data?.name === 'link') return linkCommand(i, deps);
+  if (i.type === 2 && i.data?.name === 'notify') return notifyCommandReply(i, deps);
   if (i.type !== 2 || i.data?.name !== 'lookup') return say('Unknown command.', true);
   const { env, store, siteUrl } = deps;
   const roles = i.member?.roles ?? [];
@@ -125,4 +195,70 @@ async function linkCommand(i: Interaction, deps: Parameters<typeof handleInterac
   const found = await within(deps.playerName(link.steamId), deps.nameBudgetMs ?? NAME_BUDGET_MS, null);
   const name = found ? ` as **${plainName(found)}**` : '';
   return say(`You're linked${name}: ${siteUrl}/players/${link.steamId}\nTo change or unlink: <${siteUrl}/account>`, true);
+}
+
+/** /notify: always private. Sets, lists and stops the member's alerts. */
+async function notifyCommandReply(i: Interaction, deps: Parameters<typeof handleInteraction>[1]): Promise<object> {
+  const { store } = deps;
+  const id = i.member?.user?.id ?? '';
+  if (!/^\d{17,20}$/.test(id) || i.guild_id !== deps.env.discordGuildId) return say('Use /notify in the TEG Discord server.', true);
+  const sub = i.data?.options?.[0];
+  const opt = (name: string) => sub?.options?.find((o) => o.name === name)?.value;
+  const servers = await within(deps.servers?.() ?? Promise.resolve([]), NAME_BUDGET_MS, [] as NotifyServer[]);
+  const nameOf = (sid: string) => servers.find((s) => s.id === sid)?.shortName ?? 'a server that has since gone';
+  const mine = store.alertsOf(id);
+
+  if (sub?.name === 'list') {
+    if (!mine.length) return say('You have no alerts. Set one with `/notify players` or `/notify map`.', true);
+    const paused = mine.some((a) => a.failures >= ALERT_MAX_FAILURES);
+    return say(
+      `Your alerts:\n${mine.map((a, n) => `**${n + 1}.** ${describeAlert(a, nameOf)}`).join('\n')}` +
+        (paused ? "\n\nThese are paused: my DMs to you didn't get through. Allow DMs from TEG server members, then set any alert to resume." : '') +
+        '\nStop one with `/notify stop id:<number>`, or all with `/notify stop`.',
+      true,
+    );
+  }
+
+  if (sub?.name === 'stop') {
+    const n = opt('id');
+    if (n === undefined) {
+      const gone = store.removeAlerts(id);
+      return say(gone ? `Stopped all ${gone} of your alerts.` : 'You have no alerts to stop.', true);
+    }
+    const target = mine[Number(n) - 1];
+    if (!target) return say(`You have no alert ${String(n)}. See \`/notify list\`.`, true);
+    store.removeAlerts(id, target.id);
+    return say(`Stopped: ${describeAlert(target, nameOf)}.`, true);
+  }
+
+  if (sub?.name !== 'players' && sub?.name !== 'map') return say('Unknown /notify option.', true);
+  if (mine.length >= MAX_ALERTS) return say(`You already have ${MAX_ALERTS} alerts, the most allowed. Stop one with \`/notify stop\` first.`, true);
+  const serverOpt = opt('server');
+  let serverId: string | null = null;
+  if (serverOpt !== undefined) {
+    const v = String(serverOpt).toLowerCase();
+    const s = servers.find((x) => x.id.toLowerCase() === v || x.slug === v || x.shortName.toLowerCase() === v);
+    if (!s) return say(`I don't know that server. Try one of: ${servers.map((x) => x.shortName).join(', ') || 'none right now'}.`, true);
+    serverId = s.id;
+  }
+  const whole = (v: unknown, lo: number, hi: number, fallback: number) => {
+    const n = v === undefined ? fallback : Number(v);
+    return Number.isInteger(n) && n >= lo && n <= hi ? n : null;
+  };
+  const alert =
+    sub.name === 'players'
+      ? (() => {
+          const count = whole(opt('count'), 5, 100, NaN);
+          return count === null ? null : { discordId: id, kind: 'players' as const, serverId, threshold: count, map: null };
+        })()
+      : (() => {
+          const map = ALERT_MAPS.find((m) => m === opt('map'));
+          const min = whole(opt('min_players'), 0, 100, 10);
+          return !map || min === null ? null : { discordId: id, kind: 'map' as const, serverId, threshold: min, map };
+        })();
+  if (!alert) return say("That alert doesn't make sense; check the numbers.", true);
+  store.addAlert(alert);
+  const what = describeAlert(alert, nameOf);
+  if (i.token) deps.confirmAlert?.(id, i.token, `Alert set: I'll DM you when ${what}. \`/notify list\` shows your alerts.`);
+  return say(`Done. I'll DM you when ${what}.`, true);
 }

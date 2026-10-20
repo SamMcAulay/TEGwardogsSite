@@ -1,9 +1,12 @@
 import { accounts } from '@/lib/server/accounts';
 import { handleInteraction, verifyDiscordRequest } from '@/lib/server/accounts/interactions';
-import { playerName } from '@/lib/server/data';
+import { alertConfirmer } from '@/lib/server/alerts';
+import { getServers, playerName } from '@/lib/server/data';
 import { siteEnv } from '@/lib/server/warcon/env';
 
 export const dynamic = 'force-dynamic';
+
+const g = globalThis as unknown as { __alertConfirmer?: ReturnType<typeof alertConfirmer> };
 
 /** Discord's Interactions Endpoint URL: slash commands arrive here, signed by Discord. */
 export async function POST(req: Request) {
@@ -21,5 +24,14 @@ export async function POST(req: Request) {
   } catch {
     return new Response('bad json', { status: 400 });
   }
-  return Response.json(await handleInteraction(interaction, { env: a.env, store: a.store, siteUrl: siteEnv().siteUrl, playerName }));
+  return Response.json(
+    await handleInteraction(interaction, {
+      env: a.env,
+      store: a.store,
+      siteUrl: siteEnv().siteUrl,
+      playerName,
+      servers: async () => (await getServers()).data,
+      confirmAlert: (g.__alertConfirmer ??= alertConfirmer(a.env)),
+    }),
+  );
 }
