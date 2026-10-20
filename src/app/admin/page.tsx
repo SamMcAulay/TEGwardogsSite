@@ -231,7 +231,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
                     {e.action === 'export' ? (
                       <span>
                         <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
-                        downloaded the linked-accounts CSV{e.detail && <span className="text-muted"> · {e.detail}</span>}
+                        downloaded the linked accounts{e.detail && <span className="text-muted"> · {e.detail}</span>}
                       </span>
                     ) : (
                       <span>
