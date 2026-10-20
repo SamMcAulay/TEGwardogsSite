@@ -246,7 +246,42 @@ describe('accounts.db on disk', () => {
     expect(s.bySteam(S1)).toMatchObject({ bio: 'Sniper main', colour: 'teal', featured: ['kills', 'class:sniper'] });
     s.clearBio(D1);
     expect(s.byDiscord(D1)).toMatchObject({ bio: null, colour: 'teal' });
-    expect(existsSync(`${file}.pre-v6`)).toBe(true);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
+  });
+
+  test('upgrading a v6 database (live since #31) keeps everything and adds alerts', () => {
+    const file = join(fresh(), 'accounts.db');
+    const v6 = new DatabaseSync(file);
+    v6.exec(`${MIGRATIONS.slice(0, 6).join(';\n')}; PRAGMA user_version = 6;`);
+    v6.prepare("INSERT INTO links (discord_id, steam_id, tier, checked_at, linked_at, discord_name, bio) VALUES (?, ?, 2, 50, 40, 'Jan', 'hi')").run(D1, S1);
+    v6.prepare('INSERT INTO announced_rounds (server_id, match_id, at) VALUES (?, ?, ?)').run('s1', 7, 99);
+    v6.close();
+    const s = openStore(file);
+    expect(s.byDiscord(D1)).toMatchObject({ tier: 2, discordName: 'Jan', bio: 'hi' });
+    expect(s.isAnnounced('s1', 7)).toBe(true);
+    expect(s.allAlerts()).toEqual([]);
+    expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
+  });
+
+  test('alerts: add, list per member, update, pause and remove', () => {
+    const s = openStore(':memory:');
+    const a = s.addAlert({ discordId: D1, kind: 'players', serverId: 's1', threshold: 30, map: null }, 100);
+    s.addAlert({ discordId: D1, kind: 'map', serverId: null, threshold: 10, map: 'Ozeti' }, 101);
+    s.addAlert({ discordId: D2, kind: 'players', serverId: null, threshold: 20, map: null }, 102);
+    expect(a).toEqual({ id: a.id, discordId: D1, kind: 'players', serverId: 's1', threshold: 30, map: null, armed: true, lastSent: null, failures: 0, createdAt: 100 });
+    expect(s.alertsOf(D1).map((x) => x.kind)).toEqual(['players', 'map']);
+    s.setAlertState(a.id, false, 500);
+    expect(s.alertsOf(D1)[0]).toMatchObject({ armed: false, lastSent: 500 });
+    s.setAlertFailures(D1, 3);
+    expect(s.alertsOf(D1).map((x) => x.failures)).toEqual([3, 3]);
+    expect(s.alertsOf(D2)[0].failures).toBe(0);
+    // asking again un-pauses
+    s.addAlert({ discordId: D1, kind: 'players', serverId: null, threshold: 50, map: null });
+    expect(s.alertsOf(D1).map((x) => x.failures)).toEqual([0, 0, 0]);
+    expect(s.removeAlerts(D2, a.id)).toBe(0); // not theirs
+    expect(s.removeAlerts(D1, a.id)).toBe(1);
+    expect(s.removeAlerts(D1)).toBe(2);
+    expect(s.allAlerts().map((x) => x.discordId)).toEqual([D2]);
   });
 
   test('upgrading the live v1 database keeps its links and adds the admin log', () => {

@@ -1,11 +1,12 @@
 import type { Metadata } from 'next';
+import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { NameTag, TierBadge } from '@/components/tier';
 import { isNameStyle, NAME_STYLE_LABELS, NAME_STYLES, nameStyleFor } from '@/lib/name-styles';
 import { canCustomise, isProfileColour, PROFILE_COLOURS } from '@/lib/profile-themes';
 import { buttonClass, Container, Empty, PageHeader, Panel, Stat, StatGrid } from '@/components/ui';
-import { dateTime, int } from '@/lib/format';
+import { int } from '@/lib/format';
 import { currentAdmin, parseLookup } from '@/lib/server/accounts/admin';
 import { member } from '@/lib/server/accounts/discord';
 import type { AccountsEnv } from '@/lib/server/accounts/env';
@@ -29,7 +30,7 @@ const DONE: Record<string, { text: string; good: boolean }> = {
   gone: { text: 'That account is no longer linked.', good: false },
 };
 
-const ts = (sec: number | null) => (sec ? dateTime(sec) : '—');
+const ts = (sec: number | null) => (sec ? <LocalTime ts={sec} /> : '—');
 
 async function LinkCard({ link, env }: { link: AccountLink; env: AccountsEnv }) {
   const [who, name] = await Promise.all([member(env, link.discordId).catch(() => undefined), playerName(link.steamId)]);

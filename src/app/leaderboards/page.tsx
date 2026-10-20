@@ -5,7 +5,7 @@ import { Section, safe } from '@/components/section';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
 import Link from 'next/link';
-import { linkedSteamIds } from '@/lib/server/accounts';
+import { linkedSteamIds, viewer } from '@/lib/server/accounts';
 import { getServers, leaderboard, MAX_BOARD_PAGE } from '@/lib/server/data';
 import { METRIC_LABELS, METRICS, parseMetric, parsePeriod, PERIOD_LABELS, PERIODS, type LeaderRow, type Metric } from '@/lib/server/views';
 import { one, pageParam, withParams } from '@/lib/url';
@@ -60,7 +60,8 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
   // "Linked members": the same board, only players who linked Discord and Steam. Hidden when linking is off.
   const linked = linkedSteamIds();
   const members = linked && one(sp.who) === 'members' ? linked : undefined;
-  const board = await safe(leaderboard({ metric, period, serverId, page, members }));
+  const me = (await viewer())?.steamId ?? null;
+  const board = await safe(leaderboard({ metric, period, serverId, page, members, me }));
   if (!(board instanceof Error) && page > 1) {
     const pages = Math.max(1, Math.ceil(board.data.total / board.data.pageSize));
     if (page > pages) redirect(withParams('/leaderboards', sp, { page: pages > 1 ? pages : null }));
@@ -141,8 +142,22 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
           flush
         >
           <Section loaded={board}>
-            {({ rows, total, pageSize }) => (
+            {({ rows, total, pageSize, mine }) => (
               <>
+                {mine && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-accent-soft px-4 py-2.5 text-sm">
+                    <span>
+                      You&rsquo;re <span className="font-display text-base font-bold text-accent">#{int(mine.rank)}</span> on this board
+                    </span>
+                    {mine.page && mine.page !== page ? (
+                      <Link href={withParams('/leaderboards', sp, { page: mine.page > 1 ? mine.page : null })} scroll={false} className="link font-display text-xs font-semibold uppercase tracking-[0.1em] text-accent">
+                        Jump to my rank
+                      </Link>
+                    ) : !mine.page ? (
+                      <span className="text-xs text-muted">Boards list the top {int(MAX_BOARD_PAGE * pageSize)}</span>
+                    ) : null}
+                  </div>
+                )}
                 {rows.length ? (
                   <div className="overflow-x-auto">
                     <table className="table">
@@ -161,7 +176,7 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
                       </thead>
                       <tbody>
                         {rows.map((r) => (
-                          <tr key={r.steamId}>
+                          <tr key={r.steamId} className={r.steamId === me ? 'bg-accent-soft' : undefined} aria-current={r.steamId === me ? 'true' : undefined}>
                             <td>
                               <RankCell rank={r.rank} />
                             </td>

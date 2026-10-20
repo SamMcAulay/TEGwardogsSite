@@ -6,16 +6,19 @@ import { playedSeconds } from './rounds';
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
 import { fanOut, mergeNewest } from './warcon/merge';
-import { TTL, type KillKind } from './warcon/api';
+import { TTL, type KillKind, type WarconApi } from './warcon/api';
 import type { WAnalytics, WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
 import { seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
-  PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow,
+  PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow, FriendStatus,
 } from './views';
 import { RECORD_CAUSES } from '@/lib/weapon-classes';
+import { clanTag } from '@/lib/clans';
+import { momentum } from '@/lib/momentum';
+import { groupClans, type Clan, type ClanSort } from './clans';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
 const loaded = <T>(data: T, stale = false, missing: string[] = []): Loaded<T> => ({ data, stale, missing });
@@ -328,9 +331,9 @@ async function keptSeasonTwo(serverIds: string[], sort: Metric, banned: Readonly
  * when the export fails. Throws if the ban list has never loaded, so the page shows "unavailable"
  * rather than banned players. Boards stop at page MAX_BOARD_PAGE.
  */
-export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number; members?: Set<string> }) {
+export async function leaderboard(q: { metric: Metric; period: Period; serverId?: string | null; page?: number; members?: Set<string>; me?: string | null }) {
   const anchor = (await visibleIds(q.serverId))[0];
-  if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE });
+  if (!anchor) return loaded({ rows: [] as LeaderRow[], total: 0, pageSize: BOARD_PAGE_SIZE, mine: null as { rank: number; page: number | null } | null });
   const banned = await orgBannedIds();
   const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
   let board: Kept;
@@ -353,6 +356,9 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   }
   const { kept, pageSize } = board;
   const total = Math.min(board.total, MAX_BOARD_PAGE * pageSize);
+  // The viewer's own place: their rank, and the page it's on while that's within the boards' depth.
+  const myIndex = q.me ? kept.findIndex((r) => r.steamId === q.me) : -1;
+  const mine = myIndex < 0 ? null : { rank: myIndex + 1, page: myIndex < total ? Math.floor(myIndex / pageSize) + 1 : null };
 
   const start = (page - 1) * pageSize;
   const slice = kept.slice(start, start + pageSize);
@@ -372,7 +378,84 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
     value: metricValue(q.metric, r),
     lastSeen: sec(r.lastSeen),
   }));
-  return loaded({ rows, total, pageSize }, board.stale || banned.stale);
+  return loaded({ rows, total, pageSize, mine }, board.stale || banned.stale);
+}
+
+/**
+ * Every player on the network's board for a period, org-banned players removed: the same cached
+ * export the default (kills) leaderboard reads, so it costs Warcon nothing more. Throws when the
+ * export or the ban list is unavailable.
+ */
+async function orgBoard(period: Period): Promise<{ rows: WBoardRow[]; stale: boolean }> {
+  const ids = await visibleIds(null);
+  if (!ids.length) return { rows: [], stale: false };
+  const banned = await orgBannedIds();
+  const board =
+    period === 's2'
+      ? await keptSeasonTwo(ids, 'kills', banned.ids)
+      : await keptFromExport(ids[0], { scope: 'org', range: period, sort: 'kills' }, banned.ids);
+  return { rows: board.kept, stale: board.stale || banned.stale };
+}
+
+/** The clan table for a period: tags carried by MIN_CLAN_SIZE or more players, best first. */
+export async function clans(period: Period, sort: ClanSort = 'kills'): Promise<Loaded<Clan[]>> {
+  const { rows, stale } = await orgBoard(period);
+  return loaded(groupClans(rows, sort), stale);
+}
+
+/** One clan for a period, its members' Steam pictures, and which of them are playing now. Null: no such clan. */
+export async function clan(tag: string, period: Period): Promise<Loaded<{ clan: Clan; rank: number; of: number; avatars: Record<string, string | null>; online: (LivePlayer & { serverId: string; serverName: string; serverSlug: string })[] }> | null> {
+  const [{ rows, stale }, servers] = await Promise.all([orgBoard(period), getServers().catch(() => null)]);
+  const all = groupClans(rows, 'kills');
+  const i = all.findIndex((c) => c.tag === tag);
+  if (i < 0) return null;
+  const found = all[i];
+  const ids = new Set(found.members.map((m) => m.steamId));
+  const profiles = await warcon().steamProfiles(found.members.slice(0, 100).map((m) => m.steamId));
+  const avatars = Object.fromEntries(found.members.map((m) => [m.steamId, profiles[m.steamId]?.avatar || null]));
+  const online = (servers?.data ?? []).flatMap((s) =>
+    s.players
+      .filter((p) => ids.has(p.steamId) || clanTag(p.name) === tag)
+      .map((p) => ({ ...p, serverId: s.id, serverName: s.shortName, serverSlug: s.slug })),
+  );
+  return loaded({ clan: found, rank: i + 1, of: all.length, avatars, online }, stale || !!servers?.stale);
+}
+
+/** Friends looked up at once, at most: a list longer than this is cut. */
+export const MAX_FRIENDS = 50;
+
+/**
+ * Where each friend is: playing now (from the cached live server list) or when last seen (from the
+ * in-memory player list). Costs Warcon nothing per friend; Steam pictures come from their own cache.
+ */
+export async function friendsStatus(steamIds: string[]): Promise<Loaded<FriendStatus[]>> {
+  const ids = [...new Set(steamIds.filter((id) => /^\d{17}$/.test(id)))].slice(0, MAX_FRIENDS);
+  const servers = await getServers().catch(() => null);
+  const onlineAt = new Map<string, NonNullable<FriendStatus['online']> & { name: string }>();
+  for (const s of servers?.data ?? []) {
+    for (const p of s.players) {
+      onlineAt.set(p.steamId, { serverId: s.id, serverName: s.shortName, serverSlug: s.slug, faction: p.faction, kills: p.kills, deaths: p.deaths, name: p.name });
+    }
+  }
+  const index = searchIndex(async () => (await serverList()).list[0].id);
+  const hits = new Map(await Promise.all(ids.map(async (id) => [id, await index.hit(id).catch(() => null)] as const)));
+  // Steam pictures only for players the site already knows: anyone can call this with any ids,
+  // and an unknown one would cost a Steam lookup and push a real player's picture out of the cache.
+  const known = ids.filter((id) => onlineAt.has(id) || hits.get(id));
+  const profiles = known.length ? await warcon().steamProfiles(known).catch(() => ({}) as Awaited<ReturnType<WarconApi['steamProfiles']>>) : {};
+  const rows = ids.map((steamId): FriendStatus => {
+    const live = onlineAt.get(steamId);
+    const hit = hits.get(steamId);
+    const { name: liveName, ...online } = live ?? { name: null };
+    return {
+      steamId,
+      name: liveName ?? hit?.name ?? null,
+      avatarUrl: profiles[steamId]?.avatar || null,
+      online: live ? (online as FriendStatus['online']) : null,
+      lastSeen: live ? Math.floor(Date.now() / 1000) : sec(hit?.lastSeen),
+    };
+  });
+  return loaded(rows, !servers || servers.stale, servers ? [] : ['servers']);
 }
 
 /** Warcon's floor for the career rank: players with less time on are not ranked. */
@@ -587,6 +670,25 @@ export async function listMatches(q: { serverId?: string | null; limit?: number;
   return loaded({ rows: mergeNewest(lists, (m) => m.startedAt, limit), pages }, r.stale, r.failed);
 }
 
+/** A round's kills are read this many pages of 200 at most (2,000 kills): a long, full round. */
+const MATCH_KILL_PAGES = 10;
+
+/** Every kill of one match, newest first, paging back through Warcon's 200 at a time. */
+async function matchKills(serverId: string, matchId: number, total: number, ttl: number): Promise<{ value: { kills: WKill[] }; stale: boolean }> {
+  const all: WKill[] = [];
+  let stale = false;
+  let before: { ts: string; eventTime: number } | null = null;
+  for (let p = 0; p < MATCH_KILL_PAGES; p++) {
+    const r = await warcon().kills(serverId, { match: matchId, limit: 200, before }, { ttl });
+    stale ||= r.stale;
+    all.push(...r.value.kills);
+    const last = r.value.kills.at(-1);
+    if (r.value.kills.length < 200 || !last || all.length >= total) break;
+    before = { ts: last.ts, eventTime: last.eventTime };
+  }
+  return { value: { kills: all }, stale };
+}
+
 export async function getMatch(serverId: string, matchId: number) {
   const { list } = await serverList();
   const server = list.find((s) => s.id === serverId);
@@ -603,12 +705,18 @@ export async function getMatch(serverId: string, matchId: number) {
   // The match is still worth showing without its kill feed.
   let kills: { value: { kills: WKill[] }; stale: boolean };
   try {
-    kills = await warcon().kills(serverId, { match: matchId, limit: 200 }, { ttl: v.match.endedAt ? TTL.endedMatch : TTL.stats });
+    kills = await matchKills(serverId, matchId, v.kills, v.match.endedAt ? TTL.endedMatch : TTL.stats);
   } catch (e) {
     console.error('[data] match kills failed:', e instanceof Error ? e.message : e);
     kills = { value: { kills: [] }, stale: true };
   }
   const killRows = kills.value.kills.map((k) => killRow(k, serverId, shortNameOf(server.name)));
+  const roundSeconds = Math.max(v.timeline.at(-1)?.[0] ?? 0, (sec(v.match.endedAt) ?? Math.floor(Date.now() / 1000)) - sec(v.match.startedAt)!);
+  const flow = momentum(
+    kills.value.kills.map((k) => ({ t: k.eventTime, faction: k.killer?.faction ?? null, own: k.teamKill || k.suicide })),
+    v.factions.map((f) => f.name),
+    roundSeconds,
+  );
   const weaponCounts = new Map<string, number>();
   for (const k of killRows) if (k.cause) weaponCounts.set(k.cause, (weaponCounts.get(k.cause) ?? 0) + 1);
   const lines: MatchPlayerRow[] = v.lines.map((l) => ({
@@ -624,6 +732,7 @@ export async function getMatch(serverId: string, matchId: number) {
       factions: v.factions,
       awards,
       kills: killRows,
+      momentum: kills.value.kills.length ? flow : null,
       weapons: [...weaponCounts].map(([cause, n]) => ({ cause, kills: n })).sort((a, b) => b.kills - a.kills).slice(0, 8),
     },
     view.stale || kills.stale,

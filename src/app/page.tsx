@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AreaChart } from '@/components/charts';
 import { AutoRefresh } from '@/components/client';
+import { FriendsOnline } from '@/components/friends';
 import { KillList, MapBackdrop, ServerCard } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import { Container, Meter, Panel, PanelLink, RankCell, Stat, StatGrid } from '@/components/ui';
@@ -112,6 +113,7 @@ export default async function Home() {
       </section>
 
       <Container className="mt-10 space-y-10">
+        <FriendsOnline />
         <section>
           <div className="mb-4 flex items-end justify-between">
             <h2 className="display text-2xl">Live servers</h2>

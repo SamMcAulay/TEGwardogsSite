@@ -74,6 +74,49 @@ export interface AdminLogEntry {
   detail?: string | null;
 }
 
+/** A /notify alert. players: DM when a server reaches `threshold` players. map: DM when `map` starts with `threshold`+ playing. */
+export interface Alert {
+  id: number;
+  discordId: string;
+  kind: 'players' | 'map';
+  /** null: any server */
+  serverId: string | null;
+  threshold: number;
+  map: string | null;
+  /** players alerts: may fire again (the count has dropped back since the last DM) */
+  armed: boolean;
+  lastSent: number | null;
+  /** DMs that failed in a row; at ALERT_MAX_FAILURES the member's alerts pause */
+  failures: number;
+  createdAt: number;
+}
+
+interface AlertRow {
+  id: number;
+  discord_id: string;
+  kind: 'players' | 'map';
+  server_id: string | null;
+  threshold: number;
+  map: string | null;
+  armed: number;
+  last_sent: number | null;
+  failures: number;
+  created_at: number;
+}
+
+const toAlert = (r: AlertRow): Alert => ({
+  id: r.id,
+  discordId: r.discord_id,
+  kind: r.kind,
+  serverId: r.server_id,
+  threshold: r.threshold,
+  map: r.map,
+  armed: r.armed === 1,
+  lastSent: r.last_sent,
+  failures: r.failures,
+  createdAt: r.created_at,
+});
+
 export class SteamTakenError extends Error {
   constructor() {
     super('That Steam account is already linked to another Discord account.');
@@ -120,6 +163,21 @@ export const MIGRATIONS: string[] = [
   `ALTER TABLE links ADD COLUMN bio TEXT;
    ALTER TABLE links ADD COLUMN colour TEXT;
    ALTER TABLE links ADD COLUMN featured TEXT;`,
+  // v7: /notify alerts: a Discord DM when a server fills up or a map starts. Anyone in the TEG
+  // server may set them, linked or not, so they key on the Discord id alone.
+  `CREATE TABLE alerts (
+     id         INTEGER PRIMARY KEY,
+     discord_id TEXT NOT NULL,
+     kind       TEXT NOT NULL CHECK (kind IN ('players', 'map')),
+     server_id  TEXT,
+     threshold  INTEGER NOT NULL,
+     map        TEXT,
+     armed      INTEGER NOT NULL DEFAULT 1,
+     last_sent  INTEGER,
+     failures   INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL
+   );
+   CREATE INDEX alerts_by_member ON alerts (discord_id);`,
 ];
 
 /** Brings the file up to date; snapshots it first (`<file>.pre-v<n>`) when it already holds links. */
@@ -173,6 +231,13 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     clearBio: db.prepare('UPDATE links SET bio = NULL WHERE discord_id = ?'),
     byName: db.prepare("SELECT * FROM links WHERE discord_name LIKE ? ESCAPE '\\' ORDER BY discord_name LIMIT ?"),
     auditLog: db.prepare('SELECT * FROM admin_log ORDER BY at DESC, id DESC LIMIT ?'),
+    addAlert: db.prepare('INSERT INTO alerts (discord_id, kind, server_id, threshold, map, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
+    alertsOf: db.prepare('SELECT * FROM alerts WHERE discord_id = ? ORDER BY id'),
+    allAlerts: db.prepare('SELECT * FROM alerts ORDER BY id'),
+    removeAlert: db.prepare('DELETE FROM alerts WHERE discord_id = ? AND id = ?'),
+    removeAlerts: db.prepare('DELETE FROM alerts WHERE discord_id = ?'),
+    alertState: db.prepare('UPDATE alerts SET armed = ?, last_sent = ? WHERE id = ?'),
+    alertFailures: db.prepare('UPDATE alerts SET failures = ? WHERE discord_id = ?'),
   };
   const one = (r: unknown) => (r ? toLink(r as Row) : null);
 
@@ -254,6 +319,19 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     /** Links whose last-seen Discord name contains `text` (case-insensitive for ASCII). */
     byName: (text: string, limit = 25) =>
       (q.byName.all(`%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`, limit) as unknown as Row[]).map(toLink),
+    /** Adds an alert; the member's alerts un-pause, since they've just asked again. */
+    addAlert(a: Pick<Alert, 'discordId' | 'kind' | 'serverId' | 'threshold' | 'map'>, at = now()): Alert {
+      const { lastInsertRowid } = q.addAlert.run(a.discordId, a.kind, a.serverId, a.threshold, a.map, at);
+      q.alertFailures.run(0, a.discordId);
+      return toAlert(db.prepare('SELECT * FROM alerts WHERE id = ?').get(lastInsertRowid) as unknown as AlertRow);
+    },
+    alertsOf: (discordId: string) => (q.alertsOf.all(discordId) as unknown as AlertRow[]).map(toAlert),
+    allAlerts: () => (q.allAlerts.all() as unknown as AlertRow[]).map(toAlert),
+    /** Removes one of the member's alerts, or all of them with no id; how many went. */
+    removeAlerts: (discordId: string, id?: number) => Number((id === undefined ? q.removeAlerts.run(discordId) : q.removeAlert.run(discordId, id)).changes),
+    setAlertState: (id: number, armed: boolean, lastSent: number | null) => void q.alertState.run(armed ? 1 : 0, lastSent, id),
+    /** DMs to the member that failed in a row (0 after one gets through), on all their alerts. */
+    setAlertFailures: (discordId: string, failures: number) => void q.alertFailures.run(failures, discordId),
     close: () => db.close(),
   };
 }

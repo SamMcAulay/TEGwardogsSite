@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { LocalTime } from '@/components/local-time';
+import { accountsEnv } from '@/lib/server/accounts/env';
 import Link from 'next/link';
 import { withParams } from '@/lib/url';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -20,7 +22,7 @@ import {
   StatGrid,
   StatusDot,
 } from '@/components/ui';
-import { ago, clock, compact, dateTime, duration, int, kd, money } from '@/lib/format';
+import { ago, clock, compact, duration, int, kd, money } from '@/lib/format';
 import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationView } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServer, leaderboard, listMatches, liveTags, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
@@ -38,6 +40,15 @@ export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): 
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
+
+/** /notify exists once the site answers Discord's slash commands. */
+function alertsOn(): boolean {
+  try {
+    return !!accountsEnv()?.discordPublicKey;
+  } catch {
+    return false;
+  }
+}
 
 const TAGS: Record<LiveTag, { label: string; tone: 'good' | 'lonestar'; title: string }> = {
   new: { label: 'New', tone: 'good', title: 'First session or first 45 minutes on TEG servers' },
@@ -188,10 +199,17 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
         }
         actions={
           server.joinCode && (
-            <div className="flex items-center gap-2 border border-line-strong bg-surface px-3 py-2">
-              <span className="eyebrow !text-[0.66rem]">Join code</span>
-              <code className="font-mono text-xs text-text">{server.joinCode}</code>
-              <CopyButton value={server.joinCode} />
+            <div className="flex flex-col items-start gap-1.5 md:items-end">
+              <div className="flex items-center gap-2 border border-line-strong bg-surface px-3 py-2">
+                <span className="eyebrow !text-[0.66rem]">Join code</span>
+                <code className="font-mono text-xs text-text">{server.joinCode}</code>
+                <CopyButton value={server.joinCode} />
+              </div>
+              {alertsOn() && (
+                <p className="text-xs text-muted">
+                  Want a DM when it fills up? Type <code className="font-mono text-text">/notify</code> in the TEG Discord.
+                </p>
+              )}
             </div>
           )
         }
@@ -347,7 +365,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                               </span>
                             )}
                           </td>
-                          <td className="text-muted">{dateTime(m.startedAt)}</td>
+                          <td className="text-muted"><LocalTime ts={m.startedAt} /></td>
                           <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
                           <td className="r">{m.peakPlayers}</td>
                           <td>

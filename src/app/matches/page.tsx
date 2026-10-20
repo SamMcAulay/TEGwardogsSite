@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
+import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Badge, Container, Empty, FactionTag, PageHeader, Pagination, Panel, Segmented } from '@/components/ui';
-import { dateTime, duration } from '@/lib/format';
+import { duration } from '@/lib/format';
 import { factionColor, lightingName, mapName } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServers, listMatches } from '@/lib/server/data';
@@ -76,7 +77,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                               <div className="text-xs text-dim">{lightingName(m.lighting)}</div>
                             </td>
                             <td className="text-muted">{m.serverName}</td>
-                            <td className="text-muted">{dateTime(m.startedAt)}</td>
+                            <td className="text-muted"><LocalTime ts={m.startedAt} /></td>
                             <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
                             <td className="r">{m.players}</td>
                             <td>

@@ -25,9 +25,11 @@ const SERVERS = ['EU#1', 'EU#2', 'NA#1', 'NA#2', 'NA#3', 'OC#1'].map((short, i) 
   host: '10.0.0.1', // private: must never reach a page
   notes: 'rcon pw in vault',
 }));
+// Some players carry a clan tag, as real names do, so the clan pages have something to show.
+const CLAN_TAGS = { 0: '[TEG] ', 3: '[NOR] ', 6: '(DPB) ' };
 const PLAYERS = Array.from({ length: 300 }, (_, i) => ({
   steamId: String(76561198000000000n + BigInt(i + 1)),
-  name: `${pick(['Night', 'Iron', 'Red', 'Silent', 'Owl', 'Rook', 'Viper'])}${pick(['Owl', 'Fox', 'Bear', 'Hawk', 'Wolf'])}${i}`,
+  name: `${CLAN_TAGS[i % 10] ?? ''}${pick(['Night', 'Iron', 'Red', 'Silent', 'Owl', 'Rook', 'Viper'])}${pick(['Owl', 'Fox', 'Bear', 'Hawk', 'Wolf'])}${i}`,
 }));
 
 // Every ninth player is brand new (under 45 minutes), so the live scoreboard shows "New" tags.

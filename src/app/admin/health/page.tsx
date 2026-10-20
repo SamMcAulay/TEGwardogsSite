@@ -33,6 +33,7 @@ const JOBS: { name: JobName; label: string; everyS: number; what: string }[] = [
   { name: 'warmer', label: 'Page warmer', everyS: 60, what: 'Keeps the busiest pages loaded from Warcon' },
   { name: 'tierSync', label: 'Tier sync', everyS: 120, what: 'Re-checks linked members’ Discord roles' },
   { name: 'rounds', label: 'Round poster', everyS: 120, what: 'Posts finished rounds to Discord' },
+  { name: 'alerts', label: 'Alerts', everyS: 60, what: 'Sends /notify DMs when servers fill up or maps start' },
 ];
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -134,7 +135,7 @@ export default async function HealthPage() {
           <Panel title="Background jobs" flush action="Since the site last started">
             <ul className="divide-y divide-line text-sm">
               {JOBS.map((j) => {
-                const on = j.name !== 'rounds' || !!env.roundsChannelId;
+                const on = j.name === 'rounds' ? !!env.roundsChannelId : j.name === 'alerts' ? !!env.discordPublicKey : true;
                 const s = jobState(j.name);
                 const late = !!s && now - s.lastRun > 3 * j.everyS;
                 return (
@@ -142,7 +143,7 @@ export default async function HealthPage() {
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="font-medium">{j.label}</span>
                       {!on ? (
-                        <span className="text-muted">Off (no rounds channel set)</span>
+                        <span className="text-muted">Off (not set up here)</span>
                       ) : !s ? (
                         <span className="text-muted">No pass finished yet</span>
                       ) : (

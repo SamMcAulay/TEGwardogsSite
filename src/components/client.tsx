@@ -37,13 +37,16 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
 const NAV = [
   { href: '/servers', label: 'Servers' },
   { href: '/leaderboards', label: 'Leaderboards' },
+  { href: '/clans', label: 'Clans' },
   { href: '/records', label: 'Records' },
   { href: '/players', label: 'Players' },
   { href: '/matches', label: 'Matches' },
   { href: '/feed', label: 'Kill Feed' },
+  { href: '/friends', label: 'Friends' },
 ];
 
-export function NavLinks() {
+/** The header's links. `account`: My profile once linked, else Account; null when linking is off. */
+export function NavLinks({ account }: { account?: { href: string; label: string } | null }) {
   const path = usePathname();
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -51,24 +54,24 @@ export function NavLinks() {
   const active = (href: string) => path === href || path.startsWith(`${href}/`);
   return (
     <>
-      <nav className="hidden h-full items-stretch lg:flex" aria-label="Main">
+      <nav className="hidden h-full items-stretch xl:flex" aria-label="Main">
         {NAV.map((n) => (
           <Link
             key={n.href}
             href={n.href}
             className={cx(
-              'relative flex items-center px-3.5 font-display text-[13px] font-semibold uppercase tracking-[0.12em] transition-colors',
+              'relative flex items-center px-3 font-display text-[13px] font-semibold whitespace-nowrap uppercase tracking-[0.12em] transition-colors',
               active(n.href) ? 'text-text' : 'text-muted hover:text-text',
             )}
           >
             {n.label}
-            {active(n.href) && <span className="absolute inset-x-3.5 bottom-0 h-0.5 bg-accent" />}
+            {active(n.href) && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-accent" />}
           </Link>
         ))}
       </nav>
       <button
         type="button"
-        className="ml-auto flex size-9 items-center justify-center border border-line-strong lg:hidden"
+        className="ml-auto flex size-9 items-center justify-center border border-line-strong xl:hidden"
         aria-label="Menu"
         aria-expanded={open}
         onClick={() => setOpenOn(open ? null : path)}
@@ -82,7 +85,7 @@ export function NavLinks() {
         </svg>
       </button>
       {open && (
-        <nav className="absolute inset-x-0 top-full z-40 border-b border-line bg-surface lg:hidden" aria-label="Main">
+        <nav className="absolute inset-x-0 top-full z-40 border-b border-line bg-surface xl:hidden" aria-label="Main">
           {NAV.map((n) => (
             <Link
               key={n.href}
@@ -95,6 +98,18 @@ export function NavLinks() {
               {n.label}
             </Link>
           ))}
+          {account && (
+            <Link
+              href={account.href}
+              prefetch={false}
+              className={cx(
+                'block border-t border-line px-4 py-3 font-display text-sm font-semibold uppercase tracking-[0.12em]',
+                active(account.href) ? 'text-accent' : 'text-text',
+              )}
+            >
+              {account.label}
+            </Link>
+          )}
           <form action="/players" className="border-t border-line p-4">
             <input
               name="q"

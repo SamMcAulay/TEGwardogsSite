@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from 'next';
+import { FriendButton } from '@/components/friends';
+import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { serverPath } from '@/lib/url';
 import { notFound } from 'next/navigation';
@@ -10,13 +12,13 @@ import { Avatar, PlayerLink } from '@/components/player';
 import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Segmented, Stat, StatGrid, StatusDot } from '@/components/ui';
-import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
+import { ago, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { classKills } from '@/lib/weapon-classes';
 import { milestones } from '@/lib/milestones';
 import { PROFILE_COLOURS, profileThemeStyle } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
-import { lookOfSteam } from '@/lib/server/accounts';
+import { lookOfSteam, viewer } from '@/lib/server/accounts';
 import { getPlayer, playerSeason } from '@/lib/server/data';
 import { parseSeason, SEASON_LABELS, SEASONS } from '@/lib/server/seasons';
 
@@ -98,6 +100,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   const servers = [...p.servers].sort((a, b) => b.playtime - a.playtime);
   const now = nowSec();
   const look = lookOfSteam(steamId);
+  const me = await viewer();
   const tier = look?.tier ?? null;
   const custom = look?.custom ?? null;
   const colour = custom?.colour ? PROFILE_COLOURS[custom.colour].hex : undefined;
@@ -172,6 +175,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>
                   <CopyButton value={steamId} label="Copy ID" />
+                  <FriendButton steamId={steamId} />
                   <a
                     href={`https://steamcommunity.com/profiles/${steamId}`}
                     target="_blank"
@@ -180,7 +184,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                   >
                     Steam profile ↗
                   </a>
-                  <span className="text-xs">First seen {player.firstSeen ? date(player.firstSeen) : '—'}</span>
+                  <span className="text-xs">First seen {player.firstSeen ? <LocalTime ts={player.firstSeen} dateOnly /> : '—'}</span>
+                  {me?.steamId === steamId && (
+                    <Link href="/account" className="link text-xs text-accent">
+                      This is you · Account settings
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
@@ -355,7 +364,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                           <Link prefetch={false} href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
                             {mapName(m.map)}
                           </Link>
-                          <div className="text-xs text-dim">{dateTime(m.startedAt)}</div>
+                          <div className="text-xs text-dim"><LocalTime ts={m.startedAt} /></div>
                         </td>
                         <td className="text-muted">{m.serverName}</td>
                         <td>

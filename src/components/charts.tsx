@@ -1,6 +1,8 @@
 'use client';
 
 import { useId, useMemo, useState, useSyncExternalStore, type PointerEvent } from 'react';
+import { dayMonth, hourMinute } from '@/lib/format';
+import { useViewerTz } from './local-time';
 import { cx } from './ui';
 
 export interface Point {
@@ -18,19 +20,13 @@ function niceMax(v: number): number {
   return step * mag;
 }
 
-function timeLabel(t: number, span: number): string {
-  const d = new Date(t * 1000);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  if (span <= 2 * 86400) return `${hh}:${mm}`;
-  return `${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+/** Axis labels and hover times are in the viewer's timezone (UTC until the browser takes over). */
+function timeLabel(t: number, span: number, tz: string): string {
+  return span <= 2 * 86400 ? hourMinute(t, tz) : dayMonth(t, tz);
 }
 
-function fullTime(t: number): string {
-  const d = new Date(t * 1000);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${d.getUTCDate()}/${d.getUTCMonth() + 1} ${hh}:${mm} UTC`;
+function fullTime(t: number, tz: string): string {
+  return `${dayMonth(t, tz)} ${hourMinute(t, tz)}${tz === 'UTC' ? ' UTC' : ''}`;
 }
 
 /**
@@ -51,6 +47,7 @@ export function AreaChart({
   color?: string;
 }) {
   const id = useId();
+  const tz = useViewerTz();
   const [hover, setHover] = useState<number | null>(null);
   const { path, area, max, t0, t1 } = useMemo(() => {
     const t0 = points[0]?.t ?? 0;
@@ -156,7 +153,7 @@ export function AreaChart({
                 {hp.v}
                 {unit}
               </span>
-              <span className="ml-2 text-muted">{fullTime(hp.t)}</span>
+              <span className="ml-2 text-muted">{fullTime(hp.t, tz)}</span>
             </div>
           </>
         )}
@@ -167,7 +164,7 @@ export function AreaChart({
               className="num absolute top-1.5 text-[10px] text-dim"
               style={{ left: `${f * 100}%`, transform: `translateX(${f === 0 ? '0' : f === 1 ? '-100%' : '-50%'})` }}
             >
-              {timeLabel(t0 + span * f, span)}
+              {timeLabel(t0 + span * f, span, tz)}
             </span>
           ))}
         </div>

@@ -14,7 +14,7 @@ const api = {
   seen: vi.fn(),
   steamProfiles: vi.fn(async () => ({})),
 };
-const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []) };
+const index = { search: vi.fn(async () => []), snapshot: vi.fn(async (): Promise<unknown> => []), hit: vi.fn<(id: string) => Promise<unknown>>(async () => null) };
 vi.mock('./warcon', () => ({ warcon: () => api, searchIndex: () => index }));
 const bans = { orgBannedIds: vi.fn() };
 vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
@@ -26,7 +26,7 @@ vi.mock('./seasons', async (original) => ({
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
+import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, friendsStatus, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -82,6 +82,40 @@ describe('getServers', () => {
     const r = await getServers();
     expect(r.data.map((s) => s.online)).toEqual([false, false]);
     expect(r.missing).toEqual([]);
+  });
+});
+
+describe('friendsStatus', () => {
+  test('online friends say where; the rest when last seen; junk and repeats are dropped', async () => {
+    api.live.mockImplementation(async (id: string) =>
+      fresh(
+        id === 's1'
+          ? {
+              ok: true, gameServerId: 'J1', startedAt: '2026-10-04T10:00:00Z', observedAt: '2026-10-04T12:00:00Z',
+              status: { serverName: 'x', map: 'M', experiences: [], lighting: 'Day', matchSeconds: 5, playerCount: 1, maxPlayers: 64, scoreCap: 500, scores: [] },
+              players: [{ name: 'LiveName', steamId: '76561198000000001', faction: 'Valkyra', kills: 7, deaths: 2, cash: 0 }],
+            }
+          : null,
+      ),
+    );
+    index.hit.mockImplementation(async (id: string) => (id === '76561198000000002' ? { steamId: id, name: 'Board', minutes: 5, kills: 1, lastSeen: '2026-10-04T09:00:00Z' } : null));
+    api.steamProfiles.mockResolvedValue({ '76561198000000002': { avatar: 'https://avatars.steamstatic.com/x.jpg' } } as never);
+    const r = await friendsStatus(['76561198000000001', '76561198000000002', '76561198000000002', '76561198000000003', 'nope']);
+    expect(r.data.map((f) => f.steamId)).toEqual(['76561198000000001', '76561198000000002', '76561198000000003']);
+    expect(r.data[0]).toMatchObject({ name: 'LiveName', online: { serverId: 's1', serverName: 'EU#1', faction: 'Valkyra', kills: 7, deaths: 2 } });
+    expect(r.data[1]).toEqual({ steamId: '76561198000000002', name: 'Board', avatarUrl: 'https://avatars.steamstatic.com/x.jpg', online: null, lastSeen: Date.parse('2026-10-04T09:00:00Z') / 1000 });
+    expect(r.data[2]).toMatchObject({ name: null, online: null, lastSeen: null });
+    expect(api.dossier).not.toHaveBeenCalled();
+    // Steam pictures only for players the site knows: online, or in the player list
+    expect(api.steamProfiles).toHaveBeenCalledWith(['76561198000000001', '76561198000000002']);
+  });
+
+  test('ids nobody knows cost no Steam lookup at all', async () => {
+    api.live.mockResolvedValue(fresh(null));
+    index.hit.mockResolvedValue(null);
+    const r = await friendsStatus(['76561198000000111', '76561198000000222']);
+    expect(r.data.map((f) => f.name)).toEqual([null, null]);
+    expect(api.steamProfiles).not.toHaveBeenCalled();
   });
 });
 
@@ -273,6 +307,14 @@ describe('leaderboard from the whole-board export', () => {
     expect(p2.data.total).toBe(98);
   });
 
+  test("the viewer's own rank and page; past the boards' depth, a rank with no page; absent, nothing", async () => {
+    exportOf(3000);
+    expect((await leaderboard({ metric: 'kills', period: '30d', me: row(130).steamId })).data.mine).toEqual({ rank: 130, page: 3 });
+    expect((await leaderboard({ metric: 'kills', period: '30d', me: row(2500).steamId })).data.mine).toEqual({ rank: 2500, page: null });
+    expect((await leaderboard({ metric: 'kills', period: '30d', me: '76561198099999999' })).data.mine).toBeNull();
+    expect((await leaderboard({ metric: 'kills', period: '30d' })).data.mine).toBeNull();
+  });
+
   test('boards stop at page 20 (the top 1,000)', async () => {
     exportOf(3000);
     const r = await leaderboard({ metric: 'kills', period: 'all', page: 999 });
@@ -446,10 +488,30 @@ describe('getMatch', () => {
     api.kills.mockResolvedValue(fresh({ ok: true, kills: [], total: null }));
     api.match.mockResolvedValue(fresh(view('2026-10-04T11:00:00Z')));
     await getMatch('s1', 9);
-    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200 }, { ttl: TTL.endedMatch });
+    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200, before: null }, { ttl: TTL.endedMatch });
     api.match.mockResolvedValue(fresh(view(null)));
     await getMatch('s1', 9);
-    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200 }, { ttl: TTL.stats });
+    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200, before: null }, { ttl: TTL.stats });
+  });
+
+  test("a busy round's kills are read page by page, and its momentum counts each side", async () => {
+    const two = { ...view('2026-10-04T10:10:00Z'), factions: [{ name: 'A', colorHex: null }, { name: 'B', colorHex: null }], kills: 250 };
+    api.match.mockResolvedValue(fresh(two));
+    const kill = (i: number, faction: string) => ({
+      eventId: `e${i}`, ts: '2026-10-04T10:05:00Z', map: 'M', eventTime: i, killer: { steamId: '76561198000000002', name: 'K', faction },
+      victim: { steamId: '76561198000000001', name: 'V', faction: null }, cause: null, distanceM: null, headshot: false, suicide: false, teamKill: false, tags: [],
+    });
+    api.kills.mockImplementation(async (_id: string, q: { before: unknown }) =>
+      fresh({ ok: true, total: null, kills: q.before ? Array.from({ length: 50 }, (_, i) => kill(i, 'B')) : Array.from({ length: 200 }, (_, i) => kill(300 + i, 'A')) }),
+    );
+    const r = await getMatch('s1', 9);
+    expect(api.kills).toHaveBeenCalledTimes(2);
+    expect(api.kills.mock.calls[1][1].before).toEqual({ ts: '2026-10-04T10:05:00Z', eventTime: 499 });
+    expect(r?.data.kills).toHaveLength(250);
+    const m = r!.data.momentum!;
+    expect(m.bucketS).toBe(60);
+    expect(m.buckets.reduce((n, [a]) => n + a, 0)).toBe(200);
+    expect(m.buckets.reduce((n, [, b]) => n + b, 0)).toBe(50);
   });
 });
 

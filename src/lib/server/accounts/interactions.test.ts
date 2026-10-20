@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, test, vi } from 'vitest';
 import type { AccountsEnv } from './env';
-import { COMMANDS, handleInteraction, plainName, registerCommands, verifyDiscordRequest } from './interactions';
+import { COMMANDS, handleInteraction, notifyCommand, plainName, registerCommands, verifyDiscordRequest } from './interactions';
 import { openStore } from './store';
 
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -172,6 +172,67 @@ describe('/link', () => {
   });
 });
 
+describe('/notify', () => {
+  const ME = '333333333333333333';
+  const SERVERS = [
+    { id: 'srv-eu1', shortName: 'EU#1', slug: 'eu1' },
+    { id: 'srv-eu2', shortName: 'EU#2', slug: 'eu2' },
+  ];
+  const notify = (sub: string, options: { name: string; value: unknown }[] = [], over: object = {}) => ({
+    type: 2,
+    guild_id: GUILD,
+    token: 'tok',
+    member: { roles: [], user: { id: ME } },
+    data: { name: 'notify', options: [{ name: sub, options }] },
+    ...over,
+  });
+  const ndeps = (store = openStore(':memory:')) => ({ ...deps(store), servers: async () => SERVERS, confirmAlert: vi.fn() });
+
+  test('sets a players alert privately and checks DMs reach them', async () => {
+    const d = ndeps();
+    const r = text(await handleInteraction(notify('players', [{ name: 'count', value: 30 }, { name: 'server', value: 'srv-eu2' }]), d));
+    expect(r).toMatchObject({ content: "Done. I'll DM you when EU#2 reaches 30 players.", flags: 64 });
+    expect(d.store.alertsOf(ME)).toMatchObject([{ kind: 'players', serverId: 'srv-eu2', threshold: 30 }]);
+    expect(d.confirmAlert).toHaveBeenCalledWith(ME, 'tok', expect.stringContaining('EU#2 reaches 30 players'));
+  });
+
+  test('a map alert defaults to 10 players; a typed server name works too', async () => {
+    const d = ndeps();
+    const r = text(await handleInteraction(notify('map', [{ name: 'map', value: 'Ozeti' }, { name: 'server', value: 'eu1' }]), d));
+    expect(r.content).toBe("Done. I'll DM you when Ozeti starts on EU#1 with 10+ playing.");
+    expect(text(await handleInteraction(notify('map', [{ name: 'map', value: 'Ozeti' }, { name: 'server', value: 'nowhere' }]), d)).content).toMatch(/don't know that server/);
+    expect(text(await handleInteraction(notify('map', [{ name: 'map', value: 'Moon' }]), d)).content).toMatch(/doesn't make sense/);
+  });
+
+  test('list, stop one by its number, stop all', async () => {
+    const d = ndeps();
+    await handleInteraction(notify('players', [{ name: 'count', value: 20 }]), d);
+    await handleInteraction(notify('map', [{ name: 'map', value: 'Bakurani' }, { name: 'min_players', value: 0 }]), d);
+    expect(text(await handleInteraction(notify('list'), d)).content).toContain('**1.** any server reaches 20 players\n**2.** Bakurani starts on any server');
+    expect(text(await handleInteraction(notify('stop', [{ name: 'id', value: 1 }]), d)).content).toBe('Stopped: any server reaches 20 players.');
+    expect(text(await handleInteraction(notify('stop', [{ name: 'id', value: 5 }]), d)).content).toMatch(/no alert 5/);
+    expect(text(await handleInteraction(notify('stop'), d)).content).toBe('Stopped all 1 of your alerts.');
+    expect(text(await handleInteraction(notify('list'), d)).content).toMatch(/no alerts/);
+  });
+
+  test('at most five; paused alerts say why; only in the TEG server', async () => {
+    const d = ndeps();
+    for (let n = 0; n < 5; n++) await handleInteraction(notify('players', [{ name: 'count', value: 10 + n }]), d);
+    expect(text(await handleInteraction(notify('players', [{ name: 'count', value: 50 }]), d)).content).toMatch(/already have 5/);
+    d.store.setAlertFailures(ME, 3);
+    expect(text(await handleInteraction(notify('list'), d)).content).toMatch(/paused/);
+    expect(text(await handleInteraction(notify('list', [], { guild_id: '1' }), d)).content).toMatch(/TEG Discord server/);
+  });
+});
+
+describe('notifyCommand', () => {
+  test('offers the servers as choices, and none when they are unknown', () => {
+    const servers = notifyCommand([{ id: 'srv-eu1', shortName: 'EU#1', slug: 'eu1' }]).options[0].options![1] as { choices?: unknown };
+    expect(servers.choices).toEqual([{ name: 'EU#1', value: 'srv-eu1' }]);
+    expect((notifyCommand([]).options[0].options![1] as { choices?: unknown }).choices).toBeUndefined();
+  });
+});
+
 describe('registerCommands', () => {
   test('overwrites the guild commands with the bot token', async () => {
     const f = vi.fn(async () => Response.json([])) as unknown as typeof fetch;
@@ -180,7 +241,7 @@ describe('registerCommands', () => {
     expect(url).toBe(`https://discord.com/api/v10/applications/${env.discordClientId}/guilds/${GUILD}/commands`);
     expect(init.method).toBe('PUT');
     expect((init.headers as Record<string, string>).Authorization).toBe('Bot bot');
-    expect(JSON.parse(init.body as string)).toEqual(COMMANDS);
+    expect(JSON.parse(init.body as string)).toEqual([...COMMANDS, notifyCommand([])]);
   });
 
   test('a refusal is an error', async () => {

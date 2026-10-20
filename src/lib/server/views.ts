@@ -227,3 +227,14 @@ export interface Records {
 }
 
 export interface MatchAward { key: string; label: string; steamId: string; name: string; value: string }
+
+/** One friend as /friends shows them: from the live servers and the player list, nothing per-player from Warcon. */
+export interface FriendStatus {
+  steamId: string;
+  /** null: not in the top 10,000 player list and not online */
+  name: string | null;
+  avatarUrl: string | null;
+  online: { serverId: string; serverName: string; serverSlug: string; faction: string; kills: number; deaths: number } | null;
+  /** unix seconds; null when unknown */
+  lastSeen: number | null;
+}

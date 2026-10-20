@@ -63,5 +63,22 @@ export function linkedSteamIds(): Set<string> | null {
   }
 }
 
+/**
+ * Who is looking: the signed-in member's Discord id and, once linked, their Steam id. Null when
+ * signed out or linking is off. Never throws: the header and boards just don't personalise.
+ */
+export async function viewer(): Promise<{ discordId: string; steamId: string | null } | null> {
+  try {
+    const a = accounts();
+    if (!a) return null;
+    const s = await currentSession(a);
+    if (!s) return null;
+    return { discordId: s.discordId, steamId: a.store.byDiscord(s.discordId)?.steamId ?? null };
+  } catch (e) {
+    console.error('[accounts] viewer lookup failed:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 export const secureCookies = () => siteEnv().siteUrl.startsWith('https://');
 export const callbackUrl = (provider: 'discord' | 'steam') => `${siteEnv().siteUrl}/auth/${provider}/callback`;
