@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { ago, duration, kd, metres, ordinal, pct } from './format';
+import { describe, expect, it, test } from 'vitest';
+import { ago, date, dateTime, dayMonth, duration, hourMinute, kd, metres, ordinal, pct } from './format';
 import { causeInfo, killContexts, mapName } from './game';
 
 describe('format', () => {
@@ -49,5 +49,23 @@ describe('game vocabulary', () => {
         'Meta.PlayerKillFlag.Player.Suicide',
       ]),
     ).toEqual(['Headshot', 'Suicide']);
+  });
+});
+
+describe('dates in a timezone', () => {
+  // 14 Sep 2026, 23:30 UTC
+  const ts = Date.UTC(2026, 8, 14, 23, 30) / 1000;
+  test('UTC by default, as before', () => {
+    expect(date(ts)).toBe('14 Sep 2026');
+    expect(dateTime(ts)).toBe('14 Sep, 23:30 UTC');
+    expect(hourMinute(ts)).toBe('23:30');
+    expect(dayMonth(ts)).toBe('14/9');
+  });
+  test('another timezone shifts the clock and, past midnight, the date', () => {
+    expect(dateTime(ts, 'Europe/London')).toBe('15 Sep, 00:30');
+    expect(date(ts, 'Europe/London')).toBe('15 Sep 2026');
+    expect(dateTime(ts, 'America/Los_Angeles')).toBe('14 Sep, 16:30');
+    expect(dayMonth(ts, 'Asia/Tokyo')).toBe('15/9');
+    expect(hourMinute(Date.UTC(2026, 0, 1, 0, 5) / 1000, 'Europe/Berlin')).toBe('01:05');
   });
 });

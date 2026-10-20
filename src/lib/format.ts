@@ -64,18 +64,41 @@ export function ago(ts: number | null | undefined, now = Date.now() / 1000): str
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** `14 Sep 2026` (UTC). */
-export function date(ts: number): string {
+/** Day, month, year, hour and minute of a moment in a timezone (an IANA name; UTC by default). */
+function parts(ts: number, timeZone: string) {
   const d = new Date(ts * 1000);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  if (timeZone === 'UTC') return { day: d.getUTCDate(), month: d.getUTCMonth(), year: d.getUTCFullYear(), hour: d.getUTCHours(), minute: d.getUTCMinutes() };
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' })
+      .formatToParts(d)
+      .map((x) => [x.type, Number(x.value)]),
+  );
+  return { day: p.day, month: p.month - 1, year: p.year, hour: p.hour, minute: p.minute };
 }
 
-/** `14 Sep, 18:04 UTC`. */
-export function dateTime(ts: number): string {
-  const d = new Date(ts * 1000);
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${hh}:${mm} UTC`;
+/** `14 Sep 2026`, in `timeZone` (UTC by default). */
+export function date(ts: number, timeZone = 'UTC'): string {
+  const p = parts(ts, timeZone);
+  return `${p.day} ${MONTHS[p.month]} ${p.year}`;
+}
+
+/** `14 Sep, 18:04 UTC`; in another timezone, `14 Sep, 19:04` (the page says which). */
+export function dateTime(ts: number, timeZone = 'UTC'): string {
+  const p = parts(ts, timeZone);
+  const hm = `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+  return `${p.day} ${MONTHS[p.month]}, ${hm}${timeZone === 'UTC' ? ' UTC' : ''}`;
+}
+
+/** `18:04` in `timeZone`. */
+export function hourMinute(ts: number, timeZone = 'UTC'): string {
+  const p = parts(ts, timeZone);
+  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+}
+
+/** `14/9` in `timeZone`. */
+export function dayMonth(ts: number, timeZone = 'UTC'): string {
+  const p = parts(ts, timeZone);
+  return `${p.day}/${p.month + 1}`;
 }
 
 export function clock(seconds: number): string {

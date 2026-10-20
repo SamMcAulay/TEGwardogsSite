@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { TimezoneNote } from '@/components/local-time';
 import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
@@ -138,7 +139,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="max-w-md">
               <Logo />
               <p className="mt-4 text-xs leading-relaxed text-dim">
-                Community statistics for The Employed Gamers WARDOGS servers, taken from the TEG Warcon panel. Not affiliated with Bulkhead or Team17. All times UTC.
+                Community statistics for The Employed Gamers WARDOGS servers, taken from the TEG Warcon panel. Not affiliated with Bulkhead or Team17. <TimezoneNote />
               </p>
             </div>
             <div className="grid grid-cols-2 gap-x-12 gap-y-2 text-[13px]">

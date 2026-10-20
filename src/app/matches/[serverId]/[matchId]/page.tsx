@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { serverPath } from '@/lib/url';
 import { notFound } from 'next/navigation';
@@ -7,7 +8,7 @@ import { FactionScores, KillList, MapBackdrop } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, Meter, Panel, Stat, StatGrid } from '@/components/ui';
-import { dateTime, duration, int, kd, metres, money } from '@/lib/format';
+import { duration, int, kd, metres, money } from '@/lib/format';
 import { causeLabel, factionColor, lightingName, mapName } from '@/lib/game';
 import { getMatch } from '@/lib/server/data';
 import type { MatchPlayerRow } from '@/lib/server/views';
@@ -232,7 +233,7 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
               {live ? <Badge tone="good">Live</Badge> : match.winner && <Badge tone="accent">{match.winner} won</Badge>}
             </div>
             <p className="mt-3 text-sm text-muted">
-              King of the Hill · {lightingName(match.lighting)} · {dateTime(match.startedAt)} ·{' '}
+              King of the Hill · {lightingName(match.lighting)} · <LocalTime ts={match.startedAt} /> ·{' '}
               {duration((match.endedAt ?? now) - match.startedAt)}
             </p>
           </div>

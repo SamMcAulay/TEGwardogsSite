@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { serverPath } from '@/lib/url';
 import { notFound } from 'next/navigation';
@@ -10,7 +11,7 @@ import { Avatar, PlayerLink } from '@/components/player';
 import { NameTag, TierBadge } from '@/components/tier';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, FactionTag, Meter, Panel, Segmented, Stat, StatGrid, StatusDot } from '@/components/ui';
-import { ago, date, dateTime, duration, int, kd, metres, pct } from '@/lib/format';
+import { ago, duration, int, kd, metres, pct } from '@/lib/format';
 import { causeInfo, mainFaction, mapName } from '@/lib/game';
 import { classKills } from '@/lib/weapon-classes';
 import { milestones } from '@/lib/milestones';
@@ -180,7 +181,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                   >
                     Steam profile ↗
                   </a>
-                  <span className="text-xs">First seen {player.firstSeen ? date(player.firstSeen) : '—'}</span>
+                  <span className="text-xs">First seen {player.firstSeen ? <LocalTime ts={player.firstSeen} dateOnly /> : '—'}</span>
                 </div>
               </div>
             </div>
@@ -355,7 +356,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                           <Link prefetch={false} href={`/matches/${m.serverId}/${m.matchId}`} className="link font-medium">
                             {mapName(m.map)}
                           </Link>
-                          <div className="text-xs text-dim">{dateTime(m.startedAt)}</div>
+                          <div className="text-xs text-dim"><LocalTime ts={m.startedAt} /></div>
                         </td>
                         <td className="text-muted">{m.serverName}</td>
                         <td>

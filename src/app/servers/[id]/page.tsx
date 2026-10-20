@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { LocalTime } from '@/components/local-time';
 import { accountsEnv } from '@/lib/server/accounts/env';
 import Link from 'next/link';
 import { withParams } from '@/lib/url';
@@ -21,7 +22,7 @@ import {
   StatGrid,
   StatusDot,
 } from '@/components/ui';
-import { ago, clock, compact, dateTime, duration, int, kd, money } from '@/lib/format';
+import { ago, clock, compact, duration, int, kd, money } from '@/lib/format';
 import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationView } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServer, leaderboard, listMatches, liveTags, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
@@ -364,7 +365,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                               </span>
                             )}
                           </td>
-                          <td className="text-muted">{dateTime(m.startedAt)}</td>
+                          <td className="text-muted"><LocalTime ts={m.startedAt} /></td>
                           <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
                           <td className="r">{m.peakPlayers}</td>
                           <td>

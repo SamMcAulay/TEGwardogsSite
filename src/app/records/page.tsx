@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
+import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { serverPath } from '@/lib/url';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
 import { Container, Empty, PageHeader, Panel, RankCell } from '@/components/ui';
-import { date, int, metres } from '@/lib/format';
+import { int, metres } from '@/lib/format';
 import { causeLabel } from '@/lib/game';
 import { records } from '@/lib/server/data';
 import type { RecordRow } from '@/lib/server/views';
@@ -73,7 +74,7 @@ export default async function RecordsPage() {
                           <td className="text-muted">{causeLabel(s.cause)}</td>
                           <td className="hidden max-w-48 truncate text-muted md:table-cell">{s.victim}</td>
                           <td className="r hidden text-dim sm:table-cell">
-                            {date(s.ts)} ·{' '}
+                            <LocalTime ts={s.ts} dateOnly /> ·{' '}
                             <Link prefetch={false} href={serverPath(s.serverName)} className="link text-dim">
                               {s.serverName}
                             </Link>
