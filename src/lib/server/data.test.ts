@@ -446,10 +446,30 @@ describe('getMatch', () => {
     api.kills.mockResolvedValue(fresh({ ok: true, kills: [], total: null }));
     api.match.mockResolvedValue(fresh(view('2026-10-04T11:00:00Z')));
     await getMatch('s1', 9);
-    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200 }, { ttl: TTL.endedMatch });
+    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200, before: null }, { ttl: TTL.endedMatch });
     api.match.mockResolvedValue(fresh(view(null)));
     await getMatch('s1', 9);
-    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200 }, { ttl: TTL.stats });
+    expect(api.kills).toHaveBeenLastCalledWith('s1', { match: 9, limit: 200, before: null }, { ttl: TTL.stats });
+  });
+
+  test("a busy round's kills are read page by page, and its momentum counts each side", async () => {
+    const two = { ...view('2026-10-04T10:10:00Z'), factions: [{ name: 'A', colorHex: null }, { name: 'B', colorHex: null }], kills: 250 };
+    api.match.mockResolvedValue(fresh(two));
+    const kill = (i: number, faction: string) => ({
+      eventId: `e${i}`, ts: '2026-10-04T10:05:00Z', map: 'M', eventTime: i, killer: { steamId: '76561198000000002', name: 'K', faction },
+      victim: { steamId: '76561198000000001', name: 'V', faction: null }, cause: null, distanceM: null, headshot: false, suicide: false, teamKill: false, tags: [],
+    });
+    api.kills.mockImplementation(async (_id: string, q: { before: unknown }) =>
+      fresh({ ok: true, total: null, kills: q.before ? Array.from({ length: 50 }, (_, i) => kill(i, 'B')) : Array.from({ length: 200 }, (_, i) => kill(300 + i, 'A')) }),
+    );
+    const r = await getMatch('s1', 9);
+    expect(api.kills).toHaveBeenCalledTimes(2);
+    expect(api.kills.mock.calls[1][1].before).toEqual({ ts: '2026-10-04T10:05:00Z', eventTime: 499 });
+    expect(r?.data.kills).toHaveLength(250);
+    const m = r!.data.momentum!;
+    expect(m.bucketS).toBe(60);
+    expect(m.buckets.reduce((n, [a]) => n + a, 0)).toBe(200);
+    expect(m.buckets.reduce((n, [, b]) => n + b, 0)).toBe(50);
   });
 });
 

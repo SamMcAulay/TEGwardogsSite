@@ -17,6 +17,7 @@ import type {
 } from './views';
 import { RECORD_CAUSES } from '@/lib/weapon-classes';
 import { clanTag } from '@/lib/clans';
+import { momentum } from '@/lib/momentum';
 import { groupClans, type Clan, type ClanSort } from './clans';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
@@ -629,6 +630,25 @@ export async function listMatches(q: { serverId?: string | null; limit?: number;
   return loaded({ rows: mergeNewest(lists, (m) => m.startedAt, limit), pages }, r.stale, r.failed);
 }
 
+/** A round's kills are read this many pages of 200 at most (2,000 kills): a long, full round. */
+const MATCH_KILL_PAGES = 10;
+
+/** Every kill of one match, newest first, paging back through Warcon's 200 at a time. */
+async function matchKills(serverId: string, matchId: number, total: number, ttl: number): Promise<{ value: { kills: WKill[] }; stale: boolean }> {
+  const all: WKill[] = [];
+  let stale = false;
+  let before: { ts: string; eventTime: number } | null = null;
+  for (let p = 0; p < MATCH_KILL_PAGES; p++) {
+    const r = await warcon().kills(serverId, { match: matchId, limit: 200, before }, { ttl });
+    stale ||= r.stale;
+    all.push(...r.value.kills);
+    const last = r.value.kills.at(-1);
+    if (r.value.kills.length < 200 || !last || all.length >= total) break;
+    before = { ts: last.ts, eventTime: last.eventTime };
+  }
+  return { value: { kills: all }, stale };
+}
+
 export async function getMatch(serverId: string, matchId: number) {
   const { list } = await serverList();
   const server = list.find((s) => s.id === serverId);
@@ -645,12 +665,18 @@ export async function getMatch(serverId: string, matchId: number) {
   // The match is still worth showing without its kill feed.
   let kills: { value: { kills: WKill[] }; stale: boolean };
   try {
-    kills = await warcon().kills(serverId, { match: matchId, limit: 200 }, { ttl: v.match.endedAt ? TTL.endedMatch : TTL.stats });
+    kills = await matchKills(serverId, matchId, v.kills, v.match.endedAt ? TTL.endedMatch : TTL.stats);
   } catch (e) {
     console.error('[data] match kills failed:', e instanceof Error ? e.message : e);
     kills = { value: { kills: [] }, stale: true };
   }
   const killRows = kills.value.kills.map((k) => killRow(k, serverId, shortNameOf(server.name)));
+  const roundSeconds = Math.max(v.timeline.at(-1)?.[0] ?? 0, (sec(v.match.endedAt) ?? Math.floor(Date.now() / 1000)) - sec(v.match.startedAt)!);
+  const flow = momentum(
+    kills.value.kills.map((k) => ({ t: k.eventTime, faction: k.killer?.faction ?? null, own: k.teamKill || k.suicide })),
+    v.factions.map((f) => f.name),
+    roundSeconds,
+  );
   const weaponCounts = new Map<string, number>();
   for (const k of killRows) if (k.cause) weaponCounts.set(k.cause, (weaponCounts.get(k.cause) ?? 0) + 1);
   const lines: MatchPlayerRow[] = v.lines.map((l) => ({
@@ -666,6 +692,7 @@ export async function getMatch(serverId: string, matchId: number) {
       factions: v.factions,
       awards,
       kills: killRows,
+      momentum: kills.value.kills.length ? flow : null,
       weapons: [...weaponCounts].map(([cause, n]) => ({ cause, kills: n })).sort((a, b) => b.kills - a.kills).slice(0, 8),
     },
     view.stale || kills.stale,

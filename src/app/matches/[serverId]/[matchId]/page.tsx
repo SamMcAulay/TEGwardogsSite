@@ -11,6 +11,7 @@ import { dateTime, duration, int, kd, metres, money } from '@/lib/format';
 import { causeLabel, factionColor, lightingName, mapName } from '@/lib/game';
 import { getMatch } from '@/lib/server/data';
 import type { MatchPlayerRow } from '@/lib/server/views';
+import type { Momentum } from '@/lib/momentum';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -72,6 +73,59 @@ function ScoreTimeline({
       <div className="num mt-1 flex justify-between text-[11px] text-dim">
         <span>{duration(timeline[0][0])}</span>
         <span>{duration(t1)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** Kills per stretch of the round: the first faction's above the line, the second's below. */
+function MomentumChart({ flow, factions }: { flow: Momentum; factions: { name: string; colorHex: string | null }[] }) {
+  const [a, b] = factions;
+  const max = Math.max(1, ...flow.buckets.flat());
+  const n = flow.buckets.length;
+  const W = 100;
+  const H = 100;
+  const bar = W / n;
+  const half = (v: number) => (v / max) * (H / 2 - 2);
+  const colour = (f: { name: string; colorHex: string | null }) => factionColor(f.name, f.colorHex ?? undefined);
+  const mins = flow.bucketS / 60;
+  const span = (i: number) => `${i * mins}–${(i + 1) * mins} min`;
+  const swing = flow.swing && flow.buckets[flow.swing.index];
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted">
+        <span className="flex flex-wrap gap-4">
+          {[a, b].map((f, i) => (
+            <span key={f.name} className="flex items-center gap-1.5">
+              <span className="h-2 w-2" style={{ background: colour(f) }} />
+              {f.name} {i === 0 ? '↑' : '↓'}
+            </span>
+          ))}
+        </span>
+        {flow.swing && swing && (
+          <span>
+            Biggest swing: <span className="text-text">{span(flow.swing.index)}</span>, {factions[flow.swing.leader].name}{' '}
+            <span className="num text-text">
+              {swing[flow.swing.leader]}–{swing[1 - flow.swing.leader]}
+            </span>
+          </span>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-[160px] w-full" role="img" aria-label={`Kills every ${mins} minutes for each side`}>
+        <line x1={0} x2={W} y1={H / 2} y2={H / 2} stroke="var(--line-strong)" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        {flow.buckets.map(([ka, kb], i) => (
+          <g key={i}>
+            <title>{`${span(i)}: ${a.name} ${ka}, ${b.name} ${kb}`}</title>
+            <rect x={i * bar + bar * 0.12} width={bar * 0.76} y={H / 2 - half(ka)} height={half(ka)} fill={colour(a)} opacity={flow.swing?.index === i ? 1 : 0.75} />
+            <rect x={i * bar + bar * 0.12} width={bar * 0.76} y={H / 2} height={half(kb)} fill={colour(b)} opacity={flow.swing?.index === i ? 1 : 0.75} />
+          </g>
+        ))}
+      </svg>
+      <div className="num mt-1 flex justify-between text-[11px] text-dim">
+        <span>0 min</span>
+        <span>
+          {n * mins} min · {mins === 1 ? 'each bar a minute' : `each bar ${mins} minutes`}
+        </span>
       </div>
     </div>
   );
@@ -141,7 +195,7 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
         <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
       </Container>
     );
-  const { match, lines, timeline, factions, awards, kills, weapons } = loadedMatch.data;
+  const { match, lines, timeline, factions, awards, kills, weapons, momentum } = loadedMatch.data;
   const now = nowSec();
 
   const teams = factions.length
@@ -240,6 +294,12 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
             </ul>
           </Panel>
         </div>
+
+        {momentum && factions.length === 2 && (
+          <Panel title="Momentum" action="Kills by each side through the round; team kills not counted">
+            <MomentumChart flow={momentum} factions={factions} />
+          </Panel>
+        )}
 
         <Panel title="Awards" flush>
           {awards.length ? (
