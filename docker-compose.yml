@@ -22,7 +22,7 @@ services:
       # .env would also move the port the app listens on inside the container.
       - '127.0.0.1:${SITE_HOST_PORT:-3100}:3000'
     networks: [warcon]
-    # Linked Discord/Steam accounts (accounts.db). The only state the site keeps: back this up.
+    # Linked Discord/Steam accounts (accounts.db, back this up) and history.db (rounds, daily board snapshots).
     volumes:
       - site-data:/app/data
     stop_grace_period: 15s

@@ -27,6 +27,7 @@ import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, 
 import { Section, safe } from '@/components/section';
 import { getServer, leaderboard, listMatches, liveTags, mapWinRates, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
+import { liveStrength } from '@/lib/server/trends';
 import type { LivePlayer } from '@/lib/server/views';
 
 export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): Promise<Metadata> {
@@ -152,7 +153,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   if (id !== server.slug) permanentRedirect(withParams(`/servers/${server.slug}`, sp, {}));
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
-  const [pop, history, totals, matches, top, kills, tags, wins] = await Promise.all([
+  const [pop, history, totals, matches, top, kills, tags, wins, strength] = await Promise.all([
     safe(population(server.id, range)),
     safe(populationHistory(server.id)),
     safe(serverTotals(server.id)),
@@ -163,6 +164,8 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
     // Decoration: a failed lookup means no tags, never a broken scoreboard.
     liveTags(server.players).catch(() => ({})),
     safe(mapWinRates(server.id)),
+    // Decoration too: no ratings yet, or nobody on, means no strength bar.
+    liveStrength(server.id).catch(() => null),
   ]);
   const st = server.status;
   // The server doesn't report match time any more; the round in progress started when its match did.
@@ -313,6 +316,31 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           title="Live scoreboard"
           action={<span>{server.online === null ? 'Status unavailable' : `${server.playerCount} connected`}</span>}
         >
+          {strength && (
+            <div className="mb-4">
+              <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <Link href="/skill" className="link eyebrow !text-[0.66rem]">
+                  Team strength now
+                </Link>
+                <span className="text-xs text-dim">From the skill ratings of who&rsquo;s on each side, not the score</span>
+              </div>
+              <div className="flex h-2.5 gap-0.5" role="img" aria-label={strength.map((t) => `${t.faction} ${Math.round(t.chance * 100)}%`).join(', ')}>
+                {strength.map((t) => (
+                  <span key={t.faction} className="rounded-[2px]" style={{ width: `${t.chance * 100}%`, background: factionColor(t.faction) }} />
+                ))}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-x-5 gap-y-0.5 text-xs text-muted">
+                {strength.map((t) => (
+                  <span key={t.faction} className="flex items-center gap-1.5">
+                    <span className="inline-block size-2" style={{ background: factionColor(t.faction) }} />
+                    {t.faction}
+                    <span className="num font-semibold text-text">{Math.round(t.chance * 100)}%</span>
+                    {t.avg != null && <span className="num text-dim">· avg {t.avg}</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {server.players.length ? (
             <div className="grid gap-3 lg:grid-cols-3">
               {factions.map((f) => (

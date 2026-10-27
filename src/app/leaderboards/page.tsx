@@ -2,13 +2,14 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
-import { Container, Empty, PageHeader, Pagination, Panel, RankCell, Segmented, cx } from '@/components/ui';
+import { Container, Empty, PageHeader, Pagination, Panel, RankCell, RankMove, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
 import Link from 'next/link';
 import { linkedSteamIds, viewer } from '@/lib/server/accounts';
 import { getServers, leaderboard, MAX_BOARD_PAGE } from '@/lib/server/data';
 import { METRIC_LABELS, METRICS, parseMetric, parsePeriod, PERIOD_LABELS, PERIODS, type LeaderRow, type Metric } from '@/lib/server/views';
 import { one, pageParam, withParams } from '@/lib/url';
+import { boardMoves } from '@/lib/server/trends';
 
 export const metadata: Metadata = { title: 'Leaderboards' };
 
@@ -67,6 +68,12 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
     if (page > pages) redirect(withParams('/leaderboards', sp, { page: pages > 1 ? pages : null }));
   }
   const now = nowSec();
+  // Places moved since about a week ago, from history.db's daily snapshots: the all-time, everyone board only.
+  const moves =
+    period === 'all' && !serverId && !members && !(board instanceof Error)
+      ? await boardMoves(metric, board.data.rows).catch(() => null)
+      : null;
+  const since = moves?.since ? new Date(`${moves.since}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : undefined;
 
   return (
     <>
@@ -74,6 +81,11 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
         eyebrow="Rankings"
         title="Leaderboards"
         description="Ranked from every round played on TEG servers. Days are UTC."
+        actions={
+          <Link href="/skill" className="link font-display text-sm font-semibold uppercase tracking-[0.1em] text-accent">
+            Skill rating →
+          </Link>
+        }
       >
         <div className="mt-8 flex flex-col gap-3">
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -177,8 +189,9 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
                       <tbody>
                         {rows.map((r) => (
                           <tr key={r.steamId} className={r.steamId === me ? 'bg-accent-soft' : undefined} aria-current={r.steamId === me ? 'true' : undefined}>
-                            <td>
+                            <td className="whitespace-nowrap">
                               <RankCell rank={r.rank} />
+                              <RankMove moved={moves?.moved.get(r.steamId)} since={since} />
                             </td>
                             <td className="max-w-64">
                               <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} />

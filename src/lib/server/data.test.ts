@@ -28,7 +28,7 @@ vi.mock('./seasons', async (original) => ({
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
 import { WarconError } from './warcon/http';
-import { adjustedRank, records, getMatch, getPlayer, MAX_BOARD_PAGE, getServers, friendsStatus, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
+import { adjustedRank, records, getMatch, replayOf, getPlayer, MAX_BOARD_PAGE, getServers, friendsStatus, headToHead, killFeeds, leaderboard, listMatches, networkSummary, population, recentKills, recentPlayers, regionOf, serverNameOf, shortNameOf, TEAMKILL_PAGES, teamKills } from './data';
 import { TTL } from './warcon/api';
 import type { ServerRow } from './views';
 
@@ -712,5 +712,27 @@ describe('records', () => {
     expect(r.data.longestShots).toEqual([]);
     expect(r.missing).toEqual(expect.arrayContaining(['s1', 's2']));
     expect(r.data.streaks).toHaveLength(2);
+  });
+});
+
+describe('replayOf', () => {
+  const kill = (eventTime: number, killer: string, victim: string, faction = 'Valkyra') => ({
+    eventId: `${eventTime}`, ts: '2026-10-27T00:00:00Z', map: 'Europe', eventTime,
+    killer: { steamId: killer, name: `n${killer}`, faction }, victim: { steamId: victim, name: `n${victim}`, faction: 'Lonestar' },
+    cause: 'AK', distanceM: 12.4, headshot: true, suicide: false, teamKill: false, tags: [],
+  });
+  const row = (killer: string | null, victim: string | null) => ({
+    killerSteamId: killer, killerName: killer ? `n${killer}` : 'Hidden player', victimSteamId: victim, victimName: victim ? `n${victim}` : 'Hidden player',
+  }) as unknown as Parameters<typeof replayOf>[1][number];
+
+  test('packs kills oldest first and keeps masked players anonymous', () => {
+    // Warcon sends newest first; the second killer is hidden in the masked feed.
+    const raw = [kill(20, 'h', 'b'), kill(10, 'a', 'b')];
+    const r = replayOf(raw, [row(null, 'b'), row('a', 'b')]);
+    expect(r.kills.map((k) => k[0])).toEqual([10, 20]);
+    expect(r.people.map((p) => p.steamId)).toEqual(['a', 'b', null]);
+    expect(r.people[2]).toEqual({ steamId: null, name: 'Hidden player', faction: 'Valkyra' });
+    expect(JSON.stringify(r)).not.toContain('nh');
+    expect(r.kills[0]).toEqual([10, 0, 1, 0, 1, 12]);
   });
 });

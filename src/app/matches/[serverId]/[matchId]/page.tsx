@@ -9,7 +9,8 @@ import { PlayerLink } from '@/components/player';
 import { safe } from '@/components/section';
 import { Badge, Container, Empty, Meter, Panel, Stat, StatGrid } from '@/components/ui';
 import { duration, int, kd, metres, money } from '@/lib/format';
-import { causeLabel, factionColor, lightingName, mapName } from '@/lib/game';
+import { causeLabel, factionColor, KOTH_CAP, lightingName, mapName } from '@/lib/game';
+import { MatchReplay } from '@/components/replay';
 import { getMatch } from '@/lib/server/data';
 import type { MatchPlayerRow } from '@/lib/server/views';
 import type { Momentum } from '@/lib/momentum';
@@ -196,7 +197,7 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
         <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
       </Container>
     );
-  const { match, lines, timeline, factions, awards, kills, weapons, momentum } = loadedMatch.data;
+  const { match, lines, timeline, factions, awards, kills, weapons, momentum, replay } = loadedMatch.data;
   const now = nowSec();
 
   const teams = factions.length
@@ -271,6 +272,18 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
             />
           ))}
         </div>
+
+        {!live && match.endedAt && (replay.kills.length > 0 || timeline.length > 1) && (
+          <Panel title="Replay" action="Play the round back, or drag to any moment">
+            <MatchReplay
+              data={replay}
+              timeline={timeline}
+              factions={teams.map((f) => ({ name: f, color: factions.find((x) => x.name === f)?.colorHex || factionColor(f) }))}
+              length={Math.max(match.endedAt - match.startedAt, timeline.at(-1)?.[0] ?? 0, replay.kills.at(-1)?.[0] ?? 0)}
+              cap={KOTH_CAP}
+            />
+          </Panel>
+        )}
 
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel title="Score timeline" className="lg:col-span-2" action="Score by time into the round">

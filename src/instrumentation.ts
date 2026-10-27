@@ -1,4 +1,5 @@
 // Runs once when the Next server starts: keep the most visited pages warm (src/lib/server/warm.ts),
+// keep history.db filled (src/lib/server/history),
 // and, when account linking is configured, keep linked members' tiers in step with Discord and
 // send /notify alerts.
 // The Warcon client and its cache live on globalThis, so the warmer and the pages share one cache.
@@ -8,6 +9,10 @@ export async function register() {
   if (process.env.NEXT_PHASE === 'phase-production-build') return;
   const { startWarmer } = await import('./lib/server/warm');
   startWarmer();
+  // The site's own record of rounds and the daily board (trends, skill ratings): no accounts needed.
+  const { startHistory } = await import('./lib/server/history');
+  const { historyBoard, visibleServerIds } = await import('./lib/server/data');
+  startHistory({ serverIds: visibleServerIds, board: historyBoard });
   const { accounts } = await import('./lib/server/accounts');
   const { startTierSync } = await import('./lib/server/accounts/sync');
   try {

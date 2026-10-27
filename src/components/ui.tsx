@@ -247,6 +247,22 @@ export function Meter({ value, max, color }: { value: number; max: number; color
   );
 }
 
+/** Places climbed (▲) or fallen (▼) since a past board; nothing when unchanged or unknown. */
+export function RankMove({ moved, since }: { moved: number | null | undefined; since?: string }) {
+  if (!moved) return null;
+  const up = moved > 0;
+  return (
+    <span
+      className={cx('num ml-1.5 text-[10px] font-semibold', up ? 'text-good' : 'text-bad')}
+      title={`${up ? 'Up' : 'Down'} ${Math.abs(moved)} place${Math.abs(moved) === 1 ? '' : 's'}${since ? ` since ${since}` : ''}`}
+    >
+      {up ? '▲' : '▼'}
+      {Math.abs(moved)}
+      <span className="sr-only">{up ? ' places up' : ' places down'}</span>
+    </span>
+  );
+}
+
 export function RankCell({ rank }: { rank: number }) {
   return (
     <span
