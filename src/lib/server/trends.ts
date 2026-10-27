@@ -2,6 +2,7 @@
 // trends, rank movement on the all-time board, network activity and live team strength.
 // Everything here degrades to "nothing yet" when history.db is unavailable or still filling.
 import { orgBannedIds } from './bans';
+import { presenceHidden, standing } from './accounts';
 import { getServers, metricValue, playerName, withAvatars } from './data';
 import { ratings } from './history';
 import { RANKED_MIN_ROUNDS, ratingOn, sideStrength, type PlayerRating } from './history/ratings';
@@ -23,15 +24,51 @@ async function banned(): Promise<ReadonlySet<string>> {
   }
 }
 
-/** Rated players who qualify for the board, best first, banned players left out. */
-function ranked(all: Map<string, PlayerRating>, ban: ReadonlySet<string>): PlayerRating[] {
-  return [...all.values()].filter((p) => p.rounds >= RANKED_MIN_ROUNDS && !ban.has(p.steamId)).sort((a, b) => b.rating - a.rating || b.rounds - a.rounds);
+/** Who's looking: for whether they may see a hidden player's recent play. */
+export type Viewer = { discordId: string; steamId: string | null } | null;
+
+/** A rating as one viewer may see it. */
+interface Seen {
+  p: PlayerRating;
+  rating: number;
+  rounds: number;
+  /** null: hidden from this viewer, and they've played in the last RECENT_S */
+  lastPlayed: number | null;
+}
+
+/**
+ * A rating as seen by someone who may (masked false) or may not see the player's recent play: for
+ * the latter, as it stood RECENT_S ago, so it can't show they've just played. Null when they had no
+ * rated round before then.
+ */
+export function seenRating(p: PlayerRating, masked: boolean, now = nowSec()): Seen | null {
+  if (!masked || now - p.lastPlayed > RECENT_S) return { p, rating: p.rating, rounds: p.rounds, lastPlayed: p.lastPlayed };
+  const before = p.steps.filter((s) => now - s.t > RECENT_S);
+  const last = before.at(-1);
+  return last ? { p, rating: last.rating, rounds: before.length, lastPlayed: null } : null;
+}
+
+/** For one viewer: whether a player's recent play is hidden from them (hidden, and not them or a friend). */
+function maskerFor(viewer: Viewer): (steamId: string) => boolean {
+  const hidden = presenceHidden();
+  return (steamId) => hidden.has(steamId) && !standing(steamId, viewer).seesPresence;
+}
+
+/** Rated players who qualify for the board as this viewer sees them, best first, banned players left out. */
+function ranked(all: Map<string, PlayerRating>, ban: ReadonlySet<string>, viewer: Viewer): Seen[] {
+  const masked = maskerFor(viewer);
+  const now = nowSec();
+  return [...all.values()]
+    .filter((p) => !ban.has(p.steamId))
+    .map((p) => seenRating(p, masked(p.steamId), now))
+    .filter((x): x is Seen => x != null && x.rounds >= RANKED_MIN_ROUNDS)
+    .sort((a, b) => b.rating - a.rating || b.rounds - a.rounds);
 }
 
 /** Places on `day`, from each player's rating then, among those who qualify now. */
-function placesOn(list: PlayerRating[], day: string): Map<string, number> {
+function placesOn(list: Seen[], day: string): Map<string, number> {
   const then = list
-    .map((p) => ({ id: p.steamId, r: ratingOn(p, day) }))
+    .map((x) => ({ id: x.p.steamId, r: ratingOn(x.p, day) }))
     .filter((x): x is { id: string; r: number } => x.r != null)
     .sort((a, b) => b.r - a.r);
   return new Map(then.map((x, i) => [x.id, i + 1]));
@@ -44,7 +81,8 @@ export interface SkillRow {
   avatarUrl: string | null;
   rating: number;
   rounds: number;
-  lastPlayed: number;
+  /** null: a hidden player who has played in the last few hours */
+  lastPlayed: number | null;
   /** places climbed in the last 7 days (negative: fell); null: not ranked then */
   moved: number | null;
 }
@@ -52,37 +90,30 @@ export interface SkillRow {
 export const SKILL_PAGE_SIZE = 50;
 
 /** One page of the skill board. Null when history.db isn't available. */
-export async function skillBoard(page = 1): Promise<{ rows: SkillRow[]; total: number; rated: number } | null> {
+export async function skillBoard(page = 1, viewer: Viewer = null): Promise<{ rows: SkillRow[]; total: number; rated: number } | null> {
   const all = ratings();
   if (!all) return null;
-  const list = ranked(all, await banned());
+  const list = ranked(all, await banned(), viewer);
+  // A week back is well past RECENT_S, so past places show nothing recent.
   const before = placesOn(list, daysAgo(7));
   const slice = list.slice((page - 1) * SKILL_PAGE_SIZE, page * SKILL_PAGE_SIZE);
   const rows = await Promise.all(
-    slice.map(async (p, i) => {
+    slice.map(async (x, i) => {
       const rank = (page - 1) * SKILL_PAGE_SIZE + i + 1;
-      const was = before.get(p.steamId);
+      const was = before.get(x.p.steamId);
       return {
         rank,
-        steamId: p.steamId,
-        name: (await playerName(p.steamId)) ?? 'Unknown player',
+        steamId: x.p.steamId,
+        name: (await playerName(x.p.steamId)) ?? 'Unknown player',
         avatarUrl: null,
-        rating: p.rating,
-        rounds: p.rounds,
-        lastPlayed: p.lastPlayed,
+        rating: x.rating,
+        rounds: x.rounds,
+        lastPlayed: x.lastPlayed,
         moved: was != null ? was - rank : null,
       };
     }),
   );
   return { rows: await withAvatars(rows).catch(() => rows), total: list.length, rated: all.size };
-}
-
-/** Where a rating standing is shown to someone not allowed to see a hidden player's recent play. */
-function maskedRating(p: PlayerRating, masked: boolean, now: number): { rating: number; history: PlayerRating['history'] } {
-  if (!masked || now - p.lastPlayed > RECENT_S) return { rating: p.rating, history: p.history };
-  // Drop the day of their latest round: its change would show they've just played.
-  const history = p.history.slice(0, -1);
-  return { rating: history.at(-1)?.rating ?? p.rating, history };
 }
 
 export interface PlayerSkill {
@@ -94,14 +125,27 @@ export interface PlayerSkill {
   needed: number;
 }
 
-export async function playerSkill(steamId: string, masked = false): Promise<PlayerSkill | null> {
+export async function playerSkill(steamId: string, viewer: Viewer = null): Promise<PlayerSkill | null> {
   const all = ratings();
   const p = all?.get(steamId);
   if (!all || !p) return null;
-  const list = ranked(all, await banned());
-  const { rating } = maskedRating(p, masked, nowSec());
-  const i = list.findIndex((x) => x.steamId === steamId);
-  return { rating, rank: i >= 0 ? i + 1 : null, of: list.length, rounds: p.rounds, needed: RANKED_MIN_ROUNDS };
+  const seen = seenRating(p, maskerFor(viewer)(steamId));
+  if (!seen) return null;
+  const list = ranked(all, await banned(), viewer);
+  const i = list.findIndex((x) => x.p.steamId === steamId);
+  return { rating: seen.rating, rank: i >= 0 ? i + 1 : null, of: list.length, rounds: seen.rounds, needed: RANKED_MIN_ROUNDS };
+}
+
+/** A player's end-of-day ratings counting only rounds ended at or before `t`. */
+function historyBefore(p: PlayerRating, t: number): PlayerRating['history'] {
+  const out: PlayerRating['history'] = [];
+  for (const s of p.steps) {
+    if (s.t > t) break;
+    const day = dayOf(s.t);
+    if (out.at(-1)?.day === day) out[out.length - 1].rating = s.rating;
+    else out.push({ day, rating: s.rating });
+  }
+  return out;
 }
 
 export interface TrendDay {
@@ -155,7 +199,8 @@ export async function playerTrends(steamId: string, masked = false): Promise<Pla
   const now = nowSec();
   const rounds = h.playerRounds(steamId, SEASON_TWO_START).filter((r) => !masked || now - r.endedAt > RECENT_S);
   const p = ratings()?.get(steamId);
-  const rated = p ? maskedRating(p, masked, now).history : [];
+  // Masked: only rounds that ended over RECENT_S ago, as with the days above.
+  const rated = !p ? [] : masked ? historyBefore(p, now - RECENT_S) : p.history;
   const byDay = new Map<string, TrendDay>();
   for (const r of rounds) {
     const day = dayOf(r.endedAt);
@@ -175,7 +220,9 @@ export async function playerTrends(steamId: string, masked = false): Promise<Pla
   const mine = h.playerSnapshots(steamId);
   const killsRank: PlayerTrends['killsRank'] = [];
   if (mine.length && !ban.has(steamId)) {
-    for (const day of h.snapshotDays()) {
+    // Masked: a snapshot under RECENT_S old could hold a round they just played.
+    for (const { day, takenAt } of h.snapshotTimes()) {
+      if (masked && now - takenAt <= RECENT_S) continue;
       const own = mine.filter((m) => m.day <= day).at(-1);
       if (!own) continue;
       const sorted = killsRankOn(day, () => h.asOf(day), ban);
@@ -235,9 +282,12 @@ export async function liveStrength(serverId: string): Promise<{ faction: string;
   if (!s?.players.length) return null;
   const factions = [...new Set(s.players.map((p) => p.faction).filter((f): f is string => !!f))];
   if (factions.length < 2) return null;
+  // Hidden members count as unrated newcomers: their skill would hint at who's on which side.
+  const hidden = presenceHidden();
+  const known = new Map([...all].filter(([id]) => !hidden.has(id)));
   const sides = factions.map((faction) => ({ faction, steamIds: s.players.filter((p) => p.faction === faction).map((p) => p.steamId) }));
-  return sideStrength(sides, all).map((t) => {
-    const rated = sides.find((x) => x.faction === t.faction)!.steamIds.map((id) => all.get(id)?.rating).filter((r): r is number => r != null);
+  return sideStrength(sides, known).map((t) => {
+    const rated = sides.find((x) => x.faction === t.faction)!.steamIds.map((id) => known.get(id)?.rating).filter((r): r is number => r != null);
     // Too few rated players and the average is one player's rating: it could point out a hidden one.
     return { faction: t.faction, players: t.players, chance: t.chance, avg: rated.length >= 3 ? Math.round(rated.reduce((a, r) => a + r, 0) / rated.length) : null };
   });

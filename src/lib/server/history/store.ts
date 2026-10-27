@@ -133,7 +133,7 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
       FROM rounds r LEFT JOIN round_lines l USING (server_id, match_id) WHERE r.ended_at >= ? GROUP BY day ORDER BY day`),
     hasDay: db.prepare('SELECT 1 FROM snapshot_days WHERE day = ?'),
     addDay: db.prepare('INSERT INTO snapshot_days (day, taken_at, players) VALUES (?, ?, ?)'),
-    days: db.prepare('SELECT day FROM snapshot_days ORDER BY day'),
+    days: db.prepare('SELECT day, taken_at FROM snapshot_days ORDER BY day'),
     latest: db.prepare(`SELECT s.* FROM snapshots s JOIN (SELECT steam_id, max(day) AS day FROM snapshots WHERE day <= ? GROUP BY steam_id) m
       USING (steam_id, day)`),
     addSnap: db.prepare(`INSERT OR REPLACE INTO snapshots (steam_id, day, kills, deaths, minutes, matches, wins, losses, draws, headshots, cash)
@@ -221,6 +221,8 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
 
     hasSnapshot: (day: string) => !!q.hasDay.get(day),
     snapshotDays: () => (q.days.all() as { day: string }[]).map((r) => r.day),
+    /** Each snapshot day with when it was taken (unix seconds), oldest first. */
+    snapshotTimes: () => (q.days.all() as { day: string; taken_at: number }[]).map((r) => ({ day: r.day, takenAt: Number(r.taken_at) })),
     /**
      * Saves the board as it stands on `day` (UTC, YYYY-MM-DD): only the players whose totals moved
      * since their last row, so an unchanged player costs nothing. Returns how many rows were written.

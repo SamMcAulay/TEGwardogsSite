@@ -19,7 +19,9 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 export default async function SkillPage({ searchParams }: PageProps<'/skill'>) {
   const sp = await searchParams;
   const page = pageParam(one(sp.page));
-  const [board, me] = await Promise.all([skillBoard(page).catch(() => null), viewer()]);
+  const me = await viewer();
+  // Per viewer: hidden members' last few hours show only to themselves and their friends.
+  const board = await skillBoard(page, me).catch(() => null);
   if (board && page > 1 && (page - 1) * SKILL_PAGE_SIZE >= board.total) redirect(withParams('/skill', sp, { page: null }));
   const now = nowSec();
   const mine = me?.steamId ?? null;
@@ -70,7 +72,7 @@ export default async function SkillPage({ searchParams }: PageProps<'/skill'>) {
                         </td>
                         <td className="r font-display text-base font-bold text-text">{int(r.rating)}</td>
                         <td className="r text-muted">{int(r.rounds)}</td>
-                        <td className="r hidden text-dim sm:table-cell">{ago(r.lastPlayed, now)}</td>
+                        <td className="r hidden text-dim sm:table-cell">{r.lastPlayed != null ? ago(r.lastPlayed, now) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>

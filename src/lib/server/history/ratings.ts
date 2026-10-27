@@ -19,6 +19,8 @@ export interface PlayerRating {
   lastPlayed: number;
   /** their rating at the end of each UTC day they played, oldest first */
   history: { day: string; rating: number }[];
+  /** their rating after each rated round, by when it ended, oldest first */
+  steps: { t: number; rating: number }[];
 }
 
 const dayOf = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
@@ -59,11 +61,12 @@ export function buildRatings(rounds: (StoredRound & { lines: StoredLine[] })[]):
     sides.teams.forEach((t, i) =>
       t.seats.forEach((s, j) => {
         const skill = after[i][j];
-        const p = players.get(s.steamId) ?? { steamId: s.steamId, skill, rating: 0, rounds: 0, lastPlayed: 0, history: [] };
+        const p = players.get(s.steamId) ?? { steamId: s.steamId, skill, rating: 0, rounds: 0, lastPlayed: 0, history: [], steps: [] };
         p.skill = skill;
         p.rating = displayRating(skill);
         p.rounds++;
         p.lastPlayed = round.endedAt;
+        p.steps.push({ t: round.endedAt, rating: p.rating });
         if (p.history.at(-1)?.day === day) p.history[p.history.length - 1].rating = p.rating;
         else p.history.push({ day, rating: p.rating });
         players.set(s.steamId, p);

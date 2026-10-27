@@ -99,7 +99,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   const masked = !stand.seesPresence;
   const [view, skill, trends] = await Promise.all([
     season === 'all' ? null : playerSeason(player, season),
-    playerSkill(steamId, masked).catch(() => null),
+    playerSkill(steamId, me).catch(() => null),
     season === 's1' ? null : playerTrends(steamId, masked).catch(() => null),
   ]);
   // The header is always all time; everything under the tabs is the chosen season.
