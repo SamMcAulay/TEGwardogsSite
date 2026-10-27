@@ -21,7 +21,9 @@ import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam, standing, viewer } from '@/lib/server/accounts';
 import { withoutPresence } from '@/lib/server/presence';
 import { getPlayer, playerSeason } from '@/lib/server/data';
-import { parseSeason, SEASON_LABELS, SEASONS } from '@/lib/server/seasons';
+import { parseSeason, SEASON_LABELS, SEASON_TWO_START, SEASONS } from '@/lib/server/seasons';
+import { playerSkill, playerTrends } from '@/lib/server/trends';
+import { PlayerTrends } from '@/components/trends';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -94,7 +96,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   const stand = standing(steamId, me);
   // A member hiding where they play: only they and their friends see it (lib/server/presence.ts).
   const player = stand.seesPresence ? loadedPlayer.data : withoutPresence(loadedPlayer.data, nowSec());
-  const view = season === 'all' ? null : await playerSeason(player, season);
+  const masked = !stand.seesPresence;
+  const [view, skill, trends] = await Promise.all([
+    season === 'all' ? null : playerSeason(player, season),
+    playerSkill(steamId, me).catch(() => null),
+    season === 's1' ? null : playerTrends(steamId, masked).catch(() => null),
+  ]);
   // The header is always all time; everything under the tabs is the chosen season.
   const p = view && view !== 'unavailable' ? view.profile : player;
   const t = p.totals;
@@ -204,6 +211,14 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                   {player.rank ? `#${player.rank} on the all-time kills board` : 'Unranked'}
                 </Link>
               )}
+              {skill && (
+                <div>
+                  <Link href="/skill" className="link text-muted">
+                    Skill rating <span className="num font-semibold text-text">{int(skill.rating)}</span>
+                    {skill.rank ? ` · #${int(skill.rank)} of ${int(skill.of)}` : ` · ranked after ${skill.needed} rounds (${skill.rounds} so far)`}
+                  </Link>
+                </div>
+              )}
               {player.streak && (
                 <div className="text-muted">
                   {player.streak.n} {player.streak.kind === 'win' ? 'wins' : 'losses'} in a row
@@ -251,6 +266,17 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
           <RecentForm rounds={p.matches} streak={season === 'all' ? player.streak : null} />
 
           {season === 'all' && <Milestones totals={milestoneTotals} />}
+
+          {trends && trends.days.length > 0 && (
+            <Panel title="Trends" action="Season 2 · per UTC day">
+              <PlayerTrends
+                days={trends.days}
+                killsRank={trends.killsRank}
+                from={new Date(SEASON_TWO_START * 1000).toISOString().slice(0, 10)}
+                today={new Date(now * 1000).toISOString().slice(0, 10)}
+              />
+            </Panel>
+          )}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Panel title="Servers played" flush>

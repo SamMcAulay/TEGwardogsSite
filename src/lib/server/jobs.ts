@@ -1,7 +1,7 @@
 // What the background jobs (page warmer, tier sync, round poster) last did, for the staff health
 // panel. In memory only: a restart starts it empty. globalThis keeps one record per process.
 
-export type JobName = 'warmer' | 'tierSync' | 'rounds' | 'alerts';
+export type JobName = 'warmer' | 'tierSync' | 'rounds' | 'alerts' | 'history';
 
 export interface JobState {
   /** unix seconds of the last finished pass */

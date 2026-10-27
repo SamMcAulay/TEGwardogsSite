@@ -21,6 +21,7 @@ import { accounts, presenceHidden } from './accounts';
 import { MAX_FRIENDS } from './accounts/store';
 import { maskAward, maskKill, maskLine, maskLive, RECENT_S, recentRound } from './presence';
 import { momentum } from '@/lib/momentum';
+import type { ReplayData } from '@/lib/replay';
 import { groupClans, type Clan, type ClanSort } from './clans';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
@@ -57,6 +58,22 @@ async function visibleIds(serverId: string | null | undefined): Promise<string[]
   const ids = (await serverList()).list.map((s) => s.id);
   if (!serverId) return ids;
   return ids.includes(serverId) ? [serverId] : [];
+}
+
+/** The ids of the servers the site shows, in order. */
+export async function visibleServerIds(): Promise<string[]> {
+  return visibleIds(null);
+}
+
+/** The org's all-time board (up to 10,000 players, every one with any time on), for history.db's daily snapshot. */
+export async function historyBoard() {
+  const { list } = await serverList();
+  if (!list[0]) return [];
+  const ex = await warcon().boardExport(list[0].id, { scope: 'org', range: 'all', sort: 'playtime', minMinutes: 0 });
+  return ex.value.map((r) => ({
+    steamId: r.steamId,
+    totals: { kills: r.kills, deaths: r.deaths, minutes: r.minutes, matches: r.matches, wins: r.wins, losses: r.losses, draws: r.draws, headshots: r.headshots, cash: r.cash },
+  }));
 }
 
 /** live: Warcon's answer (null = it has never observed the server); unknown = the call failed. */
@@ -192,7 +209,7 @@ export async function populationHistory(serverId: string): Promise<Loaded<{ mont
   return loaded({ month: series(month.value), week: series(week.value) }, month.stale || week.stale);
 }
 
-function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes: number; matches: number; wins: number; losses: number; draws: number; cash: number }) {
+export function metricValue(metric: Metric, r: { kills: number; deaths: number; minutes: number; matches: number; wins: number; losses: number; draws: number; cash: number }) {
   switch (metric) {
     case 'kills': return r.kills;
     case 'deaths': return r.deaths;
@@ -601,7 +618,7 @@ export async function searchPlayers(q: string): Promise<PlayerSearchRow[] | 'war
  * Fills in Steam pictures. Warcon's player list always says steam: null, so rows built from it
  * ask the Steam profile lookup (cached per player for a day; never throws).
  */
-async function withAvatars<T extends { steamId: string; avatarUrl?: string | null }>(rows: T[]): Promise<T[]> {
+export async function withAvatars<T extends { steamId: string; avatarUrl?: string | null }>(rows: T[]): Promise<T[]> {
   const missing = rows.filter((r) => !r.avatarUrl).map((r) => r.steamId);
   if (!missing.length) return rows;
   const pics = await warcon().steamProfiles(missing);
@@ -808,6 +825,43 @@ async function matchKills(serverId: string, matchId: number, total: number, ttl:
   return { value: { kills: all }, stale };
 }
 
+/**
+ * A round's kills, oldest first, packed small for the replay (lib/replay.ts): people masked as the
+ * kill feed is, and one short row per kill.
+ */
+export function replayOf(raw: WKill[], masked: KillRow[]): ReplayData {
+  const people: ReplayData['people'] = [];
+  const causes: string[] = [];
+  const personAt = new Map<string, number>();
+  const causeAt = new Map<string, number>();
+  const person = (steamId: string | null, name: string | null, faction: string | null) => {
+    // Hidden players stay one anonymous person per faction: never told apart.
+    const key = steamId ? `id:${steamId}` : `anon:${name}:${faction}`;
+    let i = personAt.get(key);
+    if (i == null) {
+      i = people.push({ steamId, name: name ?? 'Unknown', faction }) - 1;
+      personAt.set(key, i);
+    }
+    return i;
+  };
+  const kills: ReplayData['kills'] = [];
+  for (let n = raw.length - 1; n >= 0; n--) {
+    const k = raw[n];
+    const m = masked[n];
+    const killer = k.killer ? person(m.killerSteamId, m.killerName, k.killer.faction) : -1;
+    const victim = person(m.victimSteamId, m.victimName, k.victim.faction);
+    let cause = -1;
+    if (k.cause) {
+      cause = causeAt.get(k.cause) ?? causes.push(k.cause) - 1;
+      causeAt.set(k.cause, cause);
+    }
+    const flags = (k.headshot ? 1 : 0) | (k.teamKill ? 2 : 0) | (k.suicide ? 4 : 0);
+    kills.push([Math.max(0, Math.round(k.eventTime)), killer, victim, cause, flags, k.distanceM != null ? Math.round(k.distanceM) : -1]);
+  }
+  kills.sort((a, b) => a[0] - b[0]);
+  return { people, causes, kills };
+}
+
 export async function getMatch(serverId: string, matchId: number) {
   const { list } = await serverList();
   const server = list.find((s) => s.id === serverId);
@@ -847,6 +901,7 @@ export async function getMatch(serverId: string, matchId: number) {
   const now = Math.floor(Date.now() / 1000);
   const recent = recentRound(sec(v.match.endedAt), now);
   const awards: MatchAward[] = recent ? v.awards.map((a) => maskAward(a, hidden)) : v.awards;
+  const masked = killRows.map((k) => maskKill(k, hidden, now));
   return loaded(
     {
       match: matchRow(v.match, serverId, shortNameOf(server.name), colours),
@@ -854,7 +909,8 @@ export async function getMatch(serverId: string, matchId: number) {
       timeline: v.timeline,
       factions: v.factions,
       awards,
-      kills: killRows.map((k) => maskKill(k, hidden, now)),
+      kills: masked,
+      replay: replayOf(kills.value.kills, masked),
       momentum: kills.value.kills.length ? flow : null,
       weapons: [...weaponCounts].map(([cause, n]) => ({ cause, kills: n })).sort((a, b) => b.kills - a.kills).slice(0, 8),
     },

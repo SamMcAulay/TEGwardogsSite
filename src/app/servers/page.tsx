@@ -3,7 +3,10 @@ import Link from 'next/link';
 import { AreaChart } from '@/components/charts';
 import { AutoRefresh } from '@/components/client';
 import { FactionScores, MapBackdrop, statusLabel } from '@/components/game';
-import { Badge, Container, PageHeader, StatusDot } from '@/components/ui';
+import { Badge, Container, PageHeader, Panel, StatusDot } from '@/components/ui';
+import { NetworkActivity } from '@/components/trends';
+import { networkActivity } from '@/lib/server/trends';
+import { SEASON_TWO_START } from '@/lib/server/seasons';
 import { ago, clock, int } from '@/lib/format';
 import { lightingName, mapName, REGION_NAMES } from '@/lib/game';
 import { Section, safe } from '@/components/section';
@@ -24,6 +27,9 @@ export default async function ServersPage() {
       ),
     ),
   );
+
+  const activity = networkActivity();
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <>
@@ -137,6 +143,11 @@ export default async function ServersPage() {
             ))
           }
         </Section>
+        {activity && activity.length > 1 && (
+          <Panel title="Network activity" action="Season 2 · all servers · per UTC day">
+            <NetworkActivity days={activity} from={new Date(SEASON_TWO_START * 1000).toISOString().slice(0, 10)} today={today} />
+          </Panel>
+        )}
       </Container>
     </>
   );
