@@ -23,7 +23,7 @@ import {
   StatusDot,
 } from '@/components/ui';
 import { ago, clock, compact, duration, int, kd, money } from '@/lib/format';
-import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationView } from '@/lib/game';
+import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServer, leaderboard, listMatches, liveTags, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
@@ -156,7 +156,8 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
     safe(population(server.id, range)),
     safe(populationHistory(server.id)),
     safe(serverTotals(server.id)),
-    safe(listMatches({ serverId: server.id, limit: 8 })),
+    // More than the table shows, for a typical round length.
+    safe(listMatches({ serverId: server.id, limit: 20 })),
     safe(leaderboard({ metric: 'kills', period: '7d', serverId: server.id })),
     safe(recentKills({ serverId: server.id, limit: 15 })),
     // Decoration: a failed lookup means no tags, never a broken scoreboard.
@@ -170,6 +171,10 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   const elapsed = waiting ? null : (st?.matchSeconds ?? (liveRound ? now - liveRound.startedAt : null));
   const eta = st ? roundEta(st.factionScores.map((f) => f.score), st.scoreTick, st.scoreCap) : null;
   const factions = st?.factionScores.map((f) => f.name) ?? ['Valkyra', 'Lonestar', 'Manticore'];
+  const roundLength = matches instanceof Error ? null : typicalRound(matches.data.rows);
+  // Until the round ends: the score-based guess, else what a typical round has left. Nobody playing: no guess.
+  const untilNext = waiting ? null : (eta ?? (elapsed != null && roundLength ? Math.max(0, roundLength - elapsed) : null));
+  const starts = st ? rotationStarts(st.rotation.now, ROTATION.length, untilNext, roundLength) : null;
 
   return (
     <>
@@ -251,7 +256,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             title="Map rotation"
             action={st.rotation.now != null && st.rotation.now >= 0 ? `Map ${(st.rotation.now % ROTATION.length) + 1} of ${ROTATION.length}` : 'Off rotation'}
           >
-            <MapRotation status={st} eta={eta} />
+            <MapRotation status={st} eta={eta} starts={starts} />
           </Panel>
         )}
 
@@ -353,7 +358,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((m) => (
+                      {rows.slice(0, 8).map((m) => (
                         <tr key={m.id}>
                           <td>
                             <Link prefetch={false} href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">

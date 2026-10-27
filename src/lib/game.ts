@@ -68,6 +68,35 @@ export function rotationView(
   };
 }
 
+/**
+ * Seconds until each rotation slot comes up next, the current slot null. untilNext is how long the
+ * round in progress has left; every later round is taken to run a typical round's length. Null when
+ * the server is off rotation or either time is unknown.
+ */
+export function rotationStarts(
+  nowSlot: number | null,
+  length: number,
+  untilNext: number | null,
+  roundSeconds: number | null,
+): (number | null)[] | null {
+  if (nowSlot == null || nowSlot < 0 || !length || untilNext == null || !roundSeconds || roundSeconds <= 0) return null;
+  return Array.from({ length }, (_, i) => {
+    const ahead = (((i - nowSlot) % length) + length) % length;
+    return ahead === 0 ? null : untilNext + (ahead - 1) * roundSeconds;
+  });
+}
+
+/** The middle length of finished rounds, in seconds; null with none. */
+export function typicalRound(rounds: { startedAt: number; endedAt: number | null }[]): number | null {
+  const lengths = rounds
+    .filter((r) => r.endedAt != null && r.endedAt > r.startedAt)
+    .map((r) => r.endedAt! - r.startedAt)
+    .sort((a, b) => a - b);
+  if (!lengths.length) return null;
+  const mid = lengths.length >> 1;
+  return lengths.length % 2 ? lengths[mid] : Math.round((lengths[mid - 1] + lengths[mid]) / 2);
+}
+
 /** King of the Hill's winning score. The server doesn't report it; every finished round has ended at 100. */
 export const KOTH_CAP = 100;
 
