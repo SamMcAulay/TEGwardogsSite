@@ -117,7 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur">
           <Container className="relative flex h-14 items-center gap-6">
             <Logo />
-            <NavLinks account={account} />
+            <NavLinks account={account} friends={!!me?.steamId} />
             {/* Wide screens only; narrower ones have all of this in the menu. The online count needs
                 the room of a 2xl screen; search is the players page, a click away. */}
             <div className="ml-auto hidden items-center gap-3 xl:flex">

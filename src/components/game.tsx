@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
 import { ago, clock, duration, metres } from '@/lib/format';
-import { causeInfo, factionColor, lightingName, mapArt, mapName, REGION_NAMES, ROTATION, type RotationStop, rotationView } from '@/lib/game';
+import { causeInfo, factionColor, lightingName, mapArt, mapName, type MapWins, REGION_NAMES, ROTATION, type RotationStop, rotationView } from '@/lib/game';
 import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
 
 import { PlayerName } from './tier';
@@ -282,7 +282,8 @@ function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: ke
           {stop ? (
             <>
               <WeatherIcon weather={weather} />
-              <span className="truncate">{lightingName(stop.lighting) || 'Day'}</span>
+              {/* The side cards are narrow on phones: the icon alone there. */}
+              <span className={cx('truncate', !now && 'sr-only sm:not-sr-only')}>{lightingName(stop.lighting) || 'Day'}</span>
               {now && stop.slot == null && <span className="truncate text-accent">· off rotation</span>}
             </>
           ) : (
@@ -369,5 +370,42 @@ export function MapRotation({
         })}
       </ol>
     </div>
+  );
+}
+
+/** Each map's rounds split by who won them: one bar per map, each faction's share labelled. */
+export function MapWinBars({ maps }: { maps: MapWins[] }) {
+  return (
+    <ul className="space-y-4">
+      {maps.map((m) => (
+        <li key={m.map}>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <span className="display text-sm tracking-[0.06em]">{m.map}</span>
+            <span className="num text-xs text-dim">
+              {m.rounds} round{m.rounds === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="flex h-2.5 gap-0.5" role="img" aria-label={m.wins.map((w) => `${w.faction} ${Math.round((w.n / m.rounds) * 100)}%`).join(', ')}>
+            {m.wins.map((w) => (
+              <span
+                key={w.faction}
+                title={`${w.faction}: ${w.n} of ${m.rounds}`}
+                className="rounded-[2px]"
+                style={{ width: `${(w.n / m.rounds) * 100}%`, background: factionColor(w.faction) }}
+              />
+            ))}
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
+            {m.wins.map((w) => (
+              <span key={w.faction} className="flex items-center gap-1.5">
+                <span className="inline-block size-2" style={{ background: factionColor(w.faction) }} />
+                {w.faction}
+                <span className="num font-semibold text-text">{Math.round((w.n / m.rounds) * 100)}%</span>
+              </span>
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

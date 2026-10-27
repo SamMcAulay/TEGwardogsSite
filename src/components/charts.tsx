@@ -548,3 +548,95 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
     </div>
   );
 }
+
+/**
+ * Who was on in each weekday hour (Monday first), in the viewer's time: the Steam ids of everyone
+ * with a stretch of play overlapping that hour on any day.
+ */
+export function friendGrid(stretches: { steamId: string; start: number; end: number }[], utcOffsetMinutes: number): string[][][] {
+  const cells = DAYS.map(() => Array.from({ length: 24 }, () => new Set<string>()));
+  for (const { steamId, start, end } of stretches) {
+    const shift = utcOffsetMinutes * 60;
+    // every hour the stretch touches, capped at a day's worth so a stuck round can't paint the week
+    const last = Math.min(end, start + 86400) + shift;
+    for (let t = Math.floor((start + shift) / 3600) * 3600; t < last; t += 3600) {
+      const d = new Date(t * 1000);
+      cells[(d.getUTCDay() + 6) % 7][d.getUTCHours()].add(steamId);
+    }
+  }
+  return cells.map((row) => row.map((c) => [...c]));
+}
+
+/** When a member's friends play: a weekday x hour grid shaded by how many different friends were on. */
+export function FriendTimes({ stretches, names }: { stretches: { steamId: string; start: number; end: number }[]; names: Record<string, string> }) {
+  const offset = useSyncExternalStore(noop, () => -new Date().getTimezoneOffset(), () => 0);
+  const local = useSyncExternalStore(noop, () => true, () => false);
+  const grid = useMemo(() => friendGrid(stretches, offset), [stretches, offset]);
+  const max = Math.max(1, ...grid.flat().map((c) => c.length));
+  const [hover, setHover] = useState<{ d: number; h: number } | null>(null);
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+  const who = (ids: string[]) => ids.map((id) => names[id] ?? 'A friend');
+  const best = grid.flatMap((row, d) => row.map((c, h) => ({ d, h, n: c.length }))).reduce((a, b) => (b.n > a.n ? b : a));
+  const shown = hover && grid[hover.d][hover.h];
+  if (!best.n) return <p className="py-6 text-center text-sm text-muted">None of your friends has played in the last 30 days.</p>;
+  return (
+    <div>
+      <p className="mb-4 text-sm">
+        <span className="text-muted">Most of your friends are on around </span>
+        <span className="font-semibold">
+          {DAYS[best.d]} {hh(best.h)}
+        </span>
+        <span className="num text-muted">
+          {' '}
+          · {best.n} friend{best.n === 1 ? '' : 's'}
+        </span>
+      </p>
+      <div className="grid grid-cols-[2.25rem_1fr] gap-x-2">
+        <div />
+        <div className="relative mb-1 h-3 text-[10px] text-dim">
+          {Array.from({ length: 8 }, (_, i) => i * 3).map((h) => (
+            <span key={h} className={cx('num absolute', h % 6 !== 0 && 'hidden sm:inline')} style={{ left: `${(h / 24) * 100}%` }}>
+              {hh(h).slice(0, 2)}
+            </span>
+          ))}
+        </div>
+        {grid.map((row, d) => (
+          <div key={d} className="contents">
+            <span className="font-display text-[11px] leading-[1.4rem] font-semibold uppercase tracking-[0.1em] text-dim">{DAYS[d]}</span>
+            <div className="mb-0.5 grid grid-cols-[repeat(24,1fr)] gap-0.5" onPointerLeave={() => setHover(null)}>
+              {row.map((ids, h) => (
+                <span
+                  key={h}
+                  onPointerEnter={() => setHover({ d, h })}
+                  title={`${DAYS[d]} ${hh(h)} · ${ids.length ? who(ids).join(', ') : 'nobody'}`}
+                  className={cx(
+                    'h-[1.4rem] rounded-[2px]',
+                    ids.length ? 'bg-accent' : 'bg-surface-2',
+                    hover?.d === d && hover.h === h && 'outline outline-1 outline-text',
+                  )}
+                  style={ids.length ? { opacity: SHADE[busyLevel(ids.length, max)] } : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <span className="min-w-0 truncate">
+          {hover
+            ? `${DAYS[hover.d]} ${hh(hover.h)} · ${shown?.length ? who(shown).join(', ') : 'nobody'}`
+            : `${local ? `Your time (${Intl.DateTimeFormat().resolvedOptions().timeZone})` : 'UTC'} · from each friend's recent rounds`}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="num">1</span>
+          {SHADE.slice(1).map((o) => (
+            <span key={o} className="size-3 rounded-[2px] bg-accent" style={{ opacity: o }} />
+          ))}
+          <span className="num">
+            {max} friend{max === 1 ? '' : 's'}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}

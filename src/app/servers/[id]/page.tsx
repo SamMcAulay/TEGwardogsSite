@@ -6,7 +6,7 @@ import { withParams } from '@/lib/url';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { AreaChart, BusyTimes } from '@/components/charts';
 import { AutoRefresh, CopyButton } from '@/components/client';
-import { FactionScores, KillList, MapBackdrop, MapRotation } from '@/components/game';
+import { FactionScores, KillList, MapBackdrop, MapRotation, MapWinBars } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import {
   Badge,
@@ -25,7 +25,7 @@ import {
 import { ago, clock, compact, duration, int, kd, money } from '@/lib/format';
 import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from '@/lib/game';
 import { Section, safe } from '@/components/section';
-import { getServer, leaderboard, listMatches, liveTags, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
+import { getServer, leaderboard, listMatches, liveTags, mapWinRates, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
 import type { LivePlayer } from '@/lib/server/views';
 
@@ -152,7 +152,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   if (id !== server.slug) permanentRedirect(withParams(`/servers/${server.slug}`, sp, {}));
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
-  const [pop, history, totals, matches, top, kills, tags] = await Promise.all([
+  const [pop, history, totals, matches, top, kills, tags, wins] = await Promise.all([
     safe(population(server.id, range)),
     safe(populationHistory(server.id)),
     safe(serverTotals(server.id)),
@@ -162,6 +162,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
     safe(recentKills({ serverId: server.id, limit: 15 })),
     // Decoration: a failed lookup means no tags, never a broken scoreboard.
     liveTags(server.players).catch(() => ({})),
+    safe(mapWinRates(server.id)),
   ]);
   const st = server.status;
   // The server doesn't report match time any more; the round in progress started when its match did.
@@ -331,11 +332,18 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           )}
         </Panel>
 
-        <Panel title="Busiest times" action="Average players · last 30 days">
-          <Section loaded={history}>
-            {(h) => <BusyTimes month={h.month} week={h.week} />}
-          </Section>
-        </Panel>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel title="Busiest times" action="Average players · last 30 days" className="lg:col-span-2">
+            <Section loaded={history}>
+              {(h) => <BusyTimes month={h.month} week={h.week} />}
+            </Section>
+          </Panel>
+          <Panel title="Wins by map" action="Season 2 · rounds of 8+ players">
+            <Section loaded={wins}>
+              {(maps) => (maps.length ? <MapWinBars maps={maps} /> : <Empty>No finished rounds this season yet.</Empty>)}
+            </Section>
+          </Panel>
+        </div>
 
         <div className="grid gap-4 lg:grid-cols-5">
           <Panel
@@ -351,7 +359,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                     <thead>
                       <tr>
                         <th>Map</th>
-                        <th>Started</th>
+                        <th className="hidden sm:table-cell">Started</th>
                         <th className="r">Length</th>
                         <th className="r">Peak</th>
                         <th>Winner</th>
@@ -370,7 +378,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                               </span>
                             )}
                           </td>
-                          <td className="text-muted"><LocalTime ts={m.startedAt} /></td>
+                          <td className="hidden text-muted sm:table-cell"><LocalTime ts={m.startedAt} /></td>
                           <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
                           <td className="r">{m.peakPlayers}</td>
                           <td>

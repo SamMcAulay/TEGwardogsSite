@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { FriendToast, newsCount, useFriendNews } from './friend-news';
 import { cx } from './ui';
 
 /** Re-renders the current page's server components on an interval while the tab is visible. */
@@ -45,9 +46,25 @@ const NAV = [
   { href: '/friends', label: 'Friends' },
 ];
 
-/** The header's links. `account`: My profile once linked, else Account; null when linking is off. */
-export function NavLinks({ account }: { account?: { href: string; label: string } | null }) {
+/** A count of friend news beside the Friends tab. */
+function NewsBadge({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <span className="num ml-1.5 inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-4 font-bold tracking-normal text-accent-ink">
+      {n > 9 ? '9+' : n}
+      <span className="sr-only"> new</span>
+    </span>
+  );
+}
+
+/**
+ * The header's links. `account`: My profile once linked, else Account; null when linking is off.
+ * `friends`: the viewer is a linked member, so the Friends tab lights up with their friend news.
+ */
+export function NavLinks({ account, friends = false }: { account?: { href: string; label: string } | null; friends?: boolean }) {
   const path = usePathname();
+  const news = useFriendNews(friends);
+  const count = newsCount(news);
   // The menu belongs to the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === path;
@@ -61,21 +78,24 @@ export function NavLinks({ account }: { account?: { href: string; label: string 
             href={n.href}
             className={cx(
               'relative flex items-center px-3 font-display text-[13px] font-semibold whitespace-nowrap uppercase tracking-[0.12em] transition-colors',
-              active(n.href) ? 'text-text' : 'text-muted hover:text-text',
+              active(n.href) || (n.href === '/friends' && count) ? 'text-text' : 'text-muted hover:text-text',
+              n.href === '/friends' && count > 0 && 'text-accent',
             )}
           >
             {n.label}
+            {n.href === '/friends' && <NewsBadge n={count} />}
             {active(n.href) && <span className="absolute inset-x-3 bottom-0 h-0.5 bg-accent" />}
           </Link>
         ))}
       </nav>
       <button
         type="button"
-        className="ml-auto flex size-9 items-center justify-center border border-line-strong xl:hidden"
-        aria-label="Menu"
+        className="relative ml-auto flex size-9 items-center justify-center border border-line-strong xl:hidden"
+        aria-label={count ? `Menu, ${count} friend update${count === 1 ? '' : 's'}` : 'Menu'}
         aria-expanded={open}
         onClick={() => setOpenOn(open ? null : path)}
       >
+        {count > 0 && !open && <span className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-bg bg-accent" aria-hidden />}
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
           {open ? (
             <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.5" />
@@ -92,10 +112,11 @@ export function NavLinks({ account }: { account?: { href: string; label: string 
               href={n.href}
               className={cx(
                 'block border-t border-line px-4 py-3 font-display text-sm font-semibold uppercase tracking-[0.12em]',
-                active(n.href) ? 'text-accent' : 'text-text',
+                active(n.href) || (n.href === '/friends' && count) ? 'text-accent' : 'text-text',
               )}
             >
               {n.label}
+              {n.href === '/friends' && <NewsBadge n={count} />}
             </Link>
           ))}
           {account && (
@@ -119,6 +140,7 @@ export function NavLinks({ account }: { account?: { href: string; label: string 
           </form>
         </nav>
       )}
+      <FriendToast news={news} />
     </>
   );
 }

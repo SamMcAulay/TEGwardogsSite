@@ -80,13 +80,15 @@ export function FriendButton({
 }
 
 /** One friend: where they're playing now, or when last seen. */
-export function FriendRow({ f, removable }: { f: FriendStatus; removable?: boolean }) {
+/** fresh: they accepted the viewer's request since the viewer last opened /friends. */
+export function FriendRow({ f, removable, fresh }: { f: FriendStatus; removable?: boolean; fresh?: boolean }) {
   const name = f.name ?? 'Unknown player';
   return (
-    <li className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3">
+    <li className={cx('flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3', fresh && 'bg-accent-soft')}>
       <Link prefetch={false} href={`/players/${f.steamId}`} className="link flex min-w-0 flex-1 items-center gap-2.5">
         <Avatar name={name} steamId={f.steamId} url={f.avatarUrl} size={28} />
         <span className="truncate font-medium">{name}</span>
+        {fresh && <span className="shrink-0 bg-accent px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.1em] text-accent-ink">Accepted</span>}
       </Link>
       {f.online ? (
         <Link href={`/servers/${f.online.serverSlug}`} className="link inline-flex items-center gap-2 text-sm">

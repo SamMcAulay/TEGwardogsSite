@@ -65,3 +65,10 @@ export async function setHidePresence(form: FormData) {
   store.setHidePresence(id, hide);
   done(back(form), hide ? 'hidden' : 'visible');
 }
+
+/** Called from /friends once it's on screen (not on render, which a prefetch could trigger). */
+export async function markFriendsSeen() {
+  const a = accounts();
+  const v = await viewer();
+  if (a && v?.steamId) a.store.markFriendsSeen(v.discordId);
+}

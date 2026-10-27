@@ -193,6 +193,10 @@ export const MIGRATIONS: string[] = [
      PRIMARY KEY (from_discord, to_discord)
    );
    CREATE INDEX friendships_to ON friendships (to_discord);`,
+  // v9: when each member last opened /friends, so requests accepted since can be pointed out.
+  // Everyone starts as having seen what's there already.
+  `ALTER TABLE links ADD COLUMN friends_seen_at INTEGER;
+   UPDATE links SET friends_seen_at = CAST(strftime('%s', 'now') AS INTEGER);`,
 ];
 
 /** Friends one member may have, and requests they may have waiting on others at once. */
@@ -252,6 +256,9 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       FROM friendships WHERE status = 'accepted' AND (from_discord = ?1 OR to_discord = ?1) ORDER BY updated_at`),
     incoming: db.prepare("SELECT from_discord AS other, created_at AS since FROM friendships WHERE to_discord = ? AND status = 'pending' ORDER BY created_at"),
     outgoing: db.prepare("SELECT to_discord AS other, created_at AS since FROM friendships WHERE from_discord = ? AND status IN ('pending', 'denied') ORDER BY created_at"),
+    acceptedSince: db.prepare(`SELECT f.to_discord AS other, f.updated_at AS since FROM friendships f JOIN links l ON l.discord_id = f.from_discord
+      WHERE f.from_discord = ? AND f.status = 'accepted' AND f.updated_at > COALESCE(l.friends_seen_at, 0) ORDER BY f.updated_at`),
+    friendsSeen: db.prepare('UPDATE links SET friends_seen_at = ? WHERE discord_id = ?'),
     // a null name (they left the server) keeps the last one seen
     setTier: db.prepare('UPDATE links SET tier = ?, checked_at = ?, discord_name = COALESCE(?, discord_name) WHERE discord_id = ?'),
     due: db.prepare('SELECT * FROM links WHERE checked_at IS NULL OR checked_at < ? ORDER BY checked_at IS NOT NULL, checked_at LIMIT ?'),
@@ -340,6 +347,9 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     friendsOf: (me: string) => q.friendsOf.all(me) as unknown as { other: string; since: number }[],
     incoming: (me: string) => q.incoming.all(me) as unknown as { other: string; since: number }[],
     outgoing: (me: string) => q.outgoing.all(me) as unknown as { other: string; since: number }[],
+    /** Requests `me` sent that were accepted since `me` last opened /friends. */
+    acceptedSince: (me: string) => q.acceptedSince.all(me) as unknown as { other: string; since: number }[],
+    markFriendsSeen: (me: string, at = now()) => void q.friendsSeen.run(at, me),
     setTier: (discordId: string, tier: Tier | null, at = now(), discordName: string | null = null) =>
       void q.setTier.run(tier, at, discordName, discordId),
     /** Links whose roles were last checked before `olderThan` (never-checked first). */

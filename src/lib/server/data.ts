@@ -1,7 +1,7 @@
 // Page-facing reads: Warcon's answers turned into the view types in views.ts. Every function
 // is async and says whether its data is stale and which servers failed (Loaded<T>).
 import { serverSlug } from '@/lib/url';
-import { KOTH_CAP } from '@/lib/game';
+import { KOTH_CAP, mapWins, type MapWins } from '@/lib/game';
 import { playedSeconds } from './rounds';
 import { siteEnv } from './warcon/env';
 import { searchIndex, warcon } from './warcon';
@@ -10,7 +10,7 @@ import { TTL, type KillKind, type WarconApi } from './warcon/api';
 import type { WAnalytics, WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
-import { seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
+import { SEASON_TWO_START, seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow, FriendStatus,
@@ -503,6 +503,49 @@ export async function friendsPage(discordId: string): Promise<{
   };
 }
 
+/** What's new for a member on /friends: requests waiting on them, and theirs accepted since they last looked. */
+export async function friendNews(discordId: string): Promise<{ incoming: number; accepted: { steamId: string; name: string | null }[] }> {
+  const store = accounts()?.store;
+  if (!store) return { incoming: 0, accepted: [] };
+  const steamOf = (id: string) => store.byDiscord(id)?.steamId ?? null;
+  const incoming = store.incoming(discordId).filter((r) => steamOf(r.other)).length;
+  const ids = store.acceptedSince(discordId).map((r) => steamOf(r.other)).filter((id): id is string => !!id);
+  const accepted = await Promise.all(ids.map(async (steamId) => ({ steamId, name: await playerName(steamId) })));
+  return { incoming, accepted };
+}
+
+/** Friends read for the friends heatmap; each costs one (cached) career lookup. */
+const FRIEND_TIMES_MAX = 40;
+
+/**
+ * When a member's friends were on: each friend's recent rounds (Warcon's last few per player) from
+ * the last 30 days, as the stretch of each round they played. Only for the member's accepted friends,
+ * who may see where each other play.
+ */
+export async function friendTimes(steamIds: string[]): Promise<Loaded<{ steamId: string; start: number; end: number }[]>> {
+  const { list } = await serverList();
+  const anchor = list[0]?.id;
+  if (!anchor || !steamIds.length) return loaded([]);
+  const shown = new Set(list.map((s) => s.id));
+  const from = Math.floor(Date.now() / 1000) - 30 * 86400;
+  const ids = steamIds.slice(0, FRIEND_TIMES_MAX);
+  const careers = await Promise.all(ids.map((id) => warcon().career(anchor, id).catch(() => null)));
+  const out: { steamId: string; start: number; end: number }[] = [];
+  careers.forEach((c, i) => {
+    for (const m of c?.value.last ?? []) {
+      const started = sec(m.startedAt);
+      if (!started || !shown.has(m.serverId) || m.seconds <= 0) continue;
+      const ended = sec(m.endedAt);
+      // They may have joined late: count their time back from the end of a finished round.
+      const start = ended ? Math.max(started, ended - m.seconds) : started;
+      const end = ended ?? started + m.seconds;
+      if (end >= from) out.push({ steamId: ids[i], start, end });
+    }
+  });
+  const failed = careers.some((c) => c == null);
+  return loaded(out, careers.some((c) => c?.stale), failed ? ['careers'] : []);
+}
+
 /** Warcon's floor for the career rank: players with less time on are not ranked. */
 const RANK_FLOOR_MINUTES = 60;
 
@@ -723,6 +766,27 @@ export async function listMatches(q: { serverId?: string | null; limit?: number;
   });
   const pages = q.serverId ? Math.max(1, ...r.ok.map((o) => o.value.pages)) : 1;
   return loaded({ rows: mergeNewest(lists, (m) => m.startedAt, limit), pages }, r.stale, r.failed);
+}
+
+/** Match list pages read for a server's wins by map: about the last few hundred rounds. */
+const MAP_WIN_PAGES = 6;
+
+/** Which faction wins on which map on one server, this season. */
+export async function mapWinRates(serverId: string): Promise<Loaded<MapWins[]>> {
+  const { list } = await serverList();
+  if (!list.some((s) => s.id === serverId)) return loaded([]);
+  const first = await warcon().matches(serverId, 1);
+  const pages = Math.min(MAP_WIN_PAGES, first.value.pages);
+  // A later page that fails just leaves its rounds out.
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, pages - 1) }, (_, i) => warcon().matches(serverId, i + 2).catch(() => null)),
+  );
+  const all = [first, ...rest].filter((r) => r != null);
+  const rows = all
+    .flatMap((r) => r.value.matches)
+    .map((m) => ({ map: m.map ?? '', winner: m.winner, endedAt: sec(m.endedAt), peakPlayers: m.peakPlayers, startedAt: sec(m.startedAt)! }))
+    .filter((m) => m.startedAt >= SEASON_TWO_START);
+  return loaded(mapWins(rows), all.some((r) => r.stale), rest.some((r) => r == null) ? [serverId] : []);
 }
 
 /** A round's kills are read this many pages of 200 at most (2,000 kills): a long, full round. */

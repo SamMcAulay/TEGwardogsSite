@@ -97,6 +97,43 @@ export function typicalRound(rounds: { startedAt: number; endedAt: number | null
   return lengths.length % 2 ? lengths[mid] : Math.round((lengths[mid - 1] + lengths[mid]) / 2);
 }
 
+/** Rounds won by each faction on one map. */
+export interface MapWins {
+  map: string;
+  rounds: number;
+  wins: { faction: string; n: number }[];
+}
+
+/**
+ * Who wins where: finished rounds grouped by map (in-game names), each faction's wins in the usual
+ * faction order, busiest map first. Rounds with no winner or that never drew minPlayers are left
+ * out: an empty server's round says nothing about the factions.
+ */
+export function mapWins(
+  rounds: { map: string; winner: string | null; endedAt: number | null; peakPlayers: number }[],
+  minPlayers = 8,
+): MapWins[] {
+  const by = new Map<string, Map<string, number>>();
+  for (const r of rounds) {
+    if (r.endedAt == null || !r.winner || !r.map || r.peakPlayers < minPlayers) continue;
+    const name = mapName(r.map);
+    const m = by.get(name) ?? new Map<string, number>();
+    m.set(r.winner, (m.get(r.winner) ?? 0) + 1);
+    by.set(name, m);
+  }
+  const order = (f: string) => {
+    const i = Object.keys(FACTIONS).indexOf(f);
+    return i < 0 ? 99 : i;
+  };
+  return [...by]
+    .map(([map, m]) => ({
+      map,
+      rounds: [...m.values()].reduce((a, n) => a + n, 0),
+      wins: [...m].map(([faction, n]) => ({ faction, n })).sort((a, b) => order(a.faction) - order(b.faction) || a.faction.localeCompare(b.faction)),
+    }))
+    .sort((a, b) => b.rounds - a.rounds || a.map.localeCompare(b.map));
+}
+
 /** King of the Hill's winning score. The server doesn't report it; every finished round has ended at 100. */
 export const KOTH_CAP = 100;
 

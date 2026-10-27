@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { busyLevel, busySeries, lastDay, weekGrid, weekGridFrom } from './charts';
+import { busyLevel, busySeries, friendGrid, lastDay, weekGrid, weekGridFrom } from './charts';
 
 // Monday 2026-10-19 00:00 UTC
 const MON = Date.UTC(2026, 9, 19) / 1000;
@@ -107,5 +107,32 @@ describe('busyLevel', () => {
     expect(busyLevel(22, 24, 20)).toBe(3);
     expect(busyLevel(24, 24, 20)).toBe(5);
     expect(busyLevel(5, 5, 5)).toBe(5);
+  });
+});
+
+describe('friendGrid', () => {
+  it('lists each friend once per weekday hour they were on', () => {
+    const g = friendGrid(
+      [
+        { steamId: 'a', start: MON + 20 * 3600 + 1800, end: MON + 21 * 3600 + 600 }, // Mon 20:30-21:10
+        { steamId: 'a', start: MON + 7 * 86400 + 20 * 3600, end: MON + 7 * 86400 + 20 * 3600 + 60 }, // next Mon 20:00
+        { steamId: 'b', start: MON + 20 * 3600, end: MON + 20 * 3600 + 600 },
+      ],
+      0,
+    );
+    expect(g[0][20].sort()).toEqual(['a', 'b']);
+    expect(g[0][21]).toEqual(['a']);
+    expect(g[0][22]).toEqual([]);
+  });
+
+  it('reads the viewer’s time', () => {
+    // Sun 23:30 UTC is Mon 01:30 at UTC+2
+    expect(friendGrid([{ steamId: 'a', start: MON - 1800, end: MON - 1200 }], 120)[0][1]).toEqual(['a']);
+  });
+
+  it('caps a stretch at a day', () => {
+    const g = friendGrid([{ steamId: 'a', start: MON, end: MON + 5 * 86400 }], 0);
+    expect(g[1][0]).toEqual([]);
+    expect(g[0][23]).toEqual(['a']);
   });
 });

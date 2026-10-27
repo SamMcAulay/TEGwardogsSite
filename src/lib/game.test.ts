@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mainFaction, mapArt, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
+import { mainFaction, mapArt, mapWins, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
@@ -132,5 +132,21 @@ describe('typicalRound', () => {
     ])).toBe(5000);
     expect(typicalRound([{ startedAt: 0, endedAt: 3000 }, { startedAt: 0, endedAt: 5000 }])).toBe(4000);
     expect(typicalRound([{ startedAt: 0, endedAt: null }])).toBeNull();
+  });
+});
+
+describe('mapWins', () => {
+  const r = (map: string, winner: string | null, peakPlayers = 20, endedAt: number | null = 1) => ({ map, winner, peakPlayers, endedAt });
+  it('counts wins per map in faction order, busiest map first', () => {
+    expect(
+      mapWins([r('Europe', 'Lonestar'), r('Europe', 'Valkyra'), r('Europe', 'Lonestar'), r('Kavkazi', 'Manticore')]),
+    ).toEqual([
+      { map: 'Ozeti', rounds: 3, wins: [{ faction: 'Valkyra', n: 1 }, { faction: 'Lonestar', n: 2 }] },
+      { map: 'Bakurani', rounds: 1, wins: [{ faction: 'Manticore', n: 1 }] },
+    ]);
+  });
+
+  it('leaves out unfinished, winnerless and near-empty rounds', () => {
+    expect(mapWins([r('Europe', null), r('Europe', 'Valkyra', 3), r('Europe', 'Valkyra', 20, null)])).toEqual([]);
   });
 });
