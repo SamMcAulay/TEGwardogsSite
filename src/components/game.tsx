@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
 import { ago, clock, duration, metres } from '@/lib/format';
-import { causeInfo, factionColor, lightingName, mapArt, mapName, REGION_NAMES, type RotationStop, rotationView } from '@/lib/game';
+import { causeInfo, factionColor, lightingName, mapArt, mapName, type MapWins, REGION_NAMES, ROTATION, type RotationStop, rotationView } from '@/lib/game';
 import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
 
 import { PlayerName } from './tier';
@@ -282,7 +282,8 @@ function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: ke
           {stop ? (
             <>
               <WeatherIcon weather={weather} />
-              <span className="truncate">{lightingName(stop.lighting) || 'Day'}</span>
+              {/* The side cards are narrow on phones: the icon alone there. */}
+              <span className={cx('truncate', !now && 'sr-only sm:not-sr-only')}>{lightingName(stop.lighting) || 'Day'}</span>
               {now && stop.slot == null && <span className="truncate text-accent">· off rotation</span>}
             </>
           ) : (
@@ -294,12 +295,24 @@ function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: ke
   );
 }
 
-/** Previous, current and next map, with where the server is in the rotation. */
-/** eta: rough seconds until the round ends (roundEta), shown on the next map. */
-export function MapRotation({ status, eta }: { status: ServerStatus; eta?: number | null }) {
-  const view = rotationView(status);
+/**
+ * Previous, current and next map, then the whole rotation in order. eta: rough seconds until the round
+ * ends (roundEta), shown on the next map. starts: seconds until each slot comes up (rotationStarts).
+ */
+export function MapRotation({
+  status,
+  eta,
+  starts,
+  list = ROTATION,
+}: {
+  status: ServerStatus;
+  eta?: number | null;
+  starts?: (number | null)[] | null;
+  list?: readonly { map: string; lighting: string }[];
+}) {
+  const view = rotationView(status, list);
   if (!view) return null;
-  const { prev, now, next, length } = view;
+  const { prev, now, next } = view;
   return (
     <div>
       <div className="grid grid-cols-[1fr_1.35fr_1fr] items-end gap-2 sm:gap-3">
@@ -307,23 +320,92 @@ export function MapRotation({ status, eta }: { status: ServerStatus; eta?: numbe
         <RotationCard stop={now} role="now" />
         <RotationCard stop={next} role="next" eta={eta} />
       </div>
-      <ol className="mt-4 flex gap-1" aria-label="Rotation">
-        {Array.from({ length }, (_, i) => (
-          <li
-            key={i}
-            title={`#${i + 1}${i === now.slot ? ' · now playing' : i === next?.slot ? ' · up next' : ''}`}
-            className={cx(
-              'h-1 flex-1',
-              i === now.slot ? 'bg-accent' : i === next?.slot ? 'bg-accent/40' : 'bg-line-strong',
-            )}
-          >
-            <span className="sr-only">
-              Map {i + 1}
-              {i === now.slot ? ', now playing' : i === next?.slot ? ', up next' : ''}
-            </span>
-          </li>
-        ))}
+      <h3 className="eyebrow mt-6 mb-2 !text-[0.66rem]">Full rotation</h3>
+      <ol className="grid grid-cols-3 gap-1.5 sm:grid-cols-9 sm:gap-2">
+        {list.map((r, i) => {
+          const isNow = i === now.slot;
+          const isNext = i === next?.slot;
+          const weather = weatherOf(r.lighting);
+          const art = mapArt(r.map, r.lighting);
+          const wait = starts?.[i];
+          return (
+            <li
+              key={i}
+              aria-current={isNow ? 'true' : undefined}
+              className={cx('min-w-0 border bg-surface-2', isNow ? 'border-accent' : isNext ? 'border-accent/40' : 'border-line')}
+            >
+              <div className={cx('relative aspect-[16/9] overflow-hidden', `sky-${weather}`)}>
+                {art && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={art} alt="" loading="lazy" decoding="async" className={cx('absolute inset-0 h-full w-full object-cover', !isNow && 'opacity-80')} />
+                )}
+                <span className="num absolute top-1 left-1 bg-bg/80 px-1 font-mono text-[10px] text-muted">#{i + 1}</span>
+                {(isNow || isNext) && (
+                  <span
+                    className={cx(
+                      'absolute top-1 right-1 px-1 font-display text-[9px] font-semibold uppercase tracking-[0.1em]',
+                      isNow ? 'bg-accent text-accent-ink' : 'bg-bg/80 text-accent',
+                    )}
+                  >
+                    {isNow ? 'Now' : 'Next'}
+                  </span>
+                )}
+              </div>
+              <div className="px-1.5 pt-1 pb-1.5">
+                <div className={cx('truncate font-display text-xs font-semibold uppercase tracking-[0.06em]', isNow ? 'text-text' : 'text-muted')}>
+                  {mapName(r.map)}
+                </div>
+                <div className="flex items-center gap-1 text-[10px] text-dim">
+                  <WeatherIcon weather={weather} />
+                  <span className="truncate">{lightingName(r.lighting)}</span>
+                </div>
+                {wait != null && (
+                  <div className="num mt-0.5 truncate text-[10px] text-muted" title="Rough guess from how long rounds usually run">
+                    in ≈{wait < 120 ? '1m' : duration(wait)}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </div>
+  );
+}
+
+/** Each map's rounds split by who won them: one bar per map, each faction's share labelled. */
+export function MapWinBars({ maps }: { maps: MapWins[] }) {
+  return (
+    <ul className="space-y-4">
+      {maps.map((m) => (
+        <li key={m.map}>
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <span className="display text-sm tracking-[0.06em]">{m.map}</span>
+            <span className="num text-xs text-dim">
+              {m.rounds} round{m.rounds === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="flex h-2.5 gap-0.5" role="img" aria-label={m.wins.map((w) => `${w.faction} ${Math.round((w.n / m.rounds) * 100)}%`).join(', ')}>
+            {m.wins.map((w) => (
+              <span
+                key={w.faction}
+                title={`${w.faction}: ${w.n} of ${m.rounds}`}
+                className="rounded-[2px]"
+                style={{ width: `${(w.n / m.rounds) * 100}%`, background: factionColor(w.faction) }}
+              />
+            ))}
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted">
+            {m.wins.map((w) => (
+              <span key={w.faction} className="flex items-center gap-1.5">
+                <span className="inline-block size-2" style={{ background: factionColor(w.faction) }} />
+                {w.faction}
+                <span className="num font-semibold text-text">{Math.round((w.n / m.rounds) * 100)}%</span>
+              </span>
+            ))}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

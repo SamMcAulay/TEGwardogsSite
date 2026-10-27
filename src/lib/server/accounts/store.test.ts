@@ -156,6 +156,22 @@ describe('friends and privacy', () => {
     expect(s.relation(D1, D2)).toBe('none');
   });
 
+  test('an accepted request is news to its sender until they open /friends', () => {
+    const s = store();
+    s.requestFriend(D1, D2, 10);
+    expect(s.acceptedSince(D1)).toEqual([]);
+    s.answerFriend(D2, D1, true, 20);
+    expect(s.acceptedSince(D1)).toEqual([{ other: D2, since: 20 }]);
+    // the one who accepted did it themselves: nothing to tell them
+    expect(s.acceptedSince(D2)).toEqual([]);
+    s.markFriendsSeen(D1, 25);
+    expect(s.acceptedSince(D1)).toEqual([]);
+    // a denial is never news
+    s.requestFriend(D1, D3, 30);
+    s.answerFriend(D3, D1, false, 40);
+    expect(s.acceptedSince(D1)).toEqual([]);
+  });
+
   test('asking someone who already asked you makes you friends', () => {
     const s = store();
     s.requestFriend(D1, D2);

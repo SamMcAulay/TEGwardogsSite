@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mainFaction, mapArt, ROTATION, roundEta, rotationView } from './game';
+import { mainFaction, mapArt, mapWins, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
@@ -105,5 +105,48 @@ describe('roundEta', () => {
     expect(roundEta([10, 2, 0], null, 100)).toBeNull();
     expect(roundEta([10, 2, 0], 24, null)).toBeNull();
     expect(roundEta([], 24, 100)).toBeNull();
+  });
+});
+
+describe('rotationStarts', () => {
+  it('counts forward from the current slot, wrapping round', () => {
+    // slot 2 of 4 on now, 10 min left, rounds of an hour
+    expect(rotationStarts(2, 4, 600, 3600)).toEqual([600 + 3600, 600 + 2 * 3600, null, 600]);
+  });
+
+  it('is null off rotation or without the times', () => {
+    expect(rotationStarts(null, 4, 600, 3600)).toBeNull();
+    expect(rotationStarts(-1, 4, 600, 3600)).toBeNull();
+    expect(rotationStarts(1, 4, null, 3600)).toBeNull();
+    expect(rotationStarts(1, 4, 600, null)).toBeNull();
+  });
+});
+
+describe('typicalRound', () => {
+  it('takes the median finished round, ignoring the one in progress', () => {
+    expect(typicalRound([
+      { startedAt: 0, endedAt: 3000 },
+      { startedAt: 0, endedAt: 5000 },
+      { startedAt: 0, endedAt: 99999 },
+      { startedAt: 0, endedAt: null },
+    ])).toBe(5000);
+    expect(typicalRound([{ startedAt: 0, endedAt: 3000 }, { startedAt: 0, endedAt: 5000 }])).toBe(4000);
+    expect(typicalRound([{ startedAt: 0, endedAt: null }])).toBeNull();
+  });
+});
+
+describe('mapWins', () => {
+  const r = (map: string, winner: string | null, peakPlayers = 20, endedAt: number | null = 1) => ({ map, winner, peakPlayers, endedAt });
+  it('counts wins per map in faction order, busiest map first', () => {
+    expect(
+      mapWins([r('Europe', 'Lonestar'), r('Europe', 'Valkyra'), r('Europe', 'Lonestar'), r('Kavkazi', 'Manticore')]),
+    ).toEqual([
+      { map: 'Ozeti', rounds: 3, wins: [{ faction: 'Valkyra', n: 1 }, { faction: 'Lonestar', n: 2 }] },
+      { map: 'Bakurani', rounds: 1, wins: [{ faction: 'Manticore', n: 1 }] },
+    ]);
+  });
+
+  it('leaves out unfinished, winnerless and near-empty rounds', () => {
+    expect(mapWins([r('Europe', null), r('Europe', 'Valkyra', 3), r('Europe', 'Valkyra', 20, null)])).toEqual([]);
   });
 });

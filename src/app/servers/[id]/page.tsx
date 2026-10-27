@@ -6,7 +6,7 @@ import { withParams } from '@/lib/url';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { AreaChart, BusyTimes } from '@/components/charts';
 import { AutoRefresh, CopyButton } from '@/components/client';
-import { FactionScores, KillList, MapBackdrop, MapRotation } from '@/components/game';
+import { FactionScores, KillList, MapBackdrop, MapRotation, MapWinBars } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import {
   Badge,
@@ -23,9 +23,9 @@ import {
   StatusDot,
 } from '@/components/ui';
 import { ago, clock, compact, duration, int, kd, money } from '@/lib/format';
-import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationView } from '@/lib/game';
+import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from '@/lib/game';
 import { Section, safe } from '@/components/section';
-import { getServer, leaderboard, listMatches, liveTags, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
+import { getServer, leaderboard, listMatches, liveTags, mapWinRates, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
 import type { LivePlayer } from '@/lib/server/views';
 
@@ -152,15 +152,17 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   if (id !== server.slug) permanentRedirect(withParams(`/servers/${server.slug}`, sp, {}));
   const range = sp.range === '7d' ? '7d' : '24h';
   const now = nowSec();
-  const [pop, history, totals, matches, top, kills, tags] = await Promise.all([
+  const [pop, history, totals, matches, top, kills, tags, wins] = await Promise.all([
     safe(population(server.id, range)),
     safe(populationHistory(server.id)),
     safe(serverTotals(server.id)),
-    safe(listMatches({ serverId: server.id, limit: 8 })),
+    // More than the table shows, for a typical round length.
+    safe(listMatches({ serverId: server.id, limit: 20 })),
     safe(leaderboard({ metric: 'kills', period: '7d', serverId: server.id })),
     safe(recentKills({ serverId: server.id, limit: 15 })),
     // Decoration: a failed lookup means no tags, never a broken scoreboard.
     liveTags(server.players).catch(() => ({})),
+    safe(mapWinRates(server.id)),
   ]);
   const st = server.status;
   // The server doesn't report match time any more; the round in progress started when its match did.
@@ -170,6 +172,10 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   const elapsed = waiting ? null : (st?.matchSeconds ?? (liveRound ? now - liveRound.startedAt : null));
   const eta = st ? roundEta(st.factionScores.map((f) => f.score), st.scoreTick, st.scoreCap) : null;
   const factions = st?.factionScores.map((f) => f.name) ?? ['Valkyra', 'Lonestar', 'Manticore'];
+  const roundLength = matches instanceof Error ? null : typicalRound(matches.data.rows);
+  // Until the round ends: the score-based guess, else what a typical round has left. Nobody playing: no guess.
+  const untilNext = waiting ? null : (eta ?? (elapsed != null && roundLength ? Math.max(0, roundLength - elapsed) : null));
+  const starts = st ? rotationStarts(st.rotation.now, ROTATION.length, untilNext, roundLength) : null;
 
   return (
     <>
@@ -251,7 +257,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
             title="Map rotation"
             action={st.rotation.now != null && st.rotation.now >= 0 ? `Map ${(st.rotation.now % ROTATION.length) + 1} of ${ROTATION.length}` : 'Off rotation'}
           >
-            <MapRotation status={st} eta={eta} />
+            <MapRotation status={st} eta={eta} starts={starts} />
           </Panel>
         )}
 
@@ -326,11 +332,18 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           )}
         </Panel>
 
-        <Panel title="Busiest times" action="Average players · last 30 days">
-          <Section loaded={history}>
-            {(h) => <BusyTimes month={h.month} week={h.week} />}
-          </Section>
-        </Panel>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel title="Busiest times" action="Average players · last 30 days" className="lg:col-span-2">
+            <Section loaded={history}>
+              {(h) => <BusyTimes month={h.month} week={h.week} />}
+            </Section>
+          </Panel>
+          <Panel title="Wins by map" action="Season 2 · rounds of 8+ players">
+            <Section loaded={wins}>
+              {(maps) => (maps.length ? <MapWinBars maps={maps} /> : <Empty>No finished rounds this season yet.</Empty>)}
+            </Section>
+          </Panel>
+        </div>
 
         <div className="grid gap-4 lg:grid-cols-5">
           <Panel
@@ -346,14 +359,14 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                     <thead>
                       <tr>
                         <th>Map</th>
-                        <th>Started</th>
+                        <th className="hidden sm:table-cell">Started</th>
                         <th className="r">Length</th>
                         <th className="r">Peak</th>
                         <th>Winner</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((m) => (
+                      {rows.slice(0, 8).map((m) => (
                         <tr key={m.id}>
                           <td>
                             <Link prefetch={false} href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
@@ -365,7 +378,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                               </span>
                             )}
                           </td>
-                          <td className="text-muted"><LocalTime ts={m.startedAt} /></td>
+                          <td className="hidden text-muted sm:table-cell"><LocalTime ts={m.startedAt} /></td>
                           <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
                           <td className="r">{m.peakPlayers}</td>
                           <td>

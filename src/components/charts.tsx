@@ -234,26 +234,59 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const noop = () => () => {};
 
 /**
- * Average players by weekday and hour, from population buckets (each spread over the hours it covers).
- * utcOffsetMinutes: the viewer's offset, so the grid reads in their own time. Cells with no data are null.
+ * Average players by weekday and hour, from population buckets. Each bucket counts towards every hour
+ * it overlaps, weighted by how much of that hour it covers, so ten-minute and six-hour buckets mix
+ * fairly. utcOffsetMinutes: the viewer's offset, so the grid reads in their own time. Cells with no
+ * data are null.
  */
 export function weekGrid(
   points: { ts: number; players: number }[],
   bucketSeconds: number,
   utcOffsetMinutes: number,
 ): (number | null)[][] {
+  return weekGridFrom([{ points, bucketSeconds }], utcOffsetMinutes);
+}
+
+export function weekGridFrom(series: Series[], utcOffsetMinutes: number): (number | null)[][] {
   const sum = DAYS.map(() => Array<number>(24).fill(0));
-  const n = DAYS.map(() => Array<number>(24).fill(0));
-  const hours = Math.max(1, Math.round(bucketSeconds / 3600));
-  for (const p of points) {
-    for (let h = 0; h < hours; h++) {
-      const d = new Date((p.ts + h * 3600 + utcOffsetMinutes * 60) * 1000);
-      const day = (d.getUTCDay() + 6) % 7; // Monday first
-      sum[day][d.getUTCHours()] += p.players;
-      n[day][d.getUTCHours()] += 1;
+  const w = DAYS.map(() => Array<number>(24).fill(0));
+  for (const { points, bucketSeconds } of series) {
+    const len = Math.max(60, bucketSeconds);
+    for (const p of points) {
+      let t = p.ts + utcOffsetMinutes * 60;
+      const end = t + len;
+      while (t < end) {
+        const next = Math.min(end, (Math.floor(t / 3600) + 1) * 3600);
+        const d = new Date(t * 1000);
+        const day = (d.getUTCDay() + 6) % 7; // Monday first
+        const share = (next - t) / 3600;
+        sum[day][d.getUTCHours()] += p.players * share;
+        w[day][d.getUTCHours()] += share;
+        t = next;
+      }
     }
   }
-  return sum.map((row, d) => row.map((v, h) => (n[d][h] ? v / n[d][h] : null)));
+  return sum.map((row, d) => row.map((v, h) => (w[d][h] ? v / w[d][h] : null)));
+}
+
+/**
+ * The month's buckets up to where the week starts, then the week's: the last seven days at the week's
+ * finer grain where it has one, the rest of the month for history.
+ */
+export function busySeries(month: Series, week: Series): Series[] {
+  const from = week.points[0]?.ts;
+  if (from == null || !week.bucketSeconds || week.bucketSeconds >= month.bucketSeconds) return [month];
+  return [{ ...month, points: month.points.filter((p) => p.ts + month.bucketSeconds <= from) }, week];
+}
+
+/**
+ * A cell's shade, 0 (nobody) to 5 (the busiest hour of the week), stepped from the quietest hour (lo)
+ * up, so a server that never empties still shows when it peaks.
+ */
+export function busyLevel(v: number, max: number, lo = 0): number {
+  if (v <= 0 || max <= 0) return 0;
+  const span = max - lo;
+  return Math.min(5, Math.max(1, Math.ceil(span > 0 ? ((v - lo) / span) * 5 : 5)));
 }
 
 /**
@@ -375,16 +408,29 @@ function DayChart({ day, usual, label }: { day: { m: number; v: number }[]; usua
 
 type Series = { bucketSeconds: number; points: { ts: number; players: number }[] };
 
+/** Opacity of each busyLevel step over the accent. */
+const SHADE = [0, 0.16, 0.34, 0.55, 0.78, 1];
+
 /**
- * When a server is usually busy: a weekday x hour grid in the viewer's timezone (UTC until hydrated).
- * Picking a day opens it hour by hour: its latest occurrence against its usual.
+ * When a server is usually busy: a weekday x hour grid in the viewer's timezone (UTC until hydrated),
+ * shaded in five steps, with each day's peak and the hour it is now. Picking a day opens it hour by
+ * hour: its latest occurrence against its usual.
  */
 export function BusyTimes({ month, week }: { month: Series; week: Series }) {
   // The server renders UTC; the browser swaps in its own offset after hydration.
   const offset = useSyncExternalStore(noop, () => -new Date().getTimezoneOffset(), () => 0);
   const local = useSyncExternalStore(noop, () => true, () => false);
-  const grid = useMemo(() => weekGrid(month.points, month.bucketSeconds, offset), [month, offset]);
-  const max = Math.max(1, ...grid.flat().map((v) => v ?? 0));
+  // Hours since the epoch in the viewer's time: steady between renders, so a safe snapshot.
+  const nowHour = useSyncExternalStore(noop, () => Math.floor((Date.now() / 1000 - new Date().getTimezoneOffset() * 60) / 3600), () => null);
+  const nowAt = nowHour == null ? null : { d: (new Date(nowHour * 3600 * 1000).getUTCDay() + 6) % 7, h: nowHour % 24 };
+  const grid = useMemo(() => weekGridFrom(busySeries(month, week), offset), [month, week, offset]);
+  const known = grid.flat().filter((v): v is number => v != null);
+  const max = Math.max(1, ...known);
+  const lo = known.length ? Math.min(...known) : 0;
+  const level = (v: number) => busyLevel(v, max, lo);
+  const peaks = grid.map((row) => row.reduce<{ h: number; v: number } | null>((a, v, h) => (v != null && (!a || v > a.v) ? { h, v } : a), null));
+  const best = peaks.reduce<{ d: number; h: number; v: number } | null>((a, p, d) => (p && (!a || p.v > a.v) ? { d, ...p } : a), null);
+  const usualNow = nowAt && grid[nowAt.d][nowAt.h];
   const [hover, setHover] = useState<{ d: number; h: number } | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
   const day = useMemo(() => (picked == null ? null : lastDay(week.points, offset, picked)), [week, offset, picked]);
@@ -396,17 +442,38 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
   const today = newest ? new Date((newest.ts + offset * 60) * 1000).toISOString().slice(0, 10) : null;
   const dayLabel = (date: string, d: number) =>
     date === today ? 'Today so far' : `${DAYS[d]} ${date.slice(8, 10)}/${date.slice(5, 7)}`;
+  if (!best) return <p className="py-6 text-center text-sm text-muted">No population history yet.</p>;
   return (
     <div>
-      <div className="grid grid-cols-[2.25rem_1fr] gap-x-2">
+      <div className="mb-4 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+        <span>
+          <span className="text-muted">Usually busiest </span>
+          <span className="font-semibold">
+            {DAYS[best.d]} {hh(best.h)}
+          </span>
+          <span className="num text-muted"> · ~{Math.round(best.v)} players</span>
+        </span>
+        {usualNow != null && (
+          <span>
+            <span className="text-muted">This hour usually </span>
+            <span className="num font-semibold">~{Math.round(usualNow)} players</span>
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-[2.25rem_1fr_2rem] gap-x-2">
         <div />
-        <div className="mb-1 grid grid-cols-[repeat(24,1fr)] text-[10px] text-dim">
-          {Array.from({ length: 24 }, (_, h) => (
-            <span key={h} className="num">
-              {h % 6 === 0 ? hh(h).slice(0, 2) : ''}
+        <div className="relative mb-1 h-3 text-[10px] text-dim">
+          {Array.from({ length: 8 }, (_, i) => i * 3).map((h) => (
+            <span
+              key={h}
+              className={cx('num absolute', h % 6 !== 0 && 'hidden sm:inline', nowAt?.h === h && 'text-accent')}
+              style={{ left: `${(h / 24) * 100}%` }}
+            >
+              {hh(h).slice(0, 2)}
             </span>
           ))}
         </div>
+        <div className="text-right text-[10px] text-dim">Peak</div>
         {grid.map((row, d) => (
           <div key={d} className="contents">
             <button
@@ -414,28 +481,38 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
               onClick={() => pick(d)}
               aria-pressed={picked === d}
               className={cx(
-                'text-left font-display text-[11px] leading-[1.1rem] font-semibold uppercase tracking-[0.1em] transition-colors',
-                picked === d ? 'text-accent' : 'text-dim hover:text-text',
+                'text-left font-display text-[11px] leading-[1.4rem] font-semibold uppercase tracking-[0.1em] transition-colors',
+                picked === d || nowAt?.d === d ? 'text-accent' : 'text-dim hover:text-text',
               )}
             >
               {DAYS[d]}
             </button>
             {/* The squares pick their day too; the day name is the keyboard's way in. */}
             <div
-              className={cx('mb-px grid cursor-pointer grid-cols-[repeat(24,1fr)] gap-px', picked === d && 'outline outline-1 outline-offset-1 outline-accent')}
+              className={cx('mb-0.5 grid cursor-pointer grid-cols-[repeat(24,1fr)] gap-0.5', picked === d && 'outline outline-1 outline-offset-1 outline-accent')}
               onPointerLeave={() => setHover(null)}
               onClick={() => pick(d)}
             >
-              {row.map((v, h) => (
-                <span
-                  key={h}
-                  onPointerEnter={() => setHover({ d, h })}
-                  title={`${DAYS[d]} ${hh(h)} · ${v == null ? 'no data' : `~${Math.round(v)} players`}`}
-                  className={cx('h-[1.1rem]', v == null ? 'bg-surface-2' : 'bg-accent', hover?.d === d && hover.h === h && 'outline outline-1 outline-text')}
-                  style={v == null ? undefined : { opacity: 0.08 + 0.92 * (v / max) }}
-                />
-              ))}
+              {row.map((v, h) => {
+                const isNow = nowAt?.d === d && nowAt.h === h;
+                return (
+                  <span
+                    key={h}
+                    onPointerEnter={() => setHover({ d, h })}
+                    title={`${DAYS[d]} ${hh(h)} · ${v == null ? 'no data' : `~${Math.round(v)} players`}${isNow ? ' · now' : ''}`}
+                    className={cx(
+                      'h-[1.4rem] rounded-[2px]',
+                      v == null ? 'bg-surface-2' : level(v) ? 'bg-accent' : 'bg-surface-3',
+                      hover?.d === d && hover.h === h ? 'outline outline-1 outline-text' : isNow && 'outline outline-2 -outline-offset-1 outline-text',
+                    )}
+                    style={v == null || !level(v) ? undefined : { opacity: SHADE[level(v)] }}
+                  />
+                );
+              })}
             </div>
+            <span className="num self-center text-right text-[11px] text-muted" title={peaks[d] ? `Busiest around ${hh(peaks[d]!.h)}` : undefined}>
+              {peaks[d] ? Math.round(peaks[d]!.v) : '—'}
+            </span>
           </div>
         ))}
       </div>
@@ -445,10 +522,12 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
             ? `${DAYS[hover.d]} ${hh(hover.h)} · ${shown == null ? 'no data' : `about ${Math.round(shown)} players`}`
             : `${local ? `Your time (${Intl.DateTimeFormat().resolvedOptions().timeZone})` : 'UTC'} · pick a day to see it hour by hour`}
         </span>
-        <span className="flex items-center gap-1.5">
-          Quiet
-          <span className="flex h-2 w-16 bg-gradient-to-r from-accent/10 to-accent" />
-          Busy
+        <span className="flex items-center gap-1.5" aria-label={`Shading from ${Math.round(lo)} to ${Math.round(max)} players`}>
+          <span className="num">{Math.round(lo)}</span>
+          {SHADE.slice(1).map((o) => (
+            <span key={o} className="size-3 rounded-[2px] bg-accent" style={{ opacity: o }} />
+          ))}
+          <span className="num">{Math.round(max)} players</span>
         </span>
       </div>
       {picked != null && (
@@ -466,6 +545,98 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Who was on in each weekday hour (Monday first), in the viewer's time: the Steam ids of everyone
+ * with a stretch of play overlapping that hour on any day.
+ */
+export function friendGrid(stretches: { steamId: string; start: number; end: number }[], utcOffsetMinutes: number): string[][][] {
+  const cells = DAYS.map(() => Array.from({ length: 24 }, () => new Set<string>()));
+  for (const { steamId, start, end } of stretches) {
+    const shift = utcOffsetMinutes * 60;
+    // every hour the stretch touches, capped at a day's worth so a stuck round can't paint the week
+    const last = Math.min(end, start + 86400) + shift;
+    for (let t = Math.floor((start + shift) / 3600) * 3600; t < last; t += 3600) {
+      const d = new Date(t * 1000);
+      cells[(d.getUTCDay() + 6) % 7][d.getUTCHours()].add(steamId);
+    }
+  }
+  return cells.map((row) => row.map((c) => [...c]));
+}
+
+/** When a member's friends play: a weekday x hour grid shaded by how many different friends were on. */
+export function FriendTimes({ stretches, names }: { stretches: { steamId: string; start: number; end: number }[]; names: Record<string, string> }) {
+  const offset = useSyncExternalStore(noop, () => -new Date().getTimezoneOffset(), () => 0);
+  const local = useSyncExternalStore(noop, () => true, () => false);
+  const grid = useMemo(() => friendGrid(stretches, offset), [stretches, offset]);
+  const max = Math.max(1, ...grid.flat().map((c) => c.length));
+  const [hover, setHover] = useState<{ d: number; h: number } | null>(null);
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+  const who = (ids: string[]) => ids.map((id) => names[id] ?? 'A friend');
+  const best = grid.flatMap((row, d) => row.map((c, h) => ({ d, h, n: c.length }))).reduce((a, b) => (b.n > a.n ? b : a));
+  const shown = hover && grid[hover.d][hover.h];
+  if (!best.n) return <p className="py-6 text-center text-sm text-muted">None of your friends has played in the last 30 days.</p>;
+  return (
+    <div>
+      <p className="mb-4 text-sm">
+        <span className="text-muted">Most of your friends are on around </span>
+        <span className="font-semibold">
+          {DAYS[best.d]} {hh(best.h)}
+        </span>
+        <span className="num text-muted">
+          {' '}
+          · {best.n} friend{best.n === 1 ? '' : 's'}
+        </span>
+      </p>
+      <div className="grid grid-cols-[2.25rem_1fr] gap-x-2">
+        <div />
+        <div className="relative mb-1 h-3 text-[10px] text-dim">
+          {Array.from({ length: 8 }, (_, i) => i * 3).map((h) => (
+            <span key={h} className={cx('num absolute', h % 6 !== 0 && 'hidden sm:inline')} style={{ left: `${(h / 24) * 100}%` }}>
+              {hh(h).slice(0, 2)}
+            </span>
+          ))}
+        </div>
+        {grid.map((row, d) => (
+          <div key={d} className="contents">
+            <span className="font-display text-[11px] leading-[1.4rem] font-semibold uppercase tracking-[0.1em] text-dim">{DAYS[d]}</span>
+            <div className="mb-0.5 grid grid-cols-[repeat(24,1fr)] gap-0.5" onPointerLeave={() => setHover(null)}>
+              {row.map((ids, h) => (
+                <span
+                  key={h}
+                  onPointerEnter={() => setHover({ d, h })}
+                  title={`${DAYS[d]} ${hh(h)} · ${ids.length ? who(ids).join(', ') : 'nobody'}`}
+                  className={cx(
+                    'h-[1.4rem] rounded-[2px]',
+                    ids.length ? 'bg-accent' : 'bg-surface-2',
+                    hover?.d === d && hover.h === h && 'outline outline-1 outline-text',
+                  )}
+                  style={ids.length ? { opacity: SHADE[busyLevel(ids.length, max)] } : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+        <span className="min-w-0 truncate">
+          {hover
+            ? `${DAYS[hover.d]} ${hh(hover.h)} · ${shown?.length ? who(shown).join(', ') : 'nobody'}`
+            : `${local ? `Your time (${Intl.DateTimeFormat().resolvedOptions().timeZone})` : 'UTC'} · from each friend's recent rounds`}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="num">1</span>
+          {SHADE.slice(1).map((o) => (
+            <span key={o} className="size-3 rounded-[2px] bg-accent" style={{ opacity: o }} />
+          ))}
+          <span className="num">
+            {max} friend{max === 1 ? '' : 's'}
+          </span>
+        </span>
+      </div>
     </div>
   );
 }

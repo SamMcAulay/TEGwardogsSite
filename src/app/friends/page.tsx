@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { FriendRow } from '@/components/friends';
+import { FriendNewsPing } from '@/components/friend-news';
 import { Avatar } from '@/components/avatar';
 import { buttonClass, Container, Empty, PageHeader, Panel } from '@/components/ui';
 import { ago } from '@/lib/format';
 import { accounts, viewer } from '@/lib/server/accounts';
 import { MAX_FRIENDS } from '@/lib/server/accounts/store';
-import { friendsPage } from '@/lib/server/data';
+import { friendsPage, friendTimes } from '@/lib/server/data';
+import { FriendTimes } from '@/components/charts';
+import { Section, safe } from '@/components/section';
 import { one } from '@/lib/url';
 import { answerFriendRequest, removeFriend, setHidePresence } from './actions';
 
@@ -73,6 +76,10 @@ export default async function FriendsPage({ searchParams }: PageProps<'/friends'
 
   const hidden = a!.store.byDiscord(me.discordId)?.hidePresence ?? false;
   const { friends, incoming, outgoing } = await friendsPage(me.discordId);
+  const times = friends.length ? await safe(friendTimes(friends.map((f) => f.status.steamId))) : null;
+  const names = Object.fromEntries(friends.map((f) => [f.status.steamId, f.status.name ?? 'A friend']));
+  // Accepted since their last visit: marked on this visit; the page tells the store they're seen once it's showing.
+  const fresh = new Set(a!.store.acceptedSince(me.discordId).map((r) => r.other));
   const sorted = [...friends].sort(
     (x, y) => Number(!!y.status.online) - Number(!!x.status.online) || (y.status.lastSeen ?? 0) - (x.status.lastSeen ?? 0),
   );
@@ -81,6 +88,7 @@ export default async function FriendsPage({ searchParams }: PageProps<'/friends'
     <>
       {header}
       <Container className="mt-8 space-y-4">
+        <FriendNewsPing stamp={`${incoming.length}|${friends.length}|${fresh.size}`} />
         {done && (
           <p role="status" className={`border px-4 py-3 text-sm ${done.good ? 'border-good/40 bg-good/10 text-good' : 'border-bad/40 bg-bad/10 text-bad'}`}>
             {done.text}
@@ -134,7 +142,7 @@ export default async function FriendsPage({ searchParams }: PageProps<'/friends'
           {sorted.length ? (
             <ul className="divide-y divide-line">
               {sorted.map((f) => (
-                <FriendRow key={f.status.steamId} f={f.status} removable />
+                <FriendRow key={f.status.steamId} f={f.status} removable fresh={fresh.has(f.discordId)} />
               ))}
             </ul>
           ) : (
@@ -147,6 +155,12 @@ export default async function FriendsPage({ searchParams }: PageProps<'/friends'
             </Empty>
           )}
         </Panel>
+
+        {times && (
+          <Panel title="When your friends play" action="Last 30 days">
+            <Section loaded={times}>{(t) => <FriendTimes stretches={t} names={names} />}</Section>
+          </Panel>
+        )}
 
         {outgoing.length > 0 && (
           <Panel title="Requests you sent" flush>

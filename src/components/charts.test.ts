@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lastDay, weekGrid } from './charts';
+import { busyLevel, busySeries, friendGrid, lastDay, weekGrid, weekGridFrom } from './charts';
 
 // Monday 2026-10-19 00:00 UTC
 const MON = Date.UTC(2026, 9, 19) / 1000;
@@ -52,5 +52,87 @@ describe('lastDay', () => {
 
   it('is null with no such day', () => {
     expect(lastDay(pts, 0, 4)).toBeNull();
+  });
+});
+
+describe('weekGridFrom', () => {
+  it('weights short buckets by the share of the hour they cover', () => {
+    // two 30-minute buckets in Mon 20:00 and one hour-long bucket the next Monday
+    const g = weekGridFrom(
+      [
+        { bucketSeconds: 1800, points: [{ ts: MON + 20 * 3600, players: 10 }, { ts: MON + 20 * 3600 + 1800, players: 30 }] },
+        { bucketSeconds: 3600, points: [{ ts: MON + 7 * 86400 + 20 * 3600, players: 60 }] },
+      ],
+      0,
+    );
+    // (10*.5 + 30*.5 + 60*1) / 2
+    expect(g[0][20]).toBe(40);
+  });
+
+  it('splits a bucket that straddles the hour', () => {
+    const g = weekGridFrom([{ bucketSeconds: 3600, points: [{ ts: MON + 20 * 3600 + 1800, players: 8 }] }], 0);
+    expect(g[0][20]).toBe(8);
+    expect(g[0][21]).toBe(8);
+  });
+
+  it('reads half-hour offsets', () => {
+    // Mon 00:00 UTC is Mon 05:30 at UTC+5:30
+    const g = weekGridFrom([{ bucketSeconds: 3600, points: [{ ts: MON, players: 4 }] }], 330);
+    expect(g[0][5]).toBe(4);
+    expect(g[0][6]).toBe(4);
+  });
+});
+
+describe('busySeries', () => {
+  const month = { bucketSeconds: 21600, points: [{ ts: MON, players: 1 }, { ts: MON + 21600, players: 2 }] };
+  it('swaps the month for the finer week where they overlap', () => {
+    const week = { bucketSeconds: 600, points: [{ ts: MON + 21600, players: 3 }] };
+    expect(busySeries(month, week)).toEqual([{ bucketSeconds: 21600, points: [{ ts: MON, players: 1 }] }, week]);
+  });
+  it('keeps the month alone when the week is no finer or empty', () => {
+    expect(busySeries(month, { bucketSeconds: 21600, points: [{ ts: MON, players: 1 }] })).toEqual([month]);
+    expect(busySeries(month, { bucketSeconds: 600, points: [] })).toEqual([month]);
+  });
+});
+
+describe('busyLevel', () => {
+  it('steps from 0 to 5', () => {
+    expect(busyLevel(0, 50)).toBe(0);
+    expect(busyLevel(1, 50)).toBe(1);
+    expect(busyLevel(25, 50)).toBe(3);
+    expect(busyLevel(50, 50)).toBe(5);
+  });
+  it('steps up from the quietest hour', () => {
+    expect(busyLevel(20, 24, 20)).toBe(1);
+    expect(busyLevel(22, 24, 20)).toBe(3);
+    expect(busyLevel(24, 24, 20)).toBe(5);
+    expect(busyLevel(5, 5, 5)).toBe(5);
+  });
+});
+
+describe('friendGrid', () => {
+  it('lists each friend once per weekday hour they were on', () => {
+    const g = friendGrid(
+      [
+        { steamId: 'a', start: MON + 20 * 3600 + 1800, end: MON + 21 * 3600 + 600 }, // Mon 20:30-21:10
+        { steamId: 'a', start: MON + 7 * 86400 + 20 * 3600, end: MON + 7 * 86400 + 20 * 3600 + 60 }, // next Mon 20:00
+        { steamId: 'b', start: MON + 20 * 3600, end: MON + 20 * 3600 + 600 },
+      ],
+      0,
+    );
+    expect(g[0][20].sort()).toEqual(['a', 'b']);
+    expect(g[0][21]).toEqual(['a']);
+    expect(g[0][22]).toEqual([]);
+  });
+
+  it('reads the viewer’s time', () => {
+    // Sun 23:30 UTC is Mon 01:30 at UTC+2
+    expect(friendGrid([{ steamId: 'a', start: MON - 1800, end: MON - 1200 }], 120)[0][1]).toEqual(['a']);
+  });
+
+  it('caps a stretch at a day', () => {
+    const g = friendGrid([{ steamId: 'a', start: MON, end: MON + 5 * 86400 }], 0);
+    expect(g[1][0]).toEqual([]);
+    expect(g[0][23]).toEqual(['a']);
   });
 });
