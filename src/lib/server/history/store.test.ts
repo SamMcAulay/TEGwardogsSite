@@ -73,3 +73,17 @@ describe('meta', () => {
     expect(h.meta('x')).toBe('1');
   });
 });
+
+describe('teamplay', () => {
+  it('lists rounds still to read, newest first, and stores what was found', () => {
+    const h = openHistory(':memory:');
+    h.addRound(round(1, 1000), []);
+    h.addRound(round(2, 2000), []);
+    h.addRound({ ...round(3, 3000), peak: 2 }, []);
+    expect(h.needTeamplay(8, 2500, 10).map((r) => r.matchId)).toEqual([2, 1]);
+    expect(h.needTeamplay(8, 1500, 10).map((r) => r.matchId)).toEqual([1]);
+    h.setTeamplay('srv', 2, { Valkyra: { deaths: 10, refrags: 3 } });
+    expect(h.needTeamplay(8, 2500, 10).map((r) => r.matchId)).toEqual([1]);
+    expect(h.rounds().map((r) => r.teamplay)).toEqual([null, { Valkyra: { deaths: 10, refrags: 3 } }, null]);
+  });
+});

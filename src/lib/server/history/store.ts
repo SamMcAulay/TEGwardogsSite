@@ -6,6 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { Teamplay } from '@/lib/balance';
 
 export const HISTORY_MIGRATIONS = [
   `CREATE TABLE rounds (
@@ -52,6 +53,9 @@ export const HISTORY_MIGRATIONS = [
      PRIMARY KEY (steam_id, day)
    );
    CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`,
+  // {faction: {deaths, refrags}} from the round's kill feed (lib/balance.ts); NULL: not read yet,
+  // {}: the feed had nothing
+  `ALTER TABLE rounds ADD COLUMN teamplay TEXT;`,
 ];
 
 export interface StoredRound {
@@ -64,6 +68,8 @@ export interface StoredRound {
   winner: string | null;
   peak: number;
   scores: { name: string; score: number }[];
+  /** each faction's refrags, once the kill feed has been read; null until then */
+  teamplay?: Record<string, Teamplay> | null;
 }
 
 export interface StoredLine {
@@ -126,6 +132,9 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
     rounds: db.prepare('SELECT * FROM rounds WHERE ended_at >= ? ORDER BY ended_at, server_id, match_id'),
     lines: db.prepare(`SELECT l.* FROM round_lines l JOIN rounds r USING (server_id, match_id) WHERE r.ended_at >= ?`),
     roundCount: db.prepare('SELECT count(*) AS n FROM rounds'),
+    needTeamplay: db.prepare(`SELECT server_id, match_id FROM rounds WHERE teamplay IS NULL AND peak >= ? AND ended_at <= ?
+      ORDER BY ended_at DESC LIMIT ?`),
+    setTeamplay: db.prepare('UPDATE rounds SET teamplay = ? WHERE server_id = ? AND match_id = ?'),
     playerRounds: db.prepare(`SELECT r.ended_at, l.seconds, l.kills, l.deaths, l.headshots, l.result
       FROM round_lines l JOIN rounds r USING (server_id, match_id) WHERE l.steam_id = ? AND r.ended_at >= ? ORDER BY r.ended_at`),
     daily: db.prepare(`SELECT date(r.ended_at, 'unixepoch') AS day, count(DISTINCT r.server_id || ':' || r.match_id) AS rounds,
@@ -169,6 +178,10 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
       });
     },
     roundCount: () => (q.roundCount.get() as { n: number }).n,
+    /** Rounds of at least `minPeak` that ended by `endedBy` and whose refrags aren't worked out yet, newest first. */
+    needTeamplay: (minPeak: number, endedBy: number, limit: number) =>
+      (q.needTeamplay.all(minPeak, endedBy, limit) as Record<string, unknown>[]).map((r) => ({ serverId: String(r.server_id), matchId: Number(r.match_id) })),
+    setTeamplay: (serverId: string, matchId: number, t: Record<string, Teamplay>) => void q.setTeamplay.run(JSON.stringify(t), serverId, matchId),
     /** Every round ended since `since`, oldest first, each with its lines. */
     rounds(since = 0): (StoredRound & { lines: StoredLine[] })[] {
       const byKey = new Map<string, StoredLine[]>();
@@ -196,6 +209,7 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
         winner: (r.winner as string | null) ?? null,
         peak: Number(r.peak),
         scores: JSON.parse(String(r.scores)) as { name: string; score: number }[],
+        teamplay: r.teamplay ? (JSON.parse(String(r.teamplay)) as Record<string, Teamplay>) : null,
         lines: byKey.get(`${r.server_id}:${r.match_id}`) ?? [],
       }));
     },

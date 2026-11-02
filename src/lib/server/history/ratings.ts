@@ -49,12 +49,19 @@ export function sidesOf(round: StoredRound & { lines: StoredLine[] }): { teams: 
   return { teams, places };
 }
 
-/** Everyone's rating after the given rounds, taken oldest first. */
-export function buildRatings(rounds: (StoredRound & { lines: StoredLine[] })[]): Map<string, PlayerRating> {
+/**
+ * Everyone's rating after the given rounds, taken oldest first. `before` sees each rated round
+ * with everyone's ratings as they stood going into it.
+ */
+export function buildRatings(
+  rounds: (StoredRound & { lines: StoredLine[] })[],
+  before?: (round: StoredRound, teams: { faction: string; steamIds: string[] }[], players: Map<string, PlayerRating>) => void,
+): Map<string, PlayerRating> {
   const players = new Map<string, PlayerRating>();
   for (const round of [...rounds].sort((a, b) => a.endedAt - b.endedAt)) {
     const sides = sidesOf(round);
     if (!sides) continue;
+    before?.(round, sides.teams.map((t) => ({ faction: t.faction, steamIds: t.seats.map((s) => s.steamId) })), players);
     const seats: Seat[][] = sides.teams.map((t) => t.seats.map((s) => ({ skill: players.get(s.steamId)?.skill ?? fresh(), weight: s.weight })));
     const after = rate(seats, sides.places);
     const day = dayOf(round.endedAt);

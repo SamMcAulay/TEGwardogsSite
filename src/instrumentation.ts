@@ -11,8 +11,8 @@ export async function register() {
   startWarmer();
   // The site's own record of rounds and the daily board (trends, skill ratings): no accounts needed.
   const { startHistory } = await import('./lib/server/history');
-  const { historyBoard, visibleServerIds } = await import('./lib/server/data');
-  startHistory({ serverIds: visibleServerIds, board: historyBoard });
+  const { historyBoard, roundKills, visibleServerIds } = await import('./lib/server/data');
+  startHistory({ serverIds: visibleServerIds, board: historyBoard, kills: roundKills });
   const { accounts } = await import('./lib/server/accounts');
   const { startTierSync } = await import('./lib/server/accounts/sync');
   try {

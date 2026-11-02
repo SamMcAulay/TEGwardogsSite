@@ -1,10 +1,13 @@
 // Keeps history.db filled from Warcon (lib/server/history/ingest.ts) and serves the ratings worked
 // out from it. The job runs every 5 minutes: new rounds, then today's board snapshot if not taken.
+import { refrags } from '@/lib/balance';
+import { displayRating, fresh } from '@/lib/rating';
+import type { WKill } from '../warcon/schemas';
 import { jobRan } from '../jobs';
 import { SEASON_TWO_START } from '../seasons';
 import { warcon } from '../warcon';
 import { ingestRounds, snapshotToday, type RoundSource } from './ingest';
-import { buildRatings, type PlayerRating } from './ratings';
+import { buildRatings, RATED_MIN_PEAK, sideStrength, type PlayerRating } from './ratings';
 import { history, type BoardTotals } from './store';
 
 const sec = (iso: string | null | undefined): number | null => (iso ? Math.floor(Date.parse(iso) / 1000) : null);
@@ -45,7 +48,16 @@ export const warconRounds: RoundSource = {
 const g = globalThis as unknown as {
   __historyJob?: ReturnType<typeof setInterval>;
   __ratings?: { rounds: number; ratings: Map<string, PlayerRating> };
+  __pre?: { rounds: number; pre: Map<string, PreRound> };
 };
+
+/** Each side's average rating and chance of winning as a rated round started. */
+export type PreRound = { faction: string; rating: number; chance: number }[];
+
+/** Rounds whose kill feed is read for refrags per pass: older rounds fill in over a few hours. */
+const TEAMPLAY_PER_PASS = 20;
+/** A round's kill feed is read this long after it ends, so its last kills have landed. */
+const TEAMPLAY_SETTLE_S = 600;
 
 /** Everyone's season-two rating; null when history.db isn't available. Rebuilt when rounds are added. */
 export function ratings(): Map<string, PlayerRating> | null {
@@ -56,7 +68,35 @@ export function ratings(): Map<string, PlayerRating> | null {
   return g.__ratings.ratings;
 }
 
-async function pass(deps: { serverIds: () => Promise<string[]>; board: () => Promise<{ steamId: string; totals: BoardTotals }[]> }) {
+/** Every season-two rated round's sides as it started, by "serverId:matchId"; null without history.db. */
+export function preRounds(): Map<string, PreRound> | null {
+  const h = history();
+  if (!h) return null;
+  const n = h.roundCount();
+  if (g.__pre?.rounds !== n) {
+    const pre = new Map<string, PreRound>();
+    const newcomer = displayRating(fresh());
+    buildRatings(h.rounds(SEASON_TWO_START), (round, teams, players) => {
+      const odds = sideStrength(teams, players);
+      pre.set(
+        `${round.serverId}:${round.matchId}`,
+        teams.map((t, i) => ({
+          faction: t.faction,
+          rating: t.steamIds.reduce((a, id) => a + (players.get(id)?.rating ?? newcomer), 0) / Math.max(1, t.steamIds.length),
+          chance: odds[i].chance,
+        })),
+      );
+    });
+    g.__pre = { rounds: n, pre };
+  }
+  return g.__pre.pre;
+}
+
+async function pass(deps: {
+  serverIds: () => Promise<string[]>;
+  board: () => Promise<{ steamId: string; totals: BoardTotals }[]>;
+  kills?: (serverId: string, matchId: number) => Promise<WKill[]>;
+}) {
   const h = history();
   if (!h) return jobRan('history', { error: 'history.db could not be opened' });
   const errors: string[] = [];
@@ -74,11 +114,22 @@ async function pass(deps: { serverIds: () => Promise<string[]>; board: () => Pro
   } catch (e) {
     errors.push(`snapshot: ${e instanceof Error ? e.message : e}`);
   }
+  let traded = 0;
+  if (deps.kills) {
+    try {
+      for (const r of h.needTeamplay(RATED_MIN_PEAK, Math.floor(Date.now() / 1000) - TEAMPLAY_SETTLE_S, TEAMPLAY_PER_PASS)) {
+        h.setTeamplay(r.serverId, r.matchId, refrags(await deps.kills(r.serverId, r.matchId)));
+        traded++;
+      }
+    } catch (e) {
+      errors.push(`refrags: ${e instanceof Error ? e.message : e}`);
+    }
+  }
   // Rate the new rounds now, not on the next visitor's page load.
   if (added) ratings();
   jobRan('history', {
     error: errors.length ? errors.join('; ') : null,
-    note: `${added} new round${added === 1 ? '' : 's'}, ${h.roundCount()} stored${snap != null ? `; snapshot of ${snap} changed players` : ''}`,
+    note: `${added} new round${added === 1 ? '' : 's'}, ${h.roundCount()} stored, ${traded} read for refrags${snap != null ? `; snapshot of ${snap} changed players` : ''}`,
   });
 }
 
