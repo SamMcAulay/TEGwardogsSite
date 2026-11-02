@@ -426,6 +426,11 @@ async function orgBoard(period: Period): Promise<{ rows: WBoardRow[]; stale: boo
   return { rows: board.kept, stale: board.stale || banned.stale };
 }
 
+/** Season-two players' names by Steam id (staff balance page: names and clan tags for the stored rounds). */
+export async function seasonNames(): Promise<Map<string, string>> {
+  return new Map((await orgBoard('s2')).rows.map((r) => [r.steamId, r.name]));
+}
+
 /** The clan table for a period: tags carried by MIN_CLAN_SIZE or more players, best first. */
 export async function clans(period: Period, sort: ClanSort = 'kills'): Promise<Loaded<Clan[]>> {
   const { rows, stale } = await orgBoard(period);
