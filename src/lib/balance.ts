@@ -86,6 +86,8 @@ export interface Side {
   kpm: number;
   /** deaths per player-minute */
   dpm: number;
+  /** share of the side's kills made by its three best killers: high means a few carried it */
+  top3: number;
   /** the side's average skill rating going in, and its chance of winning by those ratings */
   rating: number | null;
   chance: number | null;
@@ -130,6 +132,7 @@ export function sidesOf(
       headshots: sum('headshots'),
       kpm: sum('kills') / minutes,
       dpm: sum('deaths') / minutes,
+      top3: lines.map((l) => l.kills).sort((a, b) => b - a).slice(0, 3).reduce((a, k) => a + k, 0) / Math.max(1, sum('kills')),
       rating: p?.rating ?? null,
       chance: p?.chance ?? null,
       teamplay: round.teamplay ? (round.teamplay[name] ?? { deaths: 0, refrags: 0 }) : null,
@@ -215,6 +218,9 @@ export interface SideTotals {
   teamplay: Teamplay | null;
   /** why their big wins happened: reason kind -> rounds */
   why: Partial<Record<ReasonKind, number>>;
+  /** top-3 kill share, averaged over the rounds they won and the rounds they lost */
+  carryWon: number | null;
+  carryLost: number | null;
 }
 
 /** Each faction's totals across many analysed rounds, most wins first. */
@@ -253,7 +259,80 @@ export function sideTotals(rounds: Analysed[]): SideTotals[] {
         expected: avg(s.map((x) => x.chance)),
         teamplay: tp.length ? { deaths: tp.reduce((a, x) => a + x.teamplay!.deaths, 0), refrags: tp.reduce((a, x) => a + x.teamplay!.refrags, 0) } : null,
         why,
+        carryWon: avg(s.filter((x) => wins.some((a) => a.sides.includes(x))).map((x) => x.top3)),
+        carryLost: avg(s.filter((x) => !wins.some((a) => a.sides.includes(x))).map((x) => x.top3)),
       };
     })
     .sort((a, b) => b.wins - a.wins);
+}
+
+export interface Split {
+  key: string;
+  rounds: number;
+  wins: Record<string, number>;
+  /** one-sided or landslide rounds */
+  big: number;
+  closeness: number;
+}
+
+/** Analysed rounds grouped by any key (map, day, hour), in first-seen order unless sorted after. */
+export function splitBy(items: { key: string; a: Analysed }[]): Split[] {
+  const by = new Map<string, Analysed[]>();
+  for (const { key, a } of items) by.set(key, [...(by.get(key) ?? []), a]);
+  return [...by].map(([key, list]) => {
+    const wins: Record<string, number> = {};
+    for (const a of list) wins[a.winner] = (wins[a.winner] ?? 0) + 1;
+    return {
+      key,
+      rounds: list.length,
+      wins,
+      big: list.filter((a) => a.band === 'one-sided' || a.band === 'landslide').length,
+      closeness: mean(list.map((a) => a.closeness)),
+    };
+  });
+}
+
+export interface Loyalty {
+  steamId: string;
+  rounds: number;
+  /** rounds on each side */
+  sides: Record<string, number>;
+  /** the side they played most, and the share of their rounds on it */
+  faction: string;
+  share: number;
+}
+
+/** Each player's rounds per side (2 minutes or more on), most rounds first. */
+export function loyalty(rounds: { lines: { steamId: string; faction: string | null; seconds: number }[] }[]): Loyalty[] {
+  const by = new Map<string, Record<string, number>>();
+  for (const r of rounds) {
+    for (const l of r.lines) {
+      if (!l.faction || l.seconds < 120) continue;
+      const sides = by.get(l.steamId) ?? {};
+      sides[l.faction] = (sides[l.faction] ?? 0) + 1;
+      by.set(l.steamId, sides);
+    }
+  }
+  return [...by]
+    .map(([steamId, sides]) => {
+      const n = Object.values(sides).reduce((a, x) => a + x, 0);
+      const [faction, most] = Object.entries(sides).sort((a, b) => b[1] - a[1])[0];
+      return { steamId, rounds: n, sides, faction, share: most / n };
+    })
+    .sort((a, b) => b.rounds - a.rounds);
+}
+
+/** Players grouped by clan tag: their rounds per side added up. Tags seen on fewer than `minMembers` are left out. */
+export function clanSides(players: Loyalty[], tagOf: (steamId: string) => string | null, minMembers = 3) {
+  const by = new Map<string, { tag: string; members: number; rounds: number; sides: Record<string, number> }>();
+  for (const p of players) {
+    const tag = tagOf(p.steamId);
+    if (!tag) continue;
+    const c = by.get(tag) ?? { tag, members: 0, rounds: 0, sides: {} };
+    c.members++;
+    c.rounds += p.rounds;
+    for (const [f, n] of Object.entries(p.sides)) c.sides[f] = (c.sides[f] ?? 0) + n;
+    by.set(tag, c);
+  }
+  return [...by.values()].filter((c) => c.members >= minMembers).sort((a, b) => b.rounds - a.rounds);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyse, bandOf, closeness, refrags, sideTotals } from './balance';
+import { analyse, bandOf, clanSides, closeness, loyalty, refrags, sideTotals, splitBy } from './balance';
 
 const kill = (t: number, killer: [string, string] | null, victim: [string, string], own = false) => ({
   eventTime: t,
@@ -90,5 +90,40 @@ describe('sideTotals', () => {
     expect(t.map((x) => [x.faction, x.rounds, x.wins, x.bigWins])).toEqual([['A', 3, 2, 1], ['B', 3, 1, 0]]);
     expect(t[0].why).toEqual({ teamwork: 1 });
     expect(t[0].teamplay).toEqual({ deaths: 30, refrags: 6 });
+  });
+});
+
+describe('splits, carry and loyalty', () => {
+  const line = (steamId: string, faction: string, kills: number) => ({ steamId, faction, seconds: 1800, kills, deaths: 5, headshots: 0 });
+  const r = (winner: string, loser: string, top: number, lines: ReturnType<typeof line>[]) => ({
+    startedAt: 0, endedAt: 1800, winner, lines,
+    scores: [{ name: winner, score: 100 }, { name: loser, score: top }],
+  });
+
+  it('works out how much of a side the top three carried', () => {
+    const a = analyse(r('A', 'B', 50, [line('1', 'A', 30), line('2', 'A', 20), line('3', 'A', 10), line('4', 'A', 0), line('5', 'A', 40), line('6', 'B', 5)]))!;
+    expect(a.sides[0].top3).toBe(0.9);
+    expect(sideTotals([a]).find((t) => t.faction === 'A')!.carryWon).toBe(0.9);
+    expect(sideTotals([a]).find((t) => t.faction === 'A')!.carryLost).toBeNull();
+  });
+
+  it('groups rounds by a key', () => {
+    const a = analyse(r('A', 'B', 10, [line('1', 'A', 1), line('2', 'B', 1)]))!;
+    const b = analyse(r('B', 'A', 95, [line('1', 'A', 1), line('2', 'B', 1)]))!;
+    expect(splitBy([{ key: 'Map1', a }, { key: 'Map1', a: b }, { key: 'Map2', a }])).toEqual([
+      { key: 'Map1', rounds: 2, wins: { A: 1, B: 1 }, big: 1, closeness: 52.5 },
+      { key: 'Map2', rounds: 1, wins: { A: 1 }, big: 1, closeness: 10 },
+    ]);
+  });
+
+  it('finds players and clans who keep to one side', () => {
+    const rounds = [
+      { lines: [line('1', 'A', 1), line('2', 'A', 1), line('3', 'B', 1)] },
+      { lines: [line('1', 'A', 1), line('2', 'B', 1), { ...line('3', 'A', 1), seconds: 60 }] },
+    ];
+    const l = loyalty(rounds);
+    expect(l.find((p) => p.steamId === '1')).toEqual({ steamId: '1', rounds: 2, sides: { A: 2 }, faction: 'A', share: 1 });
+    expect(l.find((p) => p.steamId === '3')!.rounds).toBe(1);
+    expect(clanSides(l, (id) => (id === '3' ? null : 'TEG'), 2)).toEqual([{ tag: 'TEG', members: 2, rounds: 4, sides: { A: 3, B: 1 } }]);
   });
 });
