@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Section, safe } from '@/components/section';
-import { Badge, Container, Empty, FactionTag, PageHeader, Panel, Segmented, Stat, StatGrid } from '@/components/ui';
+import { Badge, Container, cx, Empty, FactionTag, PageHeader, Panel, Segmented, Stat, StatGrid } from '@/components/ui';
 import { analyse, BANDS, kdOf, REFRAG_SECONDS, sideTotals, tradeRate, type Analysed, type Band, type ReasonKind, type Side } from '@/lib/balance';
 import { ago, int, pct } from '@/lib/format';
 import { factionColor } from '@/lib/game';
@@ -41,11 +41,11 @@ const share = (n: number | null) => (n == null ? '—' : `${Math.round(n * 100)}
 
 type Row = { serverId: string; server: string; matchId: number; endedAt: number; map: string | null; a: Analysed };
 
-/** Coloured segments, one per faction, sized by value. */
-function Bar({ parts, label }: { parts: { faction: string; value: number }[]; label: string }) {
+/** Coloured segments, one per faction, sized by value. `plain`: no % labels (for bars too short to hold them). */
+function Bar({ parts, label, plain }: { parts: { faction: string; value: number }[]; label: string; plain?: boolean }) {
   const total = parts.reduce((a, p) => a + p.value, 0) || 1;
   return (
-    <div className="flex h-5 w-full overflow-hidden border border-line" role="img" aria-label={label}>
+    <div className={cx('flex w-full overflow-hidden', plain ? 'h-full' : 'h-5 border border-line')} role="img" aria-label={label}>
       {parts.map((p) =>
         p.value > 0 ? (
           <span
@@ -54,7 +54,7 @@ function Bar({ parts, label }: { parts: { faction: string; value: number }[]; la
             style={{ width: `${(p.value / total) * 100}%`, background: factionColor(p.faction) }}
             title={`${p.faction}: ${p.value}`}
           >
-            {p.value / total >= 0.12 ? `${Math.round((p.value / total) * 100)}%` : ''}
+            {!plain && p.value / total >= 0.12 ?`${Math.round((p.value / total) * 100)}%` : ''}
           </span>
         ) : null,
       )}
@@ -224,17 +224,36 @@ export default async function BalancePage({ searchParams }: PageProps<'/admin/ba
                     </Panel>
 
                     <div className="grid gap-4 lg:grid-cols-2">
-                      <Panel title="How close the rounds were" action="Coloured by who won">
-                        <ul className="space-y-3">
+                      <Panel title="How close the rounds were" action="Bar length: share of all rounds · colours: who won">
+                        <ul className="space-y-5">
                           {BANDS.map((b) => {
                             const inBand = rows.filter((r) => r.a.band === b.band);
+                            const won = totals.map((t) => ({ faction: t.faction, value: inBand.filter((r) => r.a.winner === t.faction).length }));
                             return (
-                              <li key={b.band} className="grid grid-cols-[6.5rem_1fr_3rem] items-center gap-3 text-sm">
-                                <Link prefetch={false} href={href({ band: b.band })} className="link">{b.label}</Link>
-                                <div style={{ width: `${(inBand.length / rows.length) * 100}%`, minWidth: inBand.length ? '1.5rem' : 0 }}>
-                                  <Bar label={`${b.label} rounds by winner`} parts={totals.map((t) => ({ faction: t.faction, value: inBand.filter((r) => r.a.winner === t.faction).length }))} />
+                              <li key={b.band} className="space-y-1.5 text-sm">
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <Link prefetch={false} href={href({ band: b.band })} className="link font-medium">{b.label}</Link>
+                                  <span className="text-xs text-muted tabular-nums">
+                                    {int(inBand.length)} rounds · {pct(inBand.length, rows.length, 0)}
+                                  </span>
                                 </div>
-                                <span className="text-right text-xs text-muted tabular-nums">{int(inBand.length)}</span>
+                                <div className="h-4 w-full bg-surface-2">
+                                  {inBand.length > 0 && (
+                                    <div className="h-full" style={{ width: `${(inBand.length / rows.length) * 100}%`, minWidth: '0.5rem' }}>
+                                      <Bar label={`${b.label} rounds by winner`} parts={won} plain />
+                                    </div>
+                                  )}
+                                </div>
+                                {inBand.length > 0 && (
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted tabular-nums">
+                                    {won.filter((w) => w.value).map((w) => (
+                                      <span key={w.faction} className="inline-flex items-center gap-1.5">
+                                        <span className="inline-block size-2" style={{ background: factionColor(w.faction) }} />
+                                        {w.faction} <span className="text-text">{int(w.value)}</span> ({pct(w.value, inBand.length, 0)})
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </li>
                             );
                           })}
