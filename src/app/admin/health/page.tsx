@@ -35,6 +35,7 @@ const JOBS: { name: JobName; label: string; everyS: number; what: string }[] = [
   { name: 'tierSync', label: 'Tier sync', everyS: 120, what: 'Re-checks linked members’ Discord roles' },
   { name: 'rounds', label: 'Round poster', everyS: 120, what: 'Posts finished rounds to Discord' },
   { name: 'alerts', label: 'Alerts', everyS: 60, what: 'Sends /notify DMs when servers fill up or maps start' },
+  { name: 'teamBalance', label: 'Team balancer', everyS: 10, what: 'Evens the sides by skill on servers staff armed on Team balancer' },
 ];
 
 const nowSec = () => Math.floor(Date.now() / 1000);

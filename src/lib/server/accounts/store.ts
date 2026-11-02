@@ -197,7 +197,81 @@ export const MIGRATIONS: string[] = [
   // Everyone starts as having seen what's there already.
   `ALTER TABLE links ADD COLUMN friends_seen_at INTEGER;
    UPDATE links SET friends_seen_at = CAST(strftime('%s', 'now') AS INTEGER);`,
+  // v10: team balancer runs staff arm on /admin/teambalance, and every move each one made (or, in
+  // watch mode, would have made). One move per player per run: the key enforces it.
+  `CREATE TABLE balance_runs (
+     id            INTEGER PRIMARY KEY,
+     server_id     TEXT NOT NULL,
+     mode          TEXT NOT NULL CHECK (mode IN ('watch', 'live')),
+     status        TEXT NOT NULL CHECK (status IN ('armed', 'running', 'done', 'cancelled')),
+     message       TEXT NOT NULL,
+     armed_by      TEXT NOT NULL,
+     armed_by_name TEXT,
+     armed_at      INTEGER NOT NULL,
+     match         TEXT,
+     started_at    INTEGER,
+     ended_at      INTEGER,
+     note          TEXT
+   );
+   CREATE TABLE balance_moves (
+     run_id       INTEGER NOT NULL,
+     steam_id     TEXT NOT NULL,
+     name         TEXT NOT NULL,
+     from_faction TEXT NOT NULL,
+     to_faction   TEXT NOT NULL,
+     kind         TEXT NOT NULL CHECK (kind IN ('start', 'join')),
+     before       REAL NOT NULL,
+     after        REAL NOT NULL,
+     at           INTEGER NOT NULL,
+     sent         INTEGER NOT NULL DEFAULT 0,
+     error        TEXT,
+     PRIMARY KEY (run_id, steam_id)
+   );`,
 ];
+
+export interface BalanceRun {
+  id: number;
+  serverId: string;
+  mode: 'watch' | 'live';
+  status: 'armed' | 'running' | 'done' | 'cancelled';
+  message: string;
+  armedBy: string;
+  armedByName: string | null;
+  armedAt: number;
+  /** the match it balanced */
+  match: string | null;
+  startedAt: number | null;
+  endedAt: number | null;
+  note: string | null;
+}
+
+export interface BalanceMove {
+  steamId: string;
+  name: string;
+  from: string;
+  to: string;
+  kind: 'start' | 'join';
+  before: number;
+  after: number;
+  at: number;
+  sent: boolean;
+  error: string | null;
+}
+
+const toRun = (r: Record<string, unknown>): BalanceRun => ({
+  id: Number(r.id),
+  serverId: String(r.server_id),
+  mode: r.mode as BalanceRun['mode'],
+  status: r.status as BalanceRun['status'],
+  message: String(r.message),
+  armedBy: String(r.armed_by),
+  armedByName: (r.armed_by_name as string | null) ?? null,
+  armedAt: Number(r.armed_at),
+  match: (r.match as string | null) ?? null,
+  startedAt: r.started_at == null ? null : Number(r.started_at),
+  endedAt: r.ended_at == null ? null : Number(r.ended_at),
+  note: (r.note as string | null) ?? null,
+});
 
 /** Friends one member may have, and requests they may have waiting on others at once. */
 export const MAX_FRIENDS = 100;
@@ -283,6 +357,16 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     removeAlerts: db.prepare('DELETE FROM alerts WHERE discord_id = ?'),
     alertState: db.prepare('UPDATE alerts SET armed = ?, last_sent = ? WHERE id = ?'),
     alertFailures: db.prepare('UPDATE alerts SET failures = ? WHERE discord_id = ?'),
+    armRun: db.prepare(`INSERT INTO balance_runs (server_id, mode, status, message, armed_by, armed_by_name, armed_at)
+      VALUES (?, ?, 'armed', ?, ?, ?, ?)`),
+    runs: db.prepare('SELECT * FROM balance_runs ORDER BY id DESC LIMIT ?'),
+    activeRuns: db.prepare("SELECT * FROM balance_runs WHERE status IN ('armed', 'running') ORDER BY id"),
+    startRun: db.prepare("UPDATE balance_runs SET status = 'running', match = ?, started_at = ? WHERE id = ? AND status = 'armed'"),
+    endRun: db.prepare("UPDATE balance_runs SET status = ?, ended_at = ?, note = ? WHERE id = ? AND status IN ('armed', 'running')"),
+    addMove: db.prepare(`INSERT OR IGNORE INTO balance_moves (run_id, steam_id, name, from_faction, to_faction, kind, before, after, at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+    moveResult: db.prepare('UPDATE balance_moves SET sent = ?, error = ? WHERE run_id = ? AND steam_id = ?'),
+    moves: db.prepare('SELECT * FROM balance_moves WHERE run_id = ? ORDER BY at, rowid'),
   };
   const one = (r: unknown) => (r ? toLink(r as Row) : null);
 
@@ -430,6 +514,33 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     setAlertState: (id: number, armed: boolean, lastSent: number | null) => void q.alertState.run(armed ? 1 : 0, lastSent, id),
     /** DMs to the member that failed in a row (0 after one gets through), on all their alerts. */
     setAlertFailures: (discordId: string, failures: number) => void q.alertFailures.run(failures, discordId),
+
+    /** Arms the balancer on a server for its next match; null when one is already armed or running there. */
+    armBalance(r: Pick<BalanceRun, 'serverId' | 'mode' | 'message' | 'armedBy' | 'armedByName'>, at = now()): number | null {
+      if ((q.activeRuns.all() as Record<string, unknown>[]).some((x) => x.server_id === r.serverId)) return null;
+      return Number(q.armRun.run(r.serverId, r.mode, r.message, r.armedBy, r.armedByName, at).lastInsertRowid);
+    },
+    balanceRuns: (limit = 20) => (q.runs.all(limit) as Record<string, unknown>[]).map(toRun),
+    activeBalanceRuns: () => (q.activeRuns.all() as Record<string, unknown>[]).map(toRun),
+    startBalanceRun: (id: number, match: string, at = now()) => void q.startRun.run(match, at, id),
+    endBalanceRun: (id: number, status: 'done' | 'cancelled', note: string | null, at = now()) => Number(q.endRun.run(status, at, note, id).changes) > 0,
+    /** Records a move; false when the player was already moved in this run (once per player per game). */
+    addBalanceMove: (runId: number, m: Omit<BalanceMove, 'at' | 'sent' | 'error'>, at = now()) =>
+      Number(q.addMove.run(runId, m.steamId, m.name, m.from, m.to, m.kind, m.before, m.after, at).changes) > 0,
+    setBalanceMoveResult: (runId: number, steamId: string, sent: boolean, error: string | null) => void q.moveResult.run(sent ? 1 : 0, error, runId, steamId),
+    balanceMoves: (runId: number): BalanceMove[] =>
+      (q.moves.all(runId) as Record<string, unknown>[]).map((r) => ({
+        steamId: String(r.steam_id),
+        name: String(r.name),
+        from: String(r.from_faction),
+        to: String(r.to_faction),
+        kind: r.kind as BalanceMove['kind'],
+        before: Number(r.before),
+        after: Number(r.after),
+        at: Number(r.at),
+        sent: !!r.sent,
+        error: (r.error as string | null) ?? null,
+      })),
     close: () => db.close(),
   };
 }
