@@ -862,6 +862,12 @@ export function replayOf(raw: WKill[], masked: KillRow[]): ReplayData {
   return { people, causes, kills };
 }
 
+/** A finished round's whole kill feed, unmasked: for history.db's refrag counts only, never shown as is. */
+export async function roundKills(serverId: string, matchId: number): Promise<WKill[]> {
+  const v = (await warcon().match(serverId, matchId)).value;
+  return (await matchKills(serverId, matchId, v.kills, TTL.endedMatch)).value.kills;
+}
+
 export async function getMatch(serverId: string, matchId: number) {
   const { list } = await serverList();
   const server = list.find((s) => s.id === serverId);
