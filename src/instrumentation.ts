@@ -18,6 +18,23 @@ export async function register() {
   try {
     const a = accounts();
     if (a) startTierSync(a.env, a.store);
+    if (a) {
+      // Team balancer: idle until staff arm it on /admin/teambalance.
+      const { startTeamBalancer } = await import('./lib/server/teambalance/run');
+      const { warconActor } = await import('./lib/server/warcon/act');
+      const { siteEnv } = await import('./lib/server/warcon/env');
+      const { warcon } = await import('./lib/server/warcon');
+      const { ratings } = await import('./lib/server/history');
+      startTeamBalancer({
+        store: a.store,
+        ratings,
+        act: warconActor(siteEnv().warconBaseUrl, process.env.WARCON_MOVE_TOKEN),
+        live: async (id) => {
+          const v = (await warcon().live(id)).value;
+          return v && { startedAt: v.startedAt, factions: (v.status?.scores ?? []).map((s) => s.name), players: v.players };
+        },
+      });
+    }
     if (a?.env.roundsChannelId) {
       const { startRoundAnnouncer, botPoster } = await import('./lib/server/rounds');
       const { endedRounds, roundDetail } = await import('./lib/server/data');

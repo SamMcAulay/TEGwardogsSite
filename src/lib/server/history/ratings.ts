@@ -102,9 +102,15 @@ export function sideStrength(sides: { faction: string; steamIds: string[] }[], r
     const skills = s.steamIds.map((id) => ratings.get(id)?.skill ?? fresh());
     return { faction: s.faction, players: s.steamIds.length, mu: skills.reduce((a, k) => a + k.mu, 0), sigmaSq: skills.reduce((a, k) => a + k.sigma ** 2, 0) };
   });
+  const odds = chancesOf(teams);
+  return teams.map((t, i) => ({ faction: t.faction, players: t.players, mu: t.mu, chance: odds[i] }));
+}
+
+/** Each side's chance of winning from its summed skill (mu) and summed variance (sigma squared). */
+export function chancesOf(teams: { mu: number; sigmaSq: number }[]): number[] {
   const beta = fresh().sigma / 2;
   const c = Math.sqrt(teams.reduce((a, t) => a + t.sigmaSq + beta ** 2, 0)) || 1;
   const exp = teams.map((t) => Math.exp(t.mu / c));
   const sum = exp.reduce((a, e) => a + e, 0) || 1;
-  return teams.map((t, i) => ({ faction: t.faction, players: t.players, mu: t.mu, chance: exp[i] / sum }));
+  return exp.map((e) => e / sum);
 }
