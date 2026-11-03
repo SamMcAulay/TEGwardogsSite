@@ -3,6 +3,7 @@ import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Badge, Container, Empty, FactionTag, PageHeader, Pagination, Panel, Segmented } from '@/components/ui';
+import { BAND_TONE, bandLabel, bandOf, closeness } from '@/lib/balance';
 import { duration } from '@/lib/format';
 import { factionColor, lightingName, mapName } from '@/lib/game';
 import { Section, safe } from '@/components/section';
@@ -12,6 +13,18 @@ import { one, pageParam, withParams } from '@/lib/url';
 export const metadata: Metadata = { title: 'Match history' };
 
 const nowSec = () => Math.floor(Date.now() / 1000);
+
+/** How close the round was, from the final score alone. */
+function CloseBadge({ scores }: { scores: number[] }) {
+  const c = closeness(scores);
+  if (c == null) return null;
+  const band = bandOf(c);
+  return (
+    <div className="mt-1">
+      <Badge tone={BAND_TONE[band]}>{bandLabel(band)}</Badge>
+    </div>
+  );
+}
 
 export default async function MatchesPage({ searchParams }: PageProps<'/matches'>) {
   const sp = await searchParams;
@@ -97,7 +110,10 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                                 {m.scores.map((s) => s.score).join(' · ')}
                               </div>
                             </td>
-                            <td>{m.endedAt ? <FactionTag name={m.winner} /> : <Badge tone="good">Live</Badge>}</td>
+                            <td>
+                              {m.endedAt ? <FactionTag name={m.winner} /> : <Badge tone="good">Live</Badge>}
+                              {m.endedAt && <CloseBadge scores={m.scores.map((s) => s.score)} />}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

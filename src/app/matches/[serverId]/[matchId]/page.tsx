@@ -7,13 +7,17 @@ import { AutoRefresh } from '@/components/client';
 import { FactionScores, KillList, MapBackdrop } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import { safe } from '@/components/section';
-import { Badge, Container, Empty, Meter, Panel, Stat, StatGrid } from '@/components/ui';
+import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid } from '@/components/ui';
 import { duration, int, kd, metres, money } from '@/lib/format';
 import { causeLabel, factionColor, KOTH_CAP, lightingName, mapName } from '@/lib/game';
 import { MatchReplay } from '@/components/replay';
 import { getMatch } from '@/lib/server/data';
 import type { MatchPlayerRow } from '@/lib/server/views';
 import type { Momentum } from '@/lib/momentum';
+import { analyse, BAND_TONE, bandLabel, kdOf, REFRAG_SECONDS, tradeRate, type Analysed } from '@/lib/balance';
+import { preRounds } from '@/lib/server/history';
+import { history } from '@/lib/server/history/store';
+import { RATED_MIN_PEAK } from '@/lib/server/history/ratings';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -185,6 +189,67 @@ function TeamTable({ name, rows, winner }: { name: string; rows: MatchPlayerRow[
   );
 }
 
+const share = (n: number | null) => (n == null ? '—' : `${Math.round(n * 100)}%`);
+
+/** The balance analysis of a finished round from history.db; null when it isn't stored or drew too few players. */
+function balanceOf(serverId: string, matchId: number): Analysed | null {
+  try {
+    const r = history()?.round(serverId, matchId);
+    if (!r || r.peak < RATED_MIN_PEAK) return null;
+    return analyse(r, preRounds()?.get(`${serverId}:${matchId}`));
+  } catch (e) {
+    // The match page stands without this panel.
+    console.error('[match] balance failed:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** How the sides compared, and the best guess at why the winner won (lib/balance.ts). */
+function SidesCompared({ a }: { a: Analysed }) {
+  const cols = ['Side', 'Avg on', 'K/D', 'Kills/min', 'Avg rating', 'Win chance', `Deaths traded (${REFRAG_SECONDS}s)`];
+  return (
+    <Panel
+      title="Sides compared"
+      flush
+      action={
+        <span className="flex items-center gap-2">
+          Closeness <span className="num text-text">{a.closeness}</span> <Badge tone={BAND_TONE[a.band]}>{bandLabel(a.band)}</Badge>
+        </span>
+      }
+    >
+      <ul className="list-disc space-y-1 border-b border-line py-3 pr-4 pl-8 text-sm">
+        {a.reasons.map((r) => <li key={r.kind}>{r.text}</li>)}
+      </ul>
+      <div className="overflow-x-auto">
+        <table className="table">
+          <thead>
+            <tr>
+              {cols.map((h, i) => <th key={h} className={i ? 'r' : undefined}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {a.sides.map((s) => (
+              <tr key={s.faction} className={s.faction === a.winner ? 'font-semibold' : undefined}>
+                <td><FactionTag name={s.faction} /></td>
+                <td className="r">{s.avgOn.toFixed(1)}</td>
+                <td className="r">{kdOf(s).toFixed(2)}</td>
+                <td className="r">{s.kpm.toFixed(2)}</td>
+                <td className="r">{s.rating == null ? '—' : s.rating.toFixed(1)}</td>
+                <td className="r">{share(s.chance)}</td>
+                <td className="r">{share(tradeRate(s.teamplay))}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="border-t border-line px-4 py-2 text-xs text-muted">
+        Closeness is each losing side&apos;s score as a share of the winner&apos;s. Avg on is players on at once; win chance is from
+        everyone&apos;s skill rating; deaths traded is the share of a side&apos;s deaths a teammate avenged within {REFRAG_SECONDS}s.
+      </p>
+    </Panel>
+  );
+}
+
 export default async function MatchPage({ params }: PageProps<'/matches/[serverId]/[matchId]'>) {
   const { serverId, matchId } = await params;
   const id = Number(matchId);
@@ -209,6 +274,7 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
   const mvp = [...lines].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)[0];
   const live = !match.endedAt;
   const feed = kills.slice(0, 25);
+  const balance = live ? null : balanceOf(serverId, id);
 
   return (
     <>
@@ -261,6 +327,8 @@ export default async function MatchPage({ params }: PageProps<'/matches/[serverI
             sub={longest ? <PlayerLink steamId={longest.steamId} name={longest.name} avatar={false} /> : undefined}
           />
         </StatGrid>
+
+        {balance && <SidesCompared a={balance} />}
 
         <div className="grid gap-4 xl:grid-cols-3">
           {teams.map((f) => (

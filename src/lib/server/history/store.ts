@@ -56,6 +56,8 @@ export const HISTORY_MIGRATIONS = [
   // {faction: {deaths, refrags}} from the round's kill feed (lib/balance.ts); NULL: not read yet,
   // {}: the feed had nothing
   `ALTER TABLE rounds ADD COLUMN teamplay TEXT;`,
+  // {faction: {deaths, traded}} now, counted over 20s: the history job reads every feed again.
+  `UPDATE rounds SET teamplay = NULL;`,
 ];
 
 export interface StoredRound {
@@ -118,6 +120,30 @@ const totalsOf = (r: Record<string, unknown>): BoardTotals =>
   Object.fromEntries(TOTAL_KEYS.map((k) => [k, Number(r[k]) || 0])) as Totals;
 const same = (a: BoardTotals, b: BoardTotals) => TOTAL_KEYS.every((k) => a[k] === b[k]);
 
+const lineOf = (l: Record<string, unknown>): StoredLine => ({
+  steamId: String(l.steam_id),
+  faction: (l.faction as string | null) ?? null,
+  seconds: Number(l.seconds),
+  kills: Number(l.kills),
+  deaths: Number(l.deaths),
+  headshots: Number(l.headshots),
+  result: (l.result as string | null) ?? null,
+});
+
+const roundOf = (r: Record<string, unknown>, lines: StoredLine[]): StoredRound & { lines: StoredLine[] } => ({
+  serverId: String(r.server_id),
+  matchId: Number(r.match_id),
+  startedAt: Number(r.started_at),
+  endedAt: Number(r.ended_at),
+  map: (r.map as string | null) ?? null,
+  lighting: (r.lighting as string | null) ?? null,
+  winner: (r.winner as string | null) ?? null,
+  peak: Number(r.peak),
+  scores: JSON.parse(String(r.scores)) as { name: string; score: number }[],
+  teamplay: r.teamplay ? (JSON.parse(String(r.teamplay)) as Record<string, Teamplay>) : null,
+  lines,
+});
+
 export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATIONS) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000;');
@@ -131,6 +157,8 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
     rounds: db.prepare('SELECT * FROM rounds WHERE ended_at >= ? ORDER BY ended_at, server_id, match_id'),
     lines: db.prepare(`SELECT l.* FROM round_lines l JOIN rounds r USING (server_id, match_id) WHERE r.ended_at >= ?`),
+    round: db.prepare('SELECT * FROM rounds WHERE server_id = ? AND match_id = ?'),
+    roundLines: db.prepare('SELECT * FROM round_lines WHERE server_id = ? AND match_id = ?'),
     roundCount: db.prepare('SELECT count(*) AS n FROM rounds'),
     needTeamplay: db.prepare(`SELECT server_id, match_id FROM rounds WHERE teamplay IS NULL AND peak >= ? AND ended_at <= ?
       ORDER BY ended_at DESC LIMIT ?`),
@@ -187,31 +215,14 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
       const byKey = new Map<string, StoredLine[]>();
       for (const l of q.lines.all(since) as Record<string, unknown>[]) {
         const key = `${l.server_id}:${l.match_id}`;
-        const list = byKey.get(key) ?? [];
-        list.push({
-          steamId: String(l.steam_id),
-          faction: (l.faction as string | null) ?? null,
-          seconds: Number(l.seconds),
-          kills: Number(l.kills),
-          deaths: Number(l.deaths),
-          headshots: Number(l.headshots),
-          result: (l.result as string | null) ?? null,
-        });
-        byKey.set(key, list);
+        byKey.set(key, [...(byKey.get(key) ?? []), lineOf(l)]);
       }
-      return (q.rounds.all(since) as Record<string, unknown>[]).map((r) => ({
-        serverId: String(r.server_id),
-        matchId: Number(r.match_id),
-        startedAt: Number(r.started_at),
-        endedAt: Number(r.ended_at),
-        map: (r.map as string | null) ?? null,
-        lighting: (r.lighting as string | null) ?? null,
-        winner: (r.winner as string | null) ?? null,
-        peak: Number(r.peak),
-        scores: JSON.parse(String(r.scores)) as { name: string; score: number }[],
-        teamplay: r.teamplay ? (JSON.parse(String(r.teamplay)) as Record<string, Teamplay>) : null,
-        lines: byKey.get(`${r.server_id}:${r.match_id}`) ?? [],
-      }));
+      return (q.rounds.all(since) as Record<string, unknown>[]).map((r) => roundOf(r, byKey.get(`${r.server_id}:${r.match_id}`) ?? []));
+    },
+    /** One stored round with its lines; null when it isn't stored. */
+    round(serverId: string, matchId: number): (StoredRound & { lines: StoredLine[] }) | null {
+      const r = q.round.get(serverId, matchId) as Record<string, unknown> | undefined;
+      return r ? roundOf(r, (q.roundLines.all(serverId, matchId) as Record<string, unknown>[]).map(lineOf)) : null;
     },
     /** One player's rounds since `since`, oldest first. */
     playerRounds: (steamId: string, since = 0) =>
