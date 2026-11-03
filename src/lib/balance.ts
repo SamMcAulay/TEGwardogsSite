@@ -3,12 +3,12 @@
 // Pure; the rounds come from history.db, refrags from each round's kill feed.
 
 /** A death is traded (refragged) when a teammate kills the killer within this many seconds. */
-export const REFRAG_SECONDS = 10;
+export const REFRAG_SECONDS = 20;
 
 /** One side's teamwork in a round: deaths to the enemy, and how many of those were traded. */
 export interface Teamplay {
   deaths: number;
-  refrags: number;
+  traded: number;
 }
 
 interface FeedKill {
@@ -20,12 +20,13 @@ interface FeedKill {
 }
 
 /**
- * Each faction's refrags in a round: X dies to K, and within REFRAG_SECONDS a teammate of X
- * kills K. One avenging kill counts once, however many teammates K had just killed.
+ * Each faction's traded deaths in a round: X dies to K, and within REFRAG_SECONDS a teammate of X
+ * kills K. One avenging kill trades every teammate K had just killed, so traded / deaths is a
+ * true share of deaths.
  */
 export function refrags(kills: FeedKill[]): Record<string, Teamplay> {
   const out: Record<string, Teamplay> = {};
-  const side = (f: string) => (out[f] ??= { deaths: 0, refrags: 0 });
+  const side = (f: string) => (out[f] ??= { deaths: 0, traded: 0 });
   // deaths still waiting to be traded: who killed whom, when
   let open: { t: number; killer: string; faction: string }[] = [];
   for (const k of [...kills].sort((a, b) => a.eventTime - b.eventTime)) {
@@ -34,7 +35,7 @@ export function refrags(kills: FeedKill[]): Record<string, Teamplay> {
     open = open.filter((d) => t - d.t <= REFRAG_SECONDS);
     const avenged = open.filter((d) => d.killer === k.victim.steamId && d.faction === k.killer!.faction);
     if (avenged.length) {
-      side(k.killer.faction).refrags++;
+      side(k.killer.faction).traded += avenged.length;
       open = open.filter((d) => !avenged.includes(d));
     }
     side(k.victim.faction).deaths++;
@@ -63,6 +64,9 @@ export const BANDS: { band: Band; label: string; min: number }[] = [
   { band: 'landslide', label: 'Landslide', min: 0 },
 ];
 export const bandOf = (c: number): Band => BANDS.find((b) => c >= b.min)!.band;
+export const bandLabel = (b: Band) => BANDS.find((x) => x.band === b)!.label;
+/** Badge tone per band (components/ui Badge). */
+export const BAND_TONE = { close: 'good', fair: 'default', 'one-sided': 'accent', landslide: 'bad' } as const satisfies Record<Band, string>;
 
 export interface SideLine {
   faction: string | null;
@@ -109,7 +113,7 @@ export interface Analysed {
 }
 
 export const kdOf = (s: { kills: number; deaths: number }) => s.kills / Math.max(1, s.deaths);
-export const tradeRate = (t: Teamplay | null) => (t && t.deaths ? t.refrags / t.deaths : null);
+export const tradeRate = (t: Teamplay | null) => (t && t.deaths ? t.traded / t.deaths : null);
 
 /** One round's sides, worst-to-best not implied: in the round's score order. */
 export function sidesOf(
@@ -135,7 +139,8 @@ export function sidesOf(
       top3: lines.map((l) => l.kills).sort((a, b) => b - a).slice(0, 3).reduce((a, k) => a + k, 0) / Math.max(1, sum('kills')),
       rating: p?.rating ?? null,
       chance: p?.chance ?? null,
-      teamplay: round.teamplay ? (round.teamplay[name] ?? { deaths: 0, refrags: 0 }) : null,
+      // A side missing from the record (or {}: the feed was empty) wasn't measured, not zero.
+      teamplay: round.teamplay?.[name] ?? null,
     };
   });
 }
@@ -178,7 +183,8 @@ export function reasonsFor(sides: Side[], winner: string, band: Band): Reason[] 
   if (w.chance != null && fair - w.chance >= 0.1) {
     out.push({ kind: 'upset', text: `Upset: ratings gave ${winner} only ${pc(w.chance)} going in.` });
   }
-  if (!out.some((r) => r.kind !== 'upset')) {
+  // An upset already says the sides weren't even; claiming they were would contradict it.
+  if (!out.length) {
     out.push(
       band === 'close' || band === 'fair'
         ? { kind: 'even', text: 'Evenly matched on numbers, skill and gunfights.' }
@@ -257,7 +263,7 @@ export function sideTotals(rounds: Analysed[]): SideTotals[] {
         kpm: mean(s.map((x) => x.kpm)),
         rating: avg(s.map((x) => x.rating)),
         expected: avg(s.map((x) => x.chance)),
-        teamplay: tp.length ? { deaths: tp.reduce((a, x) => a + x.teamplay!.deaths, 0), refrags: tp.reduce((a, x) => a + x.teamplay!.refrags, 0) } : null,
+        teamplay: tp.length ? { deaths: tp.reduce((a, x) => a + x.teamplay!.deaths, 0), traded: tp.reduce((a, x) => a + x.teamplay!.traded, 0) } : null,
         why,
         carryWon: avg(s.filter((x) => wins.some((a) => a.sides.includes(x))).map((x) => x.top3)),
         carryLost: avg(s.filter((x) => !wins.some((a) => a.sides.includes(x))).map((x) => x.top3)),
@@ -335,4 +341,33 @@ export function clanSides(players: Loyalty[], tagOf: (steamId: string) => string
     by.set(tag, c);
   }
   return [...by.values()].filter((c) => c.members >= minMembers).sort((a, b) => b.rounds - a.rounds);
+}
+
+export interface Calibration {
+  /** favourite's chance going in: from (inclusive) to (exclusive) */
+  from: number;
+  to: number;
+  rounds: number;
+  /** what the ratings said, averaged, and how often the favourite really won */
+  predicted: number;
+  won: number;
+}
+
+const CALIBRATION_EDGES = [0, 0.4, 0.5, 0.6, 0.7, 1.01];
+
+/**
+ * Do the ratings pick winners? Rounds grouped by the favourite's chance going in. Well-calibrated
+ * ratings win about as often as they predict in every group; empty groups are left out.
+ */
+export function calibration(rounds: Analysed[]): Calibration[] {
+  const out = CALIBRATION_EDGES.slice(1).map((to, i) => ({ from: CALIBRATION_EDGES[i], to, rounds: 0, predicted: 0, won: 0 }));
+  for (const a of rounds) {
+    if (a.sides.some((s) => s.chance == null)) continue;
+    const fav = a.sides.reduce((x, s) => (s.chance! > x.chance! ? s : x));
+    const b = out.find((g) => fav.chance! >= g.from && fav.chance! < g.to)!;
+    b.rounds++;
+    b.predicted += fav.chance!;
+    if (fav.faction === a.winner) b.won++;
+  }
+  return out.filter((g) => g.rounds).map((g) => ({ ...g, predicted: g.predicted / g.rounds, won: g.won / g.rounds }));
 }

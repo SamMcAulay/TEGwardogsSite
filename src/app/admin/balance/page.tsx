@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { Section, safe } from '@/components/section';
 import { Badge, Container, cx, Empty, FactionTag, PageHeader, Panel, Segmented, Stat, StatGrid } from '@/components/ui';
 import type { ReactNode } from 'react';
-import { analyse, BANDS, clanSides, kdOf, loyalty, REFRAG_SECONDS, sideTotals, splitBy, tradeRate, type Analysed, type Band, type ReasonKind, type Side, type Split } from '@/lib/balance';
+import { analyse, BAND_TONE, bandLabel, BANDS, calibration, clanSides, kdOf, loyalty, REFRAG_SECONDS, sideTotals, splitBy, tradeRate, type Analysed, type Band, type ReasonKind, type Side, type Split } from '@/lib/balance';
 import { clanTag } from '@/lib/clans';
 import { ago, int, pct } from '@/lib/format';
 import { factionColor } from '@/lib/game';
@@ -36,8 +36,6 @@ const WHY: Record<ReasonKind, string> = {
   even: 'Even stats (comms / objective)',
   upset: 'Upset',
 };
-const BAND_TONE: Record<Band, 'good' | 'default' | 'accent' | 'bad'> = { close: 'good', fair: 'default', 'one-sided': 'accent', landslide: 'bad' };
-const bandLabel = (b: Band) => BANDS.find((x) => x.band === b)!.label;
 const f2 = (n: number) => n.toFixed(2);
 const share = (n: number | null) => (n == null ? '—' : `${Math.round(n * 100)}%`);
 
@@ -47,6 +45,8 @@ const LOYAL_MIN_ROUNDS = 10;
 const LOYAL_SHARE = 0.6;
 const LOYAL_LIST_MAX = 40;
 const HOUR_BLOCK = 3;
+const p100 = (n: number) => Math.round(n * 100);
+const bucketLabel = (g: { from: number; to: number }) => (!g.from ? `under ${p100(g.to)}%` : g.to > 1 ? `${p100(g.from)}%+` : `${p100(g.from)}–${p100(g.to)}%`);
 const dayOf = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
 
 /** Coloured segments, one per faction, sized by value. `plain`: no % labels (for bars too short to hold them). */
@@ -126,7 +126,7 @@ function SideTable({ sides, winner }: { sides: Side[]; winner: string }) {
       <table className="w-full text-sm tabular-nums">
         <thead className="text-left text-xs text-muted">
           <tr>
-            {['Side', 'Score', 'Players', 'Avg on', 'K / D', 'K/D', 'Kills/min', 'Deaths/min', 'HS %', 'Avg rating', 'Win chance', 'Top 3 share', `Refrags (${REFRAG_SECONDS}s)`].map((h) => (
+            {['Side', 'Score', 'Players', 'Avg on', 'K / D', 'K/D', 'Kills/min', 'Deaths/min', 'HS %', 'Avg rating', 'Win chance', 'Top 3 share', `Deaths traded (${REFRAG_SECONDS}s)`].map((h) => (
               <th key={h} className="px-3 py-2 font-normal whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -147,7 +147,7 @@ function SideTable({ sides, winner }: { sides: Side[]; winner: string }) {
               <td className="px-3 py-2">{share(s.chance)}</td>
               <td className="px-3 py-2">{share(s.top3)}</td>
               <td className="px-3 py-2 whitespace-nowrap">
-                {s.teamplay ? `${int(s.teamplay.refrags)} · ${share(tradeRate(s.teamplay))} of deaths` : 'not read yet'}
+                {s.teamplay ? `${int(s.teamplay.traded)} of ${int(s.teamplay.deaths)} · ${share(tradeRate(s.teamplay))}` : '—'}
               </td>
             </tr>
           ))}
@@ -210,6 +210,7 @@ export default async function BalancePage({ searchParams }: PageProps<'/admin/ba
             const totals = sideTotals(rows.map((r) => r.a));
             const big = rows.filter((r) => r.a.band === 'one-sided' || r.a.band === 'landslide');
             const withFeed = rows.filter((r) => r.a.sides.some((s) => s.teamplay)).length;
+            const cal = calibration(rows.map((r) => r.a));
             const listed = (band ? rows.filter((r) => r.a.band === band) : rows).slice(0, ROUND_LIST_MAX);
             const factions = totals.map((t) => t.faction);
             const perServer = splitBy(rows.map((r) => ({ key: r.server, a: r.a }))).sort((x, y) => servers.findIndex((s) => s.shortName === x.key) - servers.findIndex((s) => s.shortName === y.key));
@@ -244,11 +245,16 @@ export default async function BalancePage({ searchParams }: PageProps<'/admin/ba
                   skill rating as it stood when the round started. A refrag is a teammate killing your killer within{' '}
                   {REFRAG_SECONDS} seconds: more of them means a side playing closer together.
                 </p>
-                <StatGrid className="grid-cols-2 sm:grid-cols-4">
+                <StatGrid className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                   <Stat label="Rounds" value={int(rows.length)} />
+                  <Stat
+                    label="Most wins"
+                    value={totals[0] ? pct(totals[0].wins, totals[0].rounds, 0) : '—'}
+                    sub={totals[0] ? `${totals[0].faction}; even is ${pct(1, totals.length, 0)}` : undefined}
+                  />
                   <Stat label="Average closeness" value={rows.length ? Math.round(rows.reduce((a, r) => a + r.a.closeness, 0) / rows.length) : '—'} accent />
                   <Stat label="One-sided or landslide" value={pct(big.length, rows.length, 0)} sub={`${int(big.length)} rounds`} />
-                  <Stat label="Refrags read" value={pct(withFeed, rows.length, 0)} sub="of rounds; older ones fill in" />
+                  <Stat label="Kill feed read" value={pct(withFeed, rows.length, 0)} sub="of rounds; the rest have no feed or aren't read yet" />
                 </StatGrid>
 
                 {!rows.length ? (
@@ -299,6 +305,48 @@ export default async function BalancePage({ searchParams }: PageProps<'/admin/ba
                           </tbody>
                         </table>
                       </div>
+                    </Panel>
+
+                    <Panel title="Do the ratings pick the winner?" flush action="Rounds grouped by the favourite's chance going in">
+                      <Help flush>
+                        Each row is rounds where the side the ratings favoured had about that chance. If the ratings are right, the
+                        favourite wins about as often as predicted in every row. Wins well below the prediction mean the ratings
+                        overrate the favourite, so &ldquo;Stacked on skill&rdquo; and the team balancer lean on numbers that are too
+                        strong; well above, and they underrate it. Rows with few rounds swing on luck. The ratings count everyone who
+                        played the round, late joiners included.
+                      </Help>
+                      {cal.length ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm tabular-nums">
+                            <thead className="text-left text-xs text-muted">
+                              <tr>
+                                {['Favourite\'s chance', 'Rounds', 'Predicted', 'Favourite won', ''].map((h) => (
+                                  <th key={h} className="px-4 py-2 font-normal whitespace-nowrap">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-line">
+                              {cal.map((g) => (
+                                <tr key={g.from}>
+                                  <td className="px-4 py-2 whitespace-nowrap">{bucketLabel(g)}</td>
+                                  <td className="px-4 py-2">{int(g.rounds)}</td>
+                                  <td className="px-4 py-2">{share(g.predicted)}</td>
+                                  <td className="px-4 py-2 font-semibold">{share(g.won)}</td>
+                                  <td className="w-1/3 px-4 py-2">
+                                    <div className="relative h-3 bg-surface-2" role="img" aria-label={`Predicted ${share(g.predicted)}, won ${share(g.won)}`}>
+                                      <div className="h-full bg-accent" style={{ width: `${g.won * 100}%` }} />
+                                      <div className="absolute inset-y-[-3px] w-0.5 bg-text" style={{ left: `${g.predicted * 100}%` }} title="Predicted" />
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          <p className="border-t border-line px-4 py-2 text-xs text-muted">Bar: how often the favourite won · line: what the ratings predicted.</p>
+                        </div>
+                      ) : (
+                        <Empty>No rated rounds in this period.</Empty>
+                      )}
                     </Panel>
 
                     <div className="grid gap-4 lg:grid-cols-2">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyse, bandOf, clanSides, closeness, loyalty, refrags, sideTotals, splitBy } from './balance';
+import { analyse, bandOf, calibration, clanSides, closeness, loyalty, refrags, sideTotals, splitBy } from './balance';
 
 const kill = (t: number, killer: [string, string] | null, victim: [string, string], own = false) => ({
   eventTime: t,
@@ -22,23 +22,23 @@ describe('closeness', () => {
 });
 
 describe('refrags', () => {
-  it('counts a teammate killing the killer within the window, once per avenging kill', () => {
+  it('counts every death traded when a teammate kills the killer within the window', () => {
     const r = refrags([
       // newest first, as Warcon sends them
       kill(30, ['b1', 'B'], ['a3', 'A']), // a3 dies; never avenged
-      kill(12, ['a2', 'A'], ['b1', 'B']), // a2 avenges a1 and a4 together: one refrag
+      kill(12, ['a2', 'A'], ['b1', 'B']), // a2 avenges a1 and a4 together: two deaths traded
       kill(8, ['b1', 'B'], ['a4', 'A']),
       kill(5, ['b1', 'B'], ['a1', 'A']),
       kill(4, ['a1', 'A'], ['a5', 'A'], true), // team kill: ignored
-      kill(50, ['a2', 'A'], ['b1', 'B']), // 20s after a3: too late
+      kill(51, ['a2', 'A'], ['b1', 'B']), // 21s after a3: too late
     ]);
-    expect(r.A).toEqual({ deaths: 3, refrags: 1 });
-    expect(r.B).toEqual({ deaths: 2, refrags: 0 });
+    expect(r.A).toEqual({ deaths: 3, traded: 2 });
+    expect(r.B).toEqual({ deaths: 2, traded: 0 });
   });
 
   it('does not count killing someone other than the killer', () => {
     const r = refrags([kill(1, ['b1', 'B'], ['a1', 'A']), kill(2, ['a2', 'A'], ['b2', 'B'])]);
-    expect(r.A.refrags).toBe(0);
+    expect(r.A.traded).toBe(0);
   });
 });
 
@@ -84,12 +84,12 @@ describe('sideTotals', () => {
       startedAt: 0, endedAt: 1800, winner,
       scores: [{ name: winner, score: 100 }, { name: winner === 'A' ? 'B' : 'A', score: top }],
       lines: [line('A'), line('B')],
-      teamplay: { A: { deaths: 10, refrags: 2 }, B: { deaths: 10, refrags: 1 } },
+      teamplay: { A: { deaths: 10, traded: 2 }, B: { deaths: 10, traded: 1 } },
     });
     const t = sideTotals([analyse(r('A', 10))!, analyse(r('A', 95))!, analyse(r('B', 90))!]);
     expect(t.map((x) => [x.faction, x.rounds, x.wins, x.bigWins])).toEqual([['A', 3, 2, 1], ['B', 3, 1, 0]]);
     expect(t[0].why).toEqual({ teamwork: 1 });
-    expect(t[0].teamplay).toEqual({ deaths: 30, refrags: 6 });
+    expect(t[0].teamplay).toEqual({ deaths: 30, traded: 6 });
   });
 });
 
@@ -125,5 +125,32 @@ describe('splits, carry and loyalty', () => {
     expect(l.find((p) => p.steamId === '1')).toEqual({ steamId: '1', rounds: 2, sides: { A: 2 }, faction: 'A', share: 1 });
     expect(l.find((p) => p.steamId === '3')!.rounds).toBe(1);
     expect(clanSides(l, (id) => (id === '3' ? null : 'TEG'), 2)).toEqual([{ tag: 'TEG', members: 2, rounds: 4, sides: { A: 3, B: 1 } }]);
+  });
+});
+
+describe('teamplay and calibration', () => {
+  it('does not call an upset even', () => {
+    const a = analyse(r('B', null), pre(0.9))!;
+    expect(a.reasons.map((x) => x.kind)).toEqual(['upset']);
+  });
+
+  const line = (faction: string) => ({ faction, seconds: 1800, kills: 10, deaths: 10, headshots: 0 });
+  const r = (winner: string, teamplay: Record<string, { deaths: number; traded: number }> | null) => ({
+    startedAt: 0, endedAt: 1800, winner, teamplay,
+    scores: [{ name: 'A', score: 100 }, { name: 'B', score: 50 }],
+    lines: [line('A'), line('B')],
+  });
+  const pre = (a: number) => [{ faction: 'A', rating: 20, chance: a }, { faction: 'B', rating: 20, chance: 1 - a }];
+
+  it('treats an empty kill feed as not measured, not as zero', () => {
+    expect(analyse(r('A', {}))!.sides.map((s) => s.teamplay)).toEqual([null, null]);
+    expect(sideTotals([analyse(r('A', {}))!])[0].teamplay).toBeNull();
+  });
+
+  it('groups rounds by the favourite and checks how often it won', () => {
+    const rounds = [analyse(r('A', null), pre(0.65))!, analyse(r('B', null), pre(0.62))!, analyse(r('A', null), pre(0.45))!, analyse(r('A', null))!];
+    const c = calibration(rounds);
+    expect(c.map((g) => [g.from, g.rounds, g.won])).toEqual([[0.5, 1, 0], [0.6, 2, 0.5]]);
+    expect(c[1].predicted).toBeCloseTo(0.635);
   });
 });
