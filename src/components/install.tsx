@@ -193,7 +193,7 @@ export function InstallLink() {
   const how = usePlatform();
   if (!how) return null;
   return (
-    <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN))} className="link text-left text-muted">
+    <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN))} className="pill">
       Install the app
     </button>
   );
