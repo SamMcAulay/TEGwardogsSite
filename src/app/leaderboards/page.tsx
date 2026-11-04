@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
+import { StatsTabs } from '@/components/stats-tabs';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, RankMove, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
 import Link from 'next/link';
@@ -78,14 +79,9 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
   return (
     <>
       <PageHeader
-        eyebrow="Rankings"
+        eyebrow={<StatsTabs current="leaderboards" />}
         title="Leaderboards"
         description="Ranked from every round played on TEG servers. Days are UTC."
-        actions={
-          <Link href="/skill" className="link font-display text-sm font-semibold uppercase tracking-[0.1em] text-accent">
-            Skill rating →
-          </Link>
-        }
       >
         <div className="mt-8 flex flex-col gap-3">
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">

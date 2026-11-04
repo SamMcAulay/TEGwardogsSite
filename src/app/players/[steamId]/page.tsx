@@ -185,6 +185,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
                   <span className="font-mono text-xs">{steamId}</span>
                   <CopyButton value={steamId} label="Copy ID" />
+                  <Link href={`/compare?a=${steamId}`} className="pill !px-3 !py-1 text-xs">
+                    Compare with…
+                  </Link>
                   {stand.linked && stand.relation !== 'self' && (
                     <FriendButton steamId={steamId} relation={stand.relation} signedIn={!!me?.steamId} />
                   )}
