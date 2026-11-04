@@ -3,6 +3,7 @@ import { TimezoneNote } from '@/components/local-time';
 import { Rubik, Unbounded } from 'next/font/google';
 import Link from 'next/link';
 import { type Me, SiteNav } from '@/components/nav';
+import { Scene } from '@/components/scene/scene';
 import { InstallLink, InstallPrompt } from '@/components/install';
 import { Container } from '@/components/ui';
 import { accountsEnv } from '@/lib/server/accounts/env';
@@ -66,6 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to content
         </a>
+        <Scene />
         <SiteNav me={me} />
         <InstallPrompt auto />
         {SITE_NOTICE && (
@@ -77,10 +79,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </Container>
         )}
         {/* Room at the bottom on phones so the tab bar never covers the last card. */}
-        <main id="main" className="flex-1 pb-28 md:pb-0">
+        <main id="main" className="relative z-10 flex-1 pb-28 md:pb-0">
           {children}
         </main>
-        <footer className="mt-16 pb-28 md:pb-0">
+        <footer className="relative z-10 mt-16 pb-28 md:pb-0">
           <Container className="flex flex-col gap-4 py-8 text-sm text-muted md:flex-row md:items-center md:justify-between">
             <p className="max-w-xl text-xs leading-relaxed">
               Community statistics for The Employed Gamers WARDOGS servers, taken from the TEG Warcon panel. Not affiliated with
