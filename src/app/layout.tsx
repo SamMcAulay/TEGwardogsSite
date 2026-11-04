@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { TimezoneNote } from '@/components/local-time';
-import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
-import { cookies } from 'next/headers';
+import { Rubik, Unbounded } from 'next/font/google';
 import Link from 'next/link';
 import { NavLinks } from '@/components/client';
-import { ThemePrompt, ThemeToggle } from '@/components/theme';
 import { InstallLink, InstallPrompt } from '@/components/install';
 import { Container, StatusDot } from '@/components/ui';
 import { int } from '@/lib/format';
@@ -12,20 +10,13 @@ import { safe } from '@/components/section';
 import { accountsEnv } from '@/lib/server/accounts/env';
 import { viewer } from '@/lib/server/accounts';
 import { getServers } from '@/lib/server/data';
-import { parseTheme, THEME_CHROME, THEME_COOKIE } from '@/lib/theme';
 import './globals.css';
 
 // Every page reads live data from Warcon (cached briefly in memory).
 export const dynamic = 'force-dynamic';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
-const barlow = Barlow_Condensed({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-barlow',
-  display: 'swap',
-});
-const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains', display: 'swap' });
+const rubik = Rubik({ subsets: ['latin'], weight: ['400', '500', '700', '800'], variable: '--font-rubik', display: 'swap' });
+const unbounded = Unbounded({ subsets: ['latin'], weight: ['800', '900'], variable: '--font-unbounded', display: 'swap' });
 
 export const metadata: Metadata = {
   title: { default: 'TEG WARDOGS — Servers, Stats & Leaderboards', template: '%s · TEG WARDOGS' },
@@ -43,14 +34,7 @@ export const metadata: Metadata = {
 const KEEP_INSTALL_OFFER =
   "addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installOffer=e})";
 
-/** The visitor's saved theme, or null before they've picked one. */
-async function savedTheme() {
-  return parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-}
-
-export async function generateViewport(): Promise<Viewport> {
-  return { themeColor: THEME_CHROME[(await savedTheme()) ?? 'dark'] };
-}
+export const viewport: Viewport = { themeColor: '#16131c' };
 
 function Logo() {
   return (
@@ -101,12 +85,11 @@ function linkingOn(): boolean {
 const SITE_NOTICE: string | null = null;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const theme = await savedTheme();
   const me = linkingOn() ? await viewer() : null;
   const account = !linkingOn() ? null : me?.steamId ? { href: `/players/${me.steamId}`, label: 'My profile' } : { href: '/account', label: 'Account' };
   return (
-    <html lang="en" data-theme={theme ?? 'dark'} className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
-      <body className="flex min-h-screen flex-col">
+    <html lang="en" className={`${rubik.variable} ${unbounded.variable}`}>
+      <body className="sky flex min-h-screen flex-col">
         <script dangerouslySetInnerHTML={{ __html: KEEP_INSTALL_OFFER }} />
         <a
           href="#main"
@@ -144,13 +127,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 </Link>
               )}
             </div>
-            {/* Always on show, mobile included: sits beside the menu button there. */}
-            <ThemeToggle initial={theme ?? 'dark'} className="-ml-3" />
           </Container>
         </header>
-        {!theme && <ThemePrompt />}
-        {/* Never on top of the theme question: a first visit gets that, the next one this. */}
-        <InstallPrompt auto={!!theme} />
+        <InstallPrompt auto />
         {SITE_NOTICE && (
           <div role="note" className="border-b border-accent/30 bg-accent-soft">
             <Container className="py-2 text-[13px] leading-snug text-text/90">
