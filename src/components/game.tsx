@@ -5,7 +5,7 @@ import { causeInfo, factionColor, lightingName, mapArt, mapName, type MapWins, R
 import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
 
 import { PlayerName } from './tier';
-import { cx, StatusDot } from './ui';
+import { cx, RaceLane, StatusDot } from './ui';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -34,41 +34,21 @@ export function MapBackdrop({ map, className }: { map: string | null | undefined
   );
 }
 
+/** Every team racing to the winning score (King of the Hill: first to 100). */
 export function FactionScores({
   scores,
   cap,
   compact,
 }: {
   scores: FactionScore[];
-  /** points that fill the bar; without one, the leading score does */
+  /** points that win the round; KOTH_CAP when the server doesn't say */
   cap?: number | null;
   compact?: boolean;
 }) {
-  const lead = Math.max(...scores.map((s) => s.score));
-  const full = cap ?? Math.max(lead, 1);
   return (
-    <div className={cx('grid', compact ? 'gap-1.5' : 'gap-3')}>
+    <div className={cx('grid', compact ? 'gap-2' : 'gap-3')}>
       {scores.map((f) => (
-        <div key={f.name} className="grid grid-cols-[88px_1fr_36px] items-center gap-3">
-          <span
-            className={cx(
-              'truncate font-display text-[12px] font-semibold uppercase tracking-[0.1em]',
-              f.score === lead && lead > 0 ? 'text-text' : 'text-muted',
-            )}
-          >
-            {f.name}
-          </span>
-          <div className={cx('relative bg-surface-3', compact ? 'h-1.5' : 'h-2.5')}>
-            <div
-              className="absolute inset-y-0 left-0 transition-[width] duration-700"
-              style={{
-                width: `${Math.min(100, (f.score / full) * 100)}%`,
-                background: factionColor(f.name, f.colorHex),
-              }}
-            />
-          </div>
-          <span className="num text-right font-display text-sm font-bold">{f.score}</span>
-        </div>
+        <RaceLane key={f.name} name={f.name} score={f.score} cap={cap} color={factionColor(f.name, f.colorHex)} />
       ))}
     </div>
   );
@@ -82,42 +62,36 @@ export function ServerCard({ server }: { server: ServerRow }) {
   const pop = server.playerCount;
   const max = st?.players.max ?? 0;
   const fill = max ? pop / max : 0;
+  const art = st ? mapArt(mapName(st.map), st.lighting) : null;
   return (
-    <Link
-      href={`/servers/${server.slug}`}
-      className="group panel relative block overflow-hidden transition-colors hover:border-line-strong"
-    >
-      <div className="relative h-28 overflow-hidden border-b border-line bg-surface-2 text-accent/60">
-        <MapBackdrop map={st?.map} className={server.online ? '' : 'opacity-30 grayscale'} />
-        <div className="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/40 to-transparent" />
-        <div className="absolute top-3 left-4 flex items-center gap-2">
+    <Link href={`/servers/${server.slug}`} className="group panel relative block overflow-hidden">
+      <div className="relative h-28 overflow-hidden border-b-[3px] border-edge bg-surface-2 text-accent/60">
+        {art ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={art} alt="" loading="lazy" decoding="async" className={cx('absolute inset-0 h-full w-full object-cover', !server.online && 'opacity-30 grayscale')} />
+        ) : (
+          <MapBackdrop map={st?.map} className={server.online ? '' : 'opacity-30 grayscale'} />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-bg/85 to-bg/20" />
+        <div className="absolute top-3 left-5 flex items-center gap-2 text-sm font-bold">
           <StatusDot online={server.online} />
-          <span className="eyebrow !text-[0.66rem] !text-text">{statusLabel(server.online)}</span>
+          {statusLabel(server.online)}
         </div>
-        <div className="absolute top-3 right-4 eyebrow !text-[0.66rem]">
-          {REGION_NAMES[server.region] ?? server.region}
-        </div>
-        <div className="absolute bottom-3 left-4">
-          <div className="display text-2xl leading-none text-text">{server.shortName}</div>
-        </div>
-        <div className="absolute right-4 bottom-3 text-right">
-          <div className="display num text-2xl leading-none text-text">
-            {server.online ? pop : '—'}
-            <span className="text-base text-dim">/{max || '—'}</span>
-          </div>
-          <div className="mt-1 text-xs text-muted">players</div>
+        <div className="absolute top-3 right-5 text-sm font-bold text-muted">{REGION_NAMES[server.region] ?? server.region}</div>
+        <div className="display absolute bottom-3 left-5 text-2xl">{server.shortName}</div>
+        <div className="display num absolute right-5 bottom-3 text-2xl">
+          {server.online ? pop : '—'}
+          <span className="text-base text-muted">/{max || '—'}</span>
         </div>
       </div>
-      <div className="h-0.5 bg-surface-3">
-        <div className="h-full bg-accent transition-[width] duration-700" style={{ width: `${fill * 100}%` }} />
-      </div>
-      <div className="px-4 py-3.5">
+      <div className="px-5 pt-4 pb-5">
+        <div className="mb-4 h-4 overflow-hidden rounded-full border-[3px] border-edge bg-bg">
+          <div className="h-full rounded-full bg-accent transition-[width] duration-700" style={{ width: `${fill * 100}%` }} />
+        </div>
         {st ? (
           <>
-            <div className="mb-3 flex items-center justify-between text-xs">
-              <span className="font-display text-[13px] font-semibold uppercase tracking-[0.08em] text-text">
-                {mapName(st.map)}
-              </span>
+            <div className="mb-3 flex items-center justify-between text-sm">
+              <span className="font-extrabold">{mapName(st.map)}</span>
               <span className="text-muted">
                 King of the Hill{st.matchSeconds != null && <span className="num"> · {clock(st.matchSeconds)}</span>}
               </span>
@@ -157,8 +131,8 @@ export function KillTags({ tags }: { tags: string }) {
         <span
           key={t}
           className={cx(
-            'border px-1 font-display text-[10px] font-bold tracking-[0.08em]',
-            t === 'Headshot' ? 'border-accent/50 text-accent' : 'border-line-strong text-muted',
+            'rounded-md border-2 border-edge px-1.5 text-[11px] font-extrabold',
+            t === 'Headshot' ? 'bg-accent text-on-fill' : 'bg-surface-2 text-muted',
           )}
         >
           {TAG_LABEL[t]}
@@ -181,7 +155,7 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
       <span className="truncate text-muted">{name ?? 'World'}</span>
     );
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,160px)_minmax(0,1fr)_auto]">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 py-2.5 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,160px)_minmax(0,1fr)_auto]">
       <div className="flex min-w-0 items-center gap-2 sm:justify-end">
         {k.suicide
           ? who(k.victimSteamId, k.victimName)
@@ -190,14 +164,14 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
         <span className="min-w-0 truncate sm:hidden">{k.suicide ? null : who(k.victimSteamId, k.victimName)}</span>
       </div>
       <div className="hidden min-w-0 items-center justify-center gap-1.5 sm:flex">
-        <span className="truncate border border-line bg-surface-2 px-2 py-0.5 text-center text-xs text-muted">
+        <span className="truncate rounded-full border-2 border-edge bg-surface-2 px-2.5 py-0.5 text-center text-xs font-bold text-muted">
           {k.suicide ? 'Suicide' : weapon.label}
         </span>
         <KillTags tags={k.tags} />
       </div>
       <div className="hidden min-w-0 items-center gap-2 sm:flex">
         {k.suicide ? <span className="text-dim">—</span> : who(k.victimSteamId, k.victimName)}
-        {k.teamkill ? <span className="font-display text-[10px] font-bold tracking-[0.08em] text-bad">TK</span> : null}
+        {k.teamkill ? <span className="text-xs font-extrabold text-bad">TK</span> : null}
       </div>
       <div className="flex items-center justify-end gap-3 text-xs text-dim">
         {k.distance != null && !k.suicide && <span className="num hidden md:inline">{metres(k.distance)}</span>}
@@ -211,7 +185,7 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
 export function KillList({ kills, showServer }: { kills: KillRow[]; showServer?: boolean }) {
   const now = nowSec();
   return (
-    <div className="divide-y divide-line">
+    <div className="divide-y-2 divide-dashed divide-line">
       {kills.map((k) => (
         <KillLine key={k.eventId} k={k} showServer={showServer} now={now} />
       ))}
