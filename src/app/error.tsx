@@ -10,7 +10,7 @@ export default function ErrorPage({ reset }: { error: Error & { digest?: string 
       <p className="mt-3 text-muted">The page failed to load. It has been logged; trying again usually helps.</p>
       <button
         onClick={reset}
-        className="mt-8 bg-accent px-5 py-2.5 font-display text-sm font-bold uppercase tracking-[0.12em] text-accent-ink"
+        className="pill pill-on mt-8 text-sm"
       >
         Try again
       </button>

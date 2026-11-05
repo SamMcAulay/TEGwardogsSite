@@ -2,12 +2,12 @@ import type { Metadata } from 'next';
 import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Badge, Container, Empty, FactionTag, PageHeader, Pagination, Panel, Segmented } from '@/components/ui';
+import { Badge, Container, Empty, FactionTag, PageHeader, Pagination, Panel, RaceLane, Segmented } from '@/components/ui';
 import { BAND_TONE, bandLabel, bandOf, closeness } from '@/lib/balance';
-import { duration } from '@/lib/format';
+import { duration, pct } from '@/lib/format';
 import { factionColor, lightingName, mapName } from '@/lib/game';
 import { Section, safe } from '@/components/section';
-import { getServers, listMatches } from '@/lib/server/data';
+import { factionWins, getServers, listMatches } from '@/lib/server/data';
 import { one, pageParam, withParams } from '@/lib/url';
 
 export const metadata: Metadata = { title: 'Match history' };
@@ -33,7 +33,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
   const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
   // Older pages only per server (spec §12.5): "All servers" is the newest 50 merged.
   const page = serverId ? pageParam(one(sp.page)) : 1;
-  const matches = await safe(listMatches({ serverId, page }));
+  const [matches, wins] = await Promise.all([safe(listMatches({ serverId, page })), safe(factionWins(null))]);
   if (!(matches instanceof Error) && !matches.missing.length && page > matches.data.pages) {
     redirect(withParams('/matches', sp, { page: matches.data.pages > 1 ? matches.data.pages : null }));
   }
@@ -61,7 +61,26 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
           />
         </div>
       </PageHeader>
-      <Container className="mt-8">
+      <Container className="mt-8 space-y-6">
+        <Panel title="Faction wins · 7 days">
+          <Section loaded={wins}>
+            {(data) => {
+              const total = data.reduce((a, w) => a + w.wins, 0);
+              return data.length ? (
+                <>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {data.map((w) => (
+                      <RaceLane key={w.faction} name={`${w.faction} · ${pct(w.wins, total, 0)}`} score={w.wins} cap={total} color={factionColor(w.faction)} />
+                    ))}
+                  </div>
+                  <p className="mt-4 text-sm text-muted">Rounds won across all servers, matches with at least two players.</p>
+                </>
+              ) : (
+                <Empty>No finished matches yet.</Empty>
+              );
+            }}
+          </Section>
+        </Panel>
         <Panel title="Rounds" flush>
           <Section loaded={matches}>
             {({ rows, pages }) => (

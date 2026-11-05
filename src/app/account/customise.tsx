@@ -48,7 +48,7 @@ export function Customise({ link, name, totals, status }: { link: AccountLink; n
             rows={2}
             defaultValue={link.bio ?? ''}
             placeholder="Sniper main, EU evenings. Say hi."
-            className="mt-2 block w-full resize-none border border-line-strong bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+            className="mt-2 block w-full resize-none rounded-2xl border-[3px] border-edge bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <span className="mt-1 block text-xs text-dim">Up to {BIO_MAX} characters. No links. Staff can remove bios that break the rules.</span>
         </label>
@@ -58,7 +58,7 @@ export function Customise({ link, name, totals, status }: { link: AccountLink; n
           <div className="mt-2 flex flex-wrap gap-2">
             <label className="cursor-pointer">
               <input type="radio" name="colour" value="" defaultChecked={!link.colour} className="peer sr-only" />
-              <span className="flex h-9 items-center border border-line-strong px-3 text-xs text-muted peer-checked:border-text peer-checked:text-text peer-focus-visible:outline">
+              <span className="flex h-9 items-center rounded-2xl border-[3px] border-edge px-3 text-xs text-muted peer-checked:border-text peer-checked:text-text peer-focus-visible:outline">
                 Default
               </span>
             </label>
@@ -82,7 +82,7 @@ export function Customise({ link, name, totals, status }: { link: AccountLink; n
               {earned.map((m) => (
                 <label key={m.key} className="cursor-pointer">
                   <input type="checkbox" name="featured" value={m.key} defaultChecked={link.featured.includes(m.key)} className="peer sr-only" />
-                  <span className="block border border-line-strong px-2 py-1 text-xs text-muted peer-checked:border-accent peer-checked:bg-accent-soft peer-checked:text-accent">
+                  <span className="block rounded-2xl border-[3px] border-edge px-2 py-1 text-xs text-muted peer-checked:border-accent peer-checked:bg-accent-soft peer-checked:text-accent">
                     {m.earned}
                   </span>
                 </label>

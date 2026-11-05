@@ -142,7 +142,7 @@ export default async function ClanPage({ params, searchParams }: PageProps<'/cla
                           <select
                             name="vs"
                             defaultValue={vs ? clanSlug(vs.tag) : ''}
-                            className="min-w-0 flex-1 border border-line-strong bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
+                            className="min-w-0 flex-1 rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
                             aria-label="Clan to compare with"
                           >
                             <option value="">Pick a clan…</option>
@@ -152,7 +152,7 @@ export default async function ClanPage({ params, searchParams }: PageProps<'/cla
                               </option>
                             ))}
                           </select>
-                          <button className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em] text-muted hover:border-accent hover:text-text">
+                          <button className="pill !py-1  text-xs">
                             Compare
                           </button>
                         </form>
@@ -161,8 +161,8 @@ export default async function ClanPage({ params, searchParams }: PageProps<'/cla
                             <thead>
                               <tr className="text-xs text-muted">
                                 <th className="pb-2 text-left font-normal" />
-                                <th className="pb-2 text-right font-display font-bold tracking-[0.06em] text-text">[{tag}]</th>
-                                <th className="pb-2 text-right font-display font-bold tracking-[0.06em] text-text">
+                                <th className="pb-2 text-right font-display font-bold text-text">[{tag}]</th>
+                                <th className="pb-2 text-right font-display font-bold text-text">
                                   <Link href={withParams(`/clans/${clanSlug(vs.tag)}`, {}, { period: period === '30d' ? null : period, vs: clanSlug(tag) })} className="link">
                                     [{vs.tag}]
                                   </Link>

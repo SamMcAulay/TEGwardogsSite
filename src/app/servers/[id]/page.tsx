@@ -23,7 +23,7 @@ import {
   StatusDot,
 } from '@/components/ui';
 import { ago, clock, compact, duration, int, kd, money } from '@/lib/format';
-import { factionColor, lightingName, mapName, REGION_NAMES, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from '@/lib/game';
+import { factionColor, lightingName, mapArt, mapName, REGION_NAMES, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServer, leaderboard, listMatches, liveTags, mapWinRates, population, populationHistory, recentKills, serverTotals } from '@/lib/server/data';
 import type { LiveTag } from '@/lib/server/live-tags';
@@ -75,7 +75,7 @@ function Scoreboard({
         className="flex items-center justify-between border-b border-line px-3 py-2.5"
         style={{ boxShadow: `inset 3px 0 0 ${factionColor(faction)}` }}
       >
-        <span className="display text-sm tracking-[0.08em]">{faction}</span>
+        <span className="display text-sm">{faction}</span>
         <span className="num text-xs text-muted">
           {players.length} players
           {score != null && (
@@ -168,6 +168,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
     liveStrength(server.id).catch(() => null),
   ]);
   const st = server.status;
+  const roundArt = st ? mapArt(mapName(st.map), st.lighting) : null;
   // The server doesn't report match time any more; the round in progress started when its match did.
   const liveRound = server.online && !(matches instanceof Error) ? matches.data.rows.find((m) => m.endedAt == null) : undefined;
   // An empty server's round sits open for hours with nobody scoring: no clock for that.
@@ -209,7 +210,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
         actions={
           server.joinCode && (
             <div className="flex flex-col items-start gap-1.5 md:items-end">
-              <div className="flex items-center gap-2 border border-line-strong bg-surface px-3 py-2">
+              <div className="flex items-center gap-2 rounded-2xl border-[3px] border-edge bg-surface px-3 py-2">
                 <span className="eyebrow !text-[0.66rem]">Join code</span>
                 <code className="font-mono text-xs text-text">{server.joinCode}</code>
                 <CopyButton value={server.joinCode} />
@@ -264,10 +265,16 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Panel>
         )}
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        {/* Lead card: the round being played, over its map. */}
+        <div className="grid items-start gap-6 lg:grid-cols-[1.4fr_1fr]">
           <Panel title="Current round" className="relative overflow-hidden">
             <div className="pointer-events-none absolute inset-0 text-accent/20">
-              <MapBackdrop map={st?.map} />
+              {roundArt ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={roundArt} alt="" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+              ) : (
+                <MapBackdrop map={st?.map} />
+              )}
               <div className="absolute inset-0 bg-gradient-to-b from-surface/40 to-surface" />
             </div>
             <div className="relative">
@@ -275,7 +282,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                 <>
                   <div className="mb-5 flex items-end justify-between">
                     <div>
-                      <div className="display text-3xl leading-none">{mapName(st.map)}</div>
+                      <div className="display text-4xl">{mapName(st.map)}</div>
                       {st.scoreCap != null && (
                         <div className="mt-1 text-xs text-muted">First to {st.scoreCap} points</div>
                       )}
@@ -290,7 +297,6 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Panel>
           <Panel
             title="Population"
-            className="lg:col-span-2"
             action={
               <Segmented
                 label="Range"

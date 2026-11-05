@@ -29,15 +29,16 @@ async function resolve(input: string | undefined): Promise<Resolved | null> {
   return (await safe(getPlayer(steamId))) ?? 'none';
 }
 
-function PlayerInput({ name, value, label }: { name: string; value?: string; label: string }) {
+function PlayerInput({ name, value, label, autoFocus }: { name: string; value?: string; label: string; autoFocus?: boolean }) {
   return (
     <label className="block min-w-0 flex-1">
       <span className="eyebrow mb-1.5 block !text-[0.66rem]">{label}</span>
       <input
         name={name}
         defaultValue={value}
+        autoFocus={autoFocus}
         placeholder="Name or Steam ID"
-        className="h-11 w-full border border-line-strong bg-bg px-3 text-sm outline-none focus:border-accent"
+        className="h-11 w-full rounded-2xl border-[3px] border-edge bg-bg px-3 text-sm outline-none focus:border-accent"
       />
     </label>
   );
@@ -95,8 +96,9 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
       >
         <form className="mt-8 flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-end">
           <PlayerInput name="a" value={qa} label="Player one" />
-          <PlayerInput name="b" value={qb} label="Player two" />
-          <button className="h-11 bg-accent px-6 font-display text-sm font-bold uppercase tracking-[0.12em] text-accent-ink hover:opacity-90">
+          {/* Arriving from a profile's "Compare with…": only the second player is left to pick. */}
+          <PlayerInput name="b" value={qb} label="Player two" autoFocus={!!qa && !qb} />
+          <button className="pill pill-on h-11">
             Compare
           </button>
         </form>

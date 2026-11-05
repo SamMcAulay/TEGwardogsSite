@@ -108,7 +108,7 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
                   <div className="border-t border-line px-4 py-3 text-right">
                     <Link
                       href={withParams('/feed', sp, { before: oldest })}
-                      className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em] transition-colors hover:border-accent hover:text-accent"
+                      className="pill !py-1  text-xs"
                     >
                       Older →
                     </Link>

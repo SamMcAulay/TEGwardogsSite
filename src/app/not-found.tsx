@@ -10,13 +10,13 @@ export default function NotFound() {
       <div className="mt-8 flex justify-center gap-3">
         <Link
           href="/"
-          className="bg-accent px-5 py-2.5 font-display text-sm font-bold uppercase tracking-[0.12em] text-accent-ink"
+          className="pill pill-on  text-sm"
         >
           Home
         </Link>
         <Link
           href="/players"
-          className="border border-line-strong px-5 py-2.5 font-display text-sm font-bold uppercase tracking-[0.12em] hover:border-accent"
+          className="pill !py-1  text-sm"
         >
           Find a player
         </Link>

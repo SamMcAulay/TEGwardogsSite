@@ -46,7 +46,7 @@ export default async function TeamKillsPage({ searchParams }: PageProps<'/admin/
             return (
               <div className="space-y-4">
                 {capped.length > 0 && (
-                  <p role="status" className="border border-line-strong bg-surface-2 px-4 py-3 text-sm text-muted">
+                  <p role="status" className="rounded-2xl border-[3px] border-edge bg-surface-2 px-4 py-3 text-sm text-muted">
                     {capped.join(', ')} had more than {int(TEAMKILL_PAGES * 200)} team kills in this period; only the
                     newest are counted.
                   </p>

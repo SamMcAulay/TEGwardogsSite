@@ -48,3 +48,6 @@ next-env.d.ts
 
 # linked accounts (local runs)
 /data/
+
+# brainstorm mockups and plan workspaces
+.superpowers/

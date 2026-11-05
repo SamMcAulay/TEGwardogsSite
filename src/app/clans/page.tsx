@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Section, safe } from '@/components/section';
+import { StatsTabs } from '@/components/stats-tabs';
 import { Container, Empty, PageHeader, Panel, RankCell, Segmented } from '@/components/ui';
 import { clanSlug } from '@/lib/clans';
 import { ago, duration, int, kd, pct } from '@/lib/format';
@@ -43,7 +44,7 @@ export default async function ClansPage({ searchParams }: PageProps<'/clans'>) {
   return (
     <>
       <PageHeader
-        eyebrow="Rankings"
+        eyebrow={<StatsTabs current="clans" />}
         title="Clans"
         description={`Players grouped by the clan tag in their in-game name, like [TEG] or (NOR). A tag needs at least ${MIN_CLAN_SIZE} players on the board to count.`}
       >
@@ -92,7 +93,7 @@ export default async function ClansPage({ searchParams }: PageProps<'/clans'>) {
                             <RankCell rank={i + 1} />
                           </td>
                           <td>
-                            <Link href={withParams(`/clans/${clanSlug(c.tag)}`, {}, { period: period === '30d' ? null : period })} className="link font-display text-base font-bold tracking-[0.06em]">
+                            <Link href={withParams(`/clans/${clanSlug(c.tag)}`, {}, { period: period === '30d' ? null : period })} className="link font-display text-base font-bold">
                               [{c.tag}]
                             </Link>
                           </td>

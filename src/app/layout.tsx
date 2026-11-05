@@ -1,31 +1,22 @@
 import type { Metadata, Viewport } from 'next';
 import { TimezoneNote } from '@/components/local-time';
-import { Barlow_Condensed, Inter, JetBrains_Mono } from 'next/font/google';
-import { cookies } from 'next/headers';
+import { Rubik, Unbounded } from 'next/font/google';
 import Link from 'next/link';
-import { NavLinks } from '@/components/client';
-import { ThemePrompt, ThemeToggle } from '@/components/theme';
+import { type Me, SiteNav } from '@/components/nav';
+import { PageSwipe } from '@/components/page-swipe';
+import { Scene } from '@/components/scene/scene';
 import { InstallLink, InstallPrompt } from '@/components/install';
-import { Container, StatusDot } from '@/components/ui';
-import { int } from '@/lib/format';
-import { safe } from '@/components/section';
+import { Container } from '@/components/ui';
 import { accountsEnv } from '@/lib/server/accounts/env';
 import { viewer } from '@/lib/server/accounts';
-import { getServers } from '@/lib/server/data';
-import { parseTheme, THEME_CHROME, THEME_COOKIE } from '@/lib/theme';
+import { playerName } from '@/lib/server/data';
 import './globals.css';
 
 // Every page reads live data from Warcon (cached briefly in memory).
 export const dynamic = 'force-dynamic';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
-const barlow = Barlow_Condensed({
-  subsets: ['latin'],
-  weight: ['500', '600', '700'],
-  variable: '--font-barlow',
-  display: 'swap',
-});
-const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-jetbrains', display: 'swap' });
+const rubik = Rubik({ subsets: ['latin'], weight: ['400', '500', '700', '800'], variable: '--font-rubik', display: 'swap' });
+const unbounded = Unbounded({ subsets: ['latin'], weight: ['800', '900'], variable: '--font-unbounded', display: 'swap' });
 
 export const metadata: Metadata = {
   title: { default: 'TEG WARDOGS — Servers, Stats & Leaderboards', template: '%s · TEG WARDOGS' },
@@ -43,50 +34,7 @@ export const metadata: Metadata = {
 const KEEP_INSTALL_OFFER =
   "addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installOffer=e})";
 
-/** The visitor's saved theme, or null before they've picked one. */
-async function savedTheme() {
-  return parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-}
-
-export async function generateViewport(): Promise<Viewport> {
-  return { themeColor: THEME_CHROME[(await savedTheme()) ?? 'dark'] };
-}
-
-function Logo() {
-  return (
-    <Link href="/" className="flex shrink-0 items-center gap-3" aria-label="TEG WARDOGS home">
-      <span className="flex h-8 items-center bg-accent px-2 font-display text-lg leading-none font-bold tracking-[0.04em] text-accent-ink">
-        TEG
-      </span>
-      <span className="hidden flex-col leading-none sm:flex">
-        <span className="display text-[17px] tracking-[0.14em]">Wardogs</span>
-        <span className="mt-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.2em] text-dim">
-          Stats &amp; Servers
-        </span>
-      </span>
-    </Link>
-  );
-}
-
-async function OnlinePill() {
-  const loaded = await safe(getServers());
-  if (loaded instanceof Error) return null;
-  const servers = loaded.data;
-  const online = servers.reduce((a, s) => a + s.playerCount, 0);
-  const up = servers.filter((s) => s.online).length;
-  const unknown = servers.filter((s) => s.online === null).length;
-  return (
-    <Link
-      href="/servers"
-      className="hidden items-center gap-2 border border-line-strong px-3 py-1.5 text-xs transition-colors hover:border-accent md:flex"
-      title={`${up}/${servers.length} servers online${unknown ? ` · ${unknown} status unavailable` : ''}`}
-    >
-      <StatusDot online={up > 0 ? true : unknown ? null : false} />
-      <span className="num font-semibold text-text">{int(online)}</span>
-      <span className="text-muted">online</span>
-    </Link>
-  );
-}
+export const viewport: Viewport = { themeColor: '#16131c' };
 
 /** Account linking is optional; its links only show once it's configured. */
 function linkingOn(): boolean {
@@ -100,107 +48,52 @@ function linkingOn(): boolean {
 /** A heads-up shown under the header on every page; null takes it down. */
 const SITE_NOTICE: string | null = null;
 
+/** The viewer for the nav: undefined when linking is off, null when signed out. */
+async function navViewer(): Promise<Me> {
+  if (!linkingOn()) return undefined;
+  const me = await viewer();
+  if (!me) return null;
+  return { steamId: me.steamId, name: me.steamId ? await playerName(me.steamId).catch(() => null) : null };
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const theme = await savedTheme();
-  const me = linkingOn() ? await viewer() : null;
-  const account = !linkingOn() ? null : me?.steamId ? { href: `/players/${me.steamId}`, label: 'My profile' } : { href: '/account', label: 'Account' };
+  const me = await navViewer();
   return (
-    <html lang="en" data-theme={theme ?? 'dark'} className={`${inter.variable} ${barlow.variable} ${mono.variable}`}>
-      <body className="flex min-h-screen flex-col">
+    <html lang="en" className={`${rubik.variable} ${unbounded.variable}`}>
+      <body className="sky flex min-h-screen flex-col">
         <script dangerouslySetInnerHTML={{ __html: KEEP_INSTALL_OFFER }} />
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-ink"
+          className="pill pill-on sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus: focus: focus: focus:"
         >
           Skip to content
         </a>
-        <header className="sticky top-0 z-30 border-b border-line bg-bg/90 backdrop-blur">
-          <Container className="relative flex h-14 items-center gap-6">
-            <Logo />
-            <NavLinks account={account} friends={!!me?.steamId} />
-            {/* Wide screens only; narrower ones have all of this in the menu. The online count needs
-                the room of a 2xl screen; search is the players page, a click away. */}
-            <div className="ml-auto hidden items-center gap-3 xl:flex">
-              <Link
-                href="/players"
-                aria-label="Search players"
-                className="flex size-8 items-center justify-center border border-line-strong text-muted transition-colors hover:border-accent hover:text-text"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <circle cx="7" cy="7" r="5" />
-                  <path d="M11 11l3.5 3.5" />
-                </svg>
-              </Link>
-              <div className="hidden 2xl:flex">
-                <OnlinePill />
-              </div>
-              {account && (
-                <Link
-                  href={account.href}
-                  prefetch={false}
-                  className="border border-line-strong px-3 py-1.5 font-display text-xs font-semibold whitespace-nowrap uppercase tracking-[0.1em] text-muted transition-colors hover:border-accent hover:text-text"
-                >
-                  {account.label}
-                </Link>
-              )}
-            </div>
-            {/* Always on show, mobile included: sits beside the menu button there. */}
-            <ThemeToggle initial={theme ?? 'dark'} className="-ml-3" />
-          </Container>
-        </header>
-        {!theme && <ThemePrompt />}
-        {/* Never on top of the theme question: a first visit gets that, the next one this. */}
-        <InstallPrompt auto={!!theme} />
+        <Scene />
+        <SiteNav me={me} />
+        <InstallPrompt auto />
         {SITE_NOTICE && (
-          <div role="note" className="border-b border-accent/30 bg-accent-soft">
-            <Container className="py-2 text-[13px] leading-snug text-text/90">
-              <span className="mr-2 font-display text-xs font-semibold uppercase tracking-[0.1em] text-accent">Heads up</span>
+          <Container className="mt-4">
+            <div role="note" className="panel px-5 py-3 text-sm">
+              <span className="mr-2 font-extrabold text-accent">Heads up</span>
               {SITE_NOTICE}
-            </Container>
-          </div>
-        )}
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <footer className="mt-20 border-t border-line">
-          <Container className="flex flex-col gap-6 py-10 text-sm text-muted md:flex-row md:items-start md:justify-between">
-            <div className="max-w-md">
-              <Logo />
-              <p className="mt-4 text-xs leading-relaxed text-dim">
-                Community statistics for The Employed Gamers WARDOGS servers, taken from the TEG Warcon panel. Not affiliated with Bulkhead or Team17. <TimezoneNote />
-              </p>
             </div>
-            <div className="grid grid-cols-2 gap-x-12 gap-y-2 text-[13px]">
-              <Link className="link text-muted" href="/servers">
-                Servers
-              </Link>
-              <Link className="link text-muted" href="/matches">
-                Match history
-              </Link>
-              <Link className="link text-muted" href="/leaderboards">
-                Leaderboards
-              </Link>
-              <Link className="link text-muted" href="/records">
-                Records
-              </Link>
-              <Link className="link text-muted" href="/players">
-                Players
-              </Link>
-              <Link className="link text-muted" href="/compare">
-                Compare players
-              </Link>
-              <Link className="link text-muted" href="/feed">
-                Kill feed
-              </Link>
-              <Link className="link text-muted" href="/api-docs">
+          </Container>
+        )}
+        {/* Room at the bottom on phones so the tab bar never covers the last card. */}
+        <main id="main" className="relative z-10 flex-1 pb-28 md:pb-0">
+          <PageSwipe>{children}</PageSwipe>
+        </main>
+        <footer className="relative z-10 mt-16 pb-28 md:pb-0">
+          <Container className="flex flex-col gap-4 py-8 text-sm text-muted md:flex-row md:items-center md:justify-between">
+            <p className="max-w-xl text-xs leading-relaxed">
+              Community statistics for The Employed Gamers WARDOGS servers, taken from the TEG Warcon panel. Not affiliated with
+              Bulkhead or Team17. <TimezoneNote />
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Link className="pill" href="/api-docs">
                 Public API
               </Link>
               <InstallLink />
-              {linkingOn() && (
-                <Link className="link text-muted" href="/account">
-                  Link Discord &amp; Steam
-                </Link>
-              )}
             </div>
           </Container>
         </footer>

@@ -1,29 +1,37 @@
 @import 'tailwindcss';
 
 /*
- * Brand tokens. Everything on the site reads colour from here, so re-skinning to a different
- * palette is a change to these blocks only. Dark is the default; <html data-theme> picks (see
- * src/lib/theme.ts), and a data-theme on any element re-themes just that element (the picker's previews).
+ * Brand tokens: dark only, the "chunky" look (docs/superpowers/specs/2026-11-04-visual-overhaul-design.md).
+ * Everything on the site reads colour from here. Cards are slightly see-through so the sky-island
+ * scene behind the page reads faintly through them.
  */
-:root,
-[data-theme='dark'] {
-  --bg: #07090c;
-  --surface: #0d1015;
-  --surface-2: #12161c;
-  --surface-3: #181d25;
-  --line: #1c222b;
-  --line-strong: #29313c;
-  --text: #e8ebef;
-  --muted: #8d97a5;
-  --dim: #5c6674;
-  --accent: #f2b33d;
-  --accent-ink: #1a1204;
-  --accent-soft: rgb(242 179 61 / 0.12);
-  --good: #4cc38a;
-  --bad: #e5484d;
-  --valkyra: #d86060;
-  --lonestar: #5b95d8;
-  --manticore: #7bc462;
+:root {
+  --bg: #16131c;
+  --surface: rgb(34 30 43 / 0.86);
+  --surface-2: #2c2738;
+  --surface-3: #36304a;
+  --line: rgb(255 255 255 / 0.08);
+  --line-strong: #07060a;
+  --edge: #07060a;
+  --text: #f4efe6;
+  --muted: #b3aabd;
+  --dim: #8f869e;
+  --accent: #ffc93c;
+  --accent-ink: #1d1606;
+  --accent-soft: rgb(255 201 60 / 0.14);
+  --good: #2fd4a3;
+  --bad: #ff6b6b;
+  --valkyra: #ff6b6b;
+  --lonestar: #5aa8ff;
+  --manticore: #8be36b;
+  /* dark text that sits on a faction or accent fill */
+  --on-fill: #140f0a;
+  /* the sunset behind the scene */
+  --sky-top: #120e26;
+  --sky-1: #251a4d;
+  --sky-2: #4a2f72;
+  --sky-3: #9b4f86;
+  --sky-low: #f08a6c;
   /* Discord status: Premium's gold and Verified's pearl, for tags and names */
   --premium: #e8b54a;
   --premium-hi: #fff1bf;
@@ -40,63 +48,18 @@
   --pink-1: #ff6fb5;
   --pink-2: #ffb3dd;
   --pink-3: #d68cff;
-  /* time-of-day tints behind the map rotation banners; the same in both themes */
+  /* time-of-day tints behind the map rotation banners */
   --sky-rain: #5f6f7d;
   --sky-dawn: #e0874a;
   --sky-clear: #4f98d8;
   color-scheme: dark;
 }
 
-/* Light: the same roles, darkened where colour sits on white so text keeps its contrast. */
-[data-theme='light'] {
-  --bg: #f3f4f6;
-  --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --surface-3: #e7eaef;
-  --line: #dfe3e9;
-  --line-strong: #c6cdd6;
-  --text: #11151b;
-  --muted: #4f5a68;
-  --dim: #6b7583;
-  --accent: #b87700;
-  --accent-ink: #ffffff;
-  --accent-soft: rgb(184 119 0 / 0.1);
-  --good: #1e9a5d;
-  --bad: #d4343a;
-  --valkyra: #c94a4a;
-  --lonestar: #3f7cc4;
-  --manticore: #4f9a3a;
-  --premium: #b8860b;
-  --premium-hi: #dcaa3c;
-  --premium-deep: #7a5208;
-  --verified: #2f6fd0;
-  --pearl-1: #2f6fd0;
-  --pearl-2: #7258d6;
-  --pearl-3: #1a9583;
-  --aurora-1: #0f9e6e;
-  --aurora-2: #0a8ab3;
-  --aurora-3: #6a4fe0;
-  --pink-1: #d6337f;
-  --pink-2: #c2408a;
-  --pink-3: #9d45d0;
-  color-scheme: light;
-}
-
-/*
- * A Premium or staff profile's colour (--profile, set by profileThemeStyle) re-points the accent
- * tokens. On light it's darkened so it still reads as text on white.
- */
+/* A Premium or staff profile's colour (--profile, set by profileThemeStyle) re-points the accent. */
 .profile-theme {
   --accent: var(--profile);
-  --accent-soft: color-mix(in srgb, var(--profile) 12%, transparent);
-  --accent-ink: #0b0d10;
-  --line-strong: color-mix(in srgb, var(--profile) 28%, #29313c);
-}
-[data-theme='light'] .profile-theme {
-  --accent: color-mix(in srgb, var(--profile) 62%, #000);
   --accent-soft: color-mix(in srgb, var(--profile) 14%, transparent);
-  --accent-ink: #ffffff;
-  --line-strong: color-mix(in srgb, var(--profile) 40%, #c6cdd6);
+  --accent-ink: #0b0d10;
 }
 
 @theme inline {
@@ -106,6 +69,7 @@
   --color-surface-3: var(--surface-3);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-edge: var(--edge);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-dim: var(--dim);
@@ -117,25 +81,29 @@
   --color-valkyra: var(--valkyra);
   --color-lonestar: var(--lonestar);
   --color-manticore: var(--manticore);
+  --color-on-fill: var(--on-fill);
   --color-premium: var(--premium);
   --color-verified: var(--verified);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-barlow), var(--font-inter), ui-sans-serif, sans-serif;
-  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
-  --radius-sm: 2px;
-  --radius: 3px;
+  --font-sans: var(--font-rubik), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-unbounded), var(--font-rubik), ui-sans-serif, sans-serif;
+  --font-mono: ui-monospace, monospace;
+  --radius-sm: 10px;
+  --radius: 14px;
 }
 
 html {
-  background: var(--bg);
+  background: var(--sky-top);
 }
 
 body {
-  background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
+}
+
+/* The sunset the scene sits in; fixed so it never scrolls. */
+.sky {
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-1) 30%, var(--sky-2) 55%, var(--sky-3) 78%, var(--sky-low) 100%) fixed;
 }
 
 ::selection {
@@ -144,20 +112,18 @@ body {
 }
 
 @layer components {
-  /* Display type: condensed, uppercase, tracked. Used for headings and labels. */
+  /* Headings and big numbers: heavy, rounded, mixed case. */
   .display {
     font-family: var(--font-display);
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-weight: 800;
+    line-height: 1;
   }
 
+  /* Small labels: plain bold text, never uppercase-tracked. */
   .eyebrow {
-    font-family: var(--font-display);
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    font-size: 0.72rem;
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 0.8rem;
     color: var(--muted);
   }
 
@@ -165,17 +131,52 @@ body {
     font-variant-numeric: tabular-nums;
   }
 
-  .panel {
+  /* Chunky card: thick edge, hard drop shadow, big radius, a little see-through. */
+  .panel,
+  .slab {
     background: var(--surface);
-    border: 1px solid var(--line);
+    border: 3px solid var(--edge);
+    border-radius: 30px;
+    box-shadow: 0 6px 0 var(--edge);
+    backdrop-filter: blur(10px);
   }
 
-  /* Hairline grid used behind hero sections. */
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px),
-      linear-gradient(to bottom, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px);
-    background-size: 48px 48px;
+  /* Thick edge + hard shadow for small things (badges, bars). */
+  .edge {
+    border: 3px solid var(--edge);
+    box-shadow: 0 3px 0 var(--edge);
+  }
+
+  /* Pill buttons and links; they sink when pressed. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 3px solid var(--edge);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    background: var(--surface-2);
+    color: var(--text);
+    box-shadow: 0 4px 0 var(--edge);
+    transition:
+      transform 120ms,
+      box-shadow 120ms;
+    white-space: nowrap;
+  }
+  .pill:hover {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 var(--edge);
+  }
+  .pill:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 var(--edge);
+  }
+  .pill-on {
+    background: var(--accent);
+    color: var(--accent-ink);
   }
 
   .link {
@@ -190,23 +191,20 @@ body {
   .table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
   }
   .table th {
-    font-family: var(--font-display);
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    font-size: 0.68rem;
-    font-weight: 600;
-    color: var(--dim);
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: var(--muted);
     text-align: left;
-    padding: 0.625rem 0.875rem;
-    border-bottom: 1px solid var(--line);
+    padding: 0.7rem 0.9rem;
+    border-bottom: 3px solid var(--edge);
     white-space: nowrap;
   }
   .table td {
-    padding: 0.625rem 0.875rem;
-    border-bottom: 1px solid var(--line);
+    padding: 0.7rem 0.9rem;
+    border-bottom: 2px dashed var(--line);
     white-space: nowrap;
   }
   .table tbody tr {
@@ -221,6 +219,15 @@ body {
   .table .r {
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .pill:hover,
+  .pill:active {
+    transition: none;
+    transform: none;
   }
 }
 
@@ -350,9 +357,6 @@ a:hover > * > .name-premium,
 a:hover > * > .name-verified {
   filter: brightness(1.25);
 }
-[data-theme='light'] :is(.link:hover, a:hover) :is(.name-aurora, .name-pink, .name-premium, .name-verified) {
-  filter: brightness(0.85);
-}
 
 @keyframes name-shine {
   from {
@@ -380,5 +384,54 @@ a:hover > * > .name-verified {
   .live-dot,
   .feed-in {
     animation: none;
+  }
+}
+
+/* Page swipe (components/page-swipe.tsx): old cards out to the left, new ones in from the right,
+   with a little overshoot. The header, tab bar and scene stay put. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(.swipe-out) {
+  animation: swipe-out 320ms cubic-bezier(0.5, -0.4, 0.75, 0.4) both;
+}
+::view-transition-new(.swipe-in) {
+  animation: swipe-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes swipe-out {
+  to {
+    translate: -110vw 0;
+  }
+}
+@keyframes swipe-in {
+  from {
+    translate: 110vw 0;
+  }
+}
+::view-transition-group(site-header),
+::view-transition-group(site-tabbar),
+::view-transition-group(site-scene) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header),
+::view-transition-old(site-tabbar),
+::view-transition-old(site-scene) {
+  display: none;
+}
+::view-transition-new(site-header),
+::view-transition-new(site-tabbar),
+::view-transition-new(site-scene) {
+  animation: none;
+}
+::view-transition-group(site-scene) {
+  z-index: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }

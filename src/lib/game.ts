@@ -159,9 +159,9 @@ export function roundEta(scores: number[], tickSeconds: number | null, cap: numb
 }
 
 export const FACTIONS: Record<string, { color: string; short: string }> = {
-  Valkyra: { color: '#D86060', short: 'VAL' },
-  Lonestar: { color: '#5B95D8', short: 'LON' },
-  Manticore: { color: '#7BC462', short: 'MAN' },
+  Valkyra: { color: '#FF6B6B', short: 'VAL' },
+  Lonestar: { color: '#5AA8FF', short: 'LON' },
+  Manticore: { color: '#8BE36B', short: 'MAN' },
 };
 
 export function factionColor(name: string | null | undefined, fallback = '#8b93a1'): string {
@@ -172,6 +172,11 @@ export function factionColor(name: string | null | undefined, fallback = '#8b93a
  * The faction a player is loyal to: one known faction holding at least `threshold` of their rounds.
  * Warcon only splits a career by rounds, not seconds, so round share stands in for play time.
  */
+/** A rank badge's fill: gold, silver and bronze for the podium, the player's faction below it. */
+export function rankColour(rank: number, faction?: string | null): string {
+  return ['#ffc93c', '#d9d4e0', '#e29b62'][rank - 1] ?? factionColor(faction);
+}
+
 export function mainFaction(factions: { key: string; matches: number }[], threshold = 0.65): string | null {
   const total = factions.reduce((a, f) => a + f.matches, 0);
   if (!total) return null;

@@ -42,7 +42,7 @@ export default function ApiDocsPage() {
         {ENDPOINTS.map((e) => (
           <Panel
             key={e.path}
-            title={<span className="font-mono text-sm normal-case tracking-normal">GET {e.path}</span>}
+            title={<span className="font-mono text-sm">GET {e.path}</span>}
           >
             <p className="text-sm text-muted">{e.about}</p>
             <a href={e.example} className="mt-3 inline-block font-mono text-xs text-accent hover:underline">

@@ -206,7 +206,7 @@ export function PlayerTrends({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <div role="tablist" aria-label="Trend" className="inline-flex border border-line-strong bg-surface">
+          <div role="tablist" aria-label="Trend" className="inline-flex rounded-2xl border-[3px] border-edge bg-surface">
             {tabs.map((t) => (
               <button
                 key={t.key}
@@ -215,7 +215,7 @@ export function PlayerTrends({
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
                 className={cx(
-                  'px-3 py-1.5 font-display text-[12px] font-semibold whitespace-nowrap uppercase tracking-[0.1em] transition-colors',
+                  'px-3 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors',
                   tab === t.key ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
                 )}
               >
@@ -253,7 +253,7 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
   };
   return (
     <div>
-      <div role="tablist" aria-label="Activity" className="mb-4 inline-flex border border-line-strong bg-surface">
+      <div role="tablist" aria-label="Activity" className="mb-4 inline-flex rounded-2xl border-[3px] border-edge bg-surface">
         {NET_TABS.map((x) => (
           <button
             key={x.key}
@@ -262,7 +262,7 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
             aria-selected={tab === x.key}
             onClick={() => setTab(x.key)}
             className={cx(
-              'px-3 py-1.5 font-display text-[12px] font-semibold whitespace-nowrap uppercase tracking-[0.1em] transition-colors',
+              'px-3 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors',
               tab === x.key ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
             )}
           >

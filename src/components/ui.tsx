@@ -1,23 +1,23 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { factionColor } from '@/lib/game';
+import { BAND_TONE, bandLabel, bandOf, closeness } from '@/lib/balance';
+import { factionColor, KOTH_CAP, rankColour } from '@/lib/game';
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
-const BUTTON = 'inline-flex items-center gap-2 px-4 py-2 font-display text-sm font-semibold uppercase tracking-[0.1em] transition-colors';
 const BUTTONS = {
-  primary: `${BUTTON} bg-accent text-accent-ink hover:brightness-110`,
-  secondary: `${BUTTON} border border-line-strong text-muted hover:border-accent hover:text-text`,
-  danger: `${BUTTON} border border-bad/50 text-bad hover:bg-bad/10`,
+  primary: 'pill pill-on',
+  secondary: 'pill',
+  danger: 'pill !bg-bad !text-on-fill',
 };
 
 /** Classes for a button-styled <button> or <a>. */
 export const buttonClass = (kind: keyof typeof BUTTONS = 'secondary') => BUTTONS[kind];
 
 export function Container({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('mx-auto w-full max-w-[1280px] px-4 sm:px-6', className)}>{children}</div>;
+  return <div className={cx('mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8', className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -34,13 +34,13 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <header className="grid-bg border-b border-line">
-      <Container className="py-10 sm:py-12">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+    <header>
+      <Container className="pt-8 pb-4 sm:pt-10">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             {eyebrow && <div className="eyebrow mb-3 flex items-center gap-2">{eyebrow}</div>}
-            <h1 className="display text-4xl leading-none sm:text-5xl">{title}</h1>
-            {description && <p className="mt-3 max-w-2xl text-[15px] text-muted">{description}</p>}
+            <h1 className="display text-4xl sm:text-5xl">{title}</h1>
+            {description && <p className="mt-3 max-w-2xl text-base text-muted">{description}</p>}
           </div>
           {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
@@ -65,22 +65,43 @@ export function Panel({
   flush?: boolean;
 }) {
   return (
-    <section className={cx('panel min-w-0', className)}>
+    <section className={cx('panel min-w-0 overflow-hidden', className)}>
       {(title || action) && (
-        <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
-          <h2 className="display text-[15px] tracking-[0.06em] text-text">{title}</h2>
-          {action && <div className="text-xs text-muted">{action}</div>}
+        <div className="flex items-center justify-between gap-4 px-6 pt-5 pb-3">
+          <h2 className="display text-xl text-text">{title}</h2>
+          {action && <div className="text-sm text-muted">{action}</div>}
         </div>
       )}
-      <div className={flush ? '' : 'p-4'}>{children}</div>
+      <div className={flush ? 'pb-2' : 'px-6 pt-1 pb-6'}>{children}</div>
     </section>
   );
 }
 
 export function PanelLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="eyebrow !text-[0.66rem] transition-colors hover:!text-accent">
+    <Link href={href} className="text-sm font-bold whitespace-nowrap text-accent transition-opacity hover:opacity-80">
       {children} →
+    </Link>
+  );
+}
+
+/** A pill-shaped link; `on` fills it with the accent. */
+export function Pill({
+  href,
+  on,
+  children,
+  prefetch,
+  className,
+}: {
+  href: string;
+  on?: boolean;
+  children: ReactNode;
+  prefetch?: false;
+  className?: string;
+}) {
+  return (
+    <Link href={href} prefetch={prefetch} aria-current={on ? 'page' : undefined} className={cx('pill', on && 'pill-on', className)}>
+      {children}
     </Link>
   );
 }
@@ -97,17 +118,17 @@ export function Stat({
   accent?: boolean;
 }) {
   return (
-    <div className="min-w-0 bg-surface px-4 py-4">
-      <div className="eyebrow !text-[0.66rem]">{label}</div>
-      <div className={cx('display num mt-1.5 truncate text-[28px] leading-none', accent && 'text-accent')}>{value}</div>
-      {sub && <div className="mt-1.5 truncate text-xs text-muted">{sub}</div>}
+    <div className="min-w-0 px-5 py-4">
+      <div className="eyebrow">{label}</div>
+      <div className={cx('display num mt-2 truncate text-[30px]', accent && 'text-accent')}>{value}</div>
+      {sub && <div className="mt-1.5 truncate text-sm text-muted">{sub}</div>}
     </div>
   );
 }
 
-/** Stat tiles on a hairline grid. */
+/** Stat tiles in one chunky card, split by dashed lines. */
 export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('grid gap-px border border-line bg-line', className)}>{children}</div>;
+  return <div className={cx('panel grid divide-x-2 divide-dashed divide-line', className)}>{children}</div>;
 }
 
 /** online null: status unknown (Warcon didn't answer), drawn as a hollow ring. */
@@ -115,8 +136,8 @@ export function StatusDot({ online, className }: { online: boolean | null; class
   return (
     <span
       className={cx(
-        'inline-block size-2 shrink-0 rounded-full',
-        online === null ? 'border border-dim' : online ? 'live-dot bg-good' : 'bg-dim',
+        'inline-block size-2.5 shrink-0 rounded-full',
+        online === null ? 'border-2 border-dim' : online ? 'live-dot bg-good' : 'bg-dim',
         className,
       )}
       aria-label={online === null ? 'Status unavailable' : online ? 'Online' : 'Offline'}
@@ -134,19 +155,19 @@ export function Badge({
   tone?: 'default' | 'accent' | 'good' | 'bad' | 'admin' | 'premium' | 'verified' | 'lonestar';
 }) {
   const tones = {
-    default: 'border-line-strong text-muted',
-    accent: 'border-accent/40 bg-accent-soft text-accent',
-    good: 'border-good/40 bg-good/10 text-good',
-    bad: 'border-bad/40 bg-bad/10 text-bad',
-    admin: 'border-text/50 bg-text/10 text-text',
-    premium: 'border-premium/50 bg-premium/10 text-premium',
-    verified: 'border-verified/50 bg-verified/10 text-verified',
-    lonestar: 'border-lonestar/50 bg-lonestar/10 text-lonestar',
+    default: 'bg-surface-2 text-text',
+    accent: 'bg-accent text-on-fill',
+    good: 'bg-good text-on-fill',
+    bad: 'bg-bad text-on-fill',
+    admin: 'bg-text text-on-fill',
+    premium: 'bg-premium text-on-fill',
+    verified: 'bg-verified text-on-fill',
+    lonestar: 'bg-lonestar text-on-fill',
   };
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 border px-1.5 py-0.5 font-display text-[11px] font-semibold uppercase tracking-[0.1em]',
+        'inline-flex items-center gap-1.5 rounded-full border-2 border-edge px-2.5 py-0.5 text-xs font-extrabold whitespace-nowrap',
         tones[tone],
         className,
       )}
@@ -160,13 +181,13 @@ export function FactionTag({ name }: { name: string | null | undefined }) {
   if (!name) return <span className="text-dim">—</span>;
   return (
     <span className="inline-flex items-center gap-1.5 text-muted">
-      <span className="inline-block size-2" style={{ background: factionColor(name) }} />
+      <span className="inline-block size-2.5 rounded-full border-2 border-edge" style={{ background: factionColor(name) }} />
       {name}
     </span>
   );
 }
 
-/** Links that set one query parameter, rendered as a segmented control. */
+/** Links that set one query parameter, rendered as a row of pills. */
 export function Segmented({
   items,
   active,
@@ -180,7 +201,7 @@ export function Segmented({
   prefetch?: false;
 }) {
   return (
-    <nav aria-label={label} className="inline-flex border border-line-strong bg-surface">
+    <nav aria-label={label} className="inline-flex flex-wrap gap-2">
       {items.map((it) => (
         <Link
           key={it.key}
@@ -188,10 +209,7 @@ export function Segmented({
           scroll={false}
           prefetch={prefetch}
           aria-current={it.key === active ? 'page' : undefined}
-          className={cx(
-            'px-3 py-1.5 font-display text-[12px] font-semibold whitespace-nowrap uppercase tracking-[0.1em] transition-colors',
-            it.key === active ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
-          )}
+          className={cx('pill', it.key === active && 'pill-on')}
         >
           {it.label}
         </Link>
@@ -202,26 +220,25 @@ export function Segmented({
 
 export function Pagination({ page, pages, href }: { page: number; pages: number; href: (page: number) => string }) {
   if (pages <= 1) return null;
-  const btn = 'border border-line-strong px-3 py-1.5 font-display text-xs font-semibold uppercase tracking-[0.1em]';
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-line px-4 py-3 text-sm text-muted">
+    <div className="flex items-center justify-between gap-4 px-6 py-4 text-sm text-muted">
       <span className="num">
         Page {page} of {pages}
       </span>
       <div className="flex gap-2">
         {page > 1 ? (
-          <Link className={cx(btn, 'hover:border-accent hover:text-accent')} href={href(page - 1)}>
+          <Link className="pill" href={href(page - 1)}>
             ← Prev
           </Link>
         ) : (
-          <span className={cx(btn, 'opacity-40')}>← Prev</span>
+          <span className="pill opacity-40">← Prev</span>
         )}
         {page < pages ? (
-          <Link className={cx(btn, 'hover:border-accent hover:text-accent')} href={href(page + 1)}>
+          <Link className="pill" href={href(page + 1)}>
             Next →
           </Link>
         ) : (
-          <span className={cx(btn, 'opacity-40')}>Next →</span>
+          <span className="pill opacity-40">Next →</span>
         )}
       </div>
     </div>
@@ -232,19 +249,63 @@ export function Empty({ children }: { children: ReactNode }) {
   return <div className="px-4 py-10 text-center text-sm text-muted">{children}</div>;
 }
 
-/** A thin proportional bar, for share-of-total columns. */
 /** Bar width in %: at least a sliver, never wider than the track. */
 export function meterWidth(value: number, max: number): number {
   return max > 0 ? Math.min(100, Math.max(1.5, (value / max) * 100)) : 0;
 }
 
+/** A fat rounded bar, for share-of-total columns. */
 export function Meter({ value, max, color }: { value: number; max: number; color?: string }) {
   const w = meterWidth(value, max);
   return (
-    <div className="h-1 w-full overflow-hidden bg-surface-3">
-      <div className="h-full" style={{ width: `${w}%`, background: color ?? 'var(--accent)' }} />
+    <div className="h-4 w-full overflow-hidden rounded-full border-[3px] border-edge bg-bg">
+      <div className="h-full rounded-full" style={{ width: `${w}%`, background: color ?? 'var(--accent)' }} />
     </div>
   );
+}
+
+/** One team's race to the winning score: name, big score, a track filled to score/cap. */
+export function RaceLane({ name, score, cap = KOTH_CAP, color }: { name: string; score: number; cap?: number | null; color?: string }) {
+  const w = Math.min(100, Math.max(0, (score / (cap || KOTH_CAP)) * 100));
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3 font-extrabold">
+        <span className="truncate">{name}</span>
+        <span className="display num text-2xl">{score}</span>
+      </div>
+      <div className="edge h-7 overflow-hidden rounded-full bg-bg">
+        <div className="h-full rounded-full border-r-[3px] border-edge" style={{ width: `${w}%`, background: color ?? factionColor(name) }} />
+      </div>
+    </div>
+  );
+}
+
+/** A round's final scores as small faction-coloured tags, highest first. */
+export function ScoreChips({ scores }: { scores: { name: string; score: number }[] }) {
+  return (
+    <span className="inline-flex gap-1">
+      {[...scores]
+        .sort((a, b) => b.score - a.score)
+        .map((s) => (
+          <span
+            key={s.name}
+            title={s.name}
+            className="num rounded-lg border-2 border-edge px-1.5 text-xs font-extrabold text-on-fill"
+            style={{ background: factionColor(s.name) }}
+          >
+            {s.score}
+          </span>
+        ))}
+    </span>
+  );
+}
+
+/** Fair / One-sided / Landslide for a finished round; nothing when it can't be told. */
+export function ClosenessChip({ scores }: { scores: number[] }) {
+  const c = closeness(scores);
+  if (c === null) return null;
+  const band = bandOf(c);
+  return <Badge tone={BAND_TONE[band]}>{bandLabel(band)}</Badge>;
 }
 
 /** Places climbed (▲) or fallen (▼) since a past board; nothing when unchanged or unknown. */
@@ -253,7 +314,7 @@ export function RankMove({ moved, since }: { moved: number | null | undefined; s
   const up = moved > 0;
   return (
     <span
-      className={cx('num ml-1.5 text-[10px] font-semibold', up ? 'text-good' : 'text-bad')}
+      className={cx('num ml-1.5 text-xs font-extrabold', up ? 'text-good' : 'text-bad')}
       title={`${up ? 'Up' : 'Down'} ${Math.abs(moved)} place${Math.abs(moved) === 1 ? '' : 's'}${since ? ` since ${since}` : ''}`}
     >
       {up ? '▲' : '▼'}
@@ -263,16 +324,17 @@ export function RankMove({ moved, since }: { moved: number | null | undefined; s
   );
 }
 
-export function RankCell({ rank }: { rank: number }) {
+/** A chunky rank badge: gold, silver, bronze, then the player's faction (or plain when unknown). */
+export function RankCell({ rank, faction, large }: { rank: number; faction?: string | null; large?: boolean }) {
+  const filled = rank <= 3 || !!faction;
   return (
     <span
       className={cx(
-        'num inline-flex h-6 min-w-6 items-center justify-center px-1 font-display text-[13px] font-bold',
-        rank === 1 && 'bg-accent text-accent-ink',
-        rank === 2 && 'bg-[#c9ced6] text-[#111]',
-        rank === 3 && 'bg-[#b07a4a] text-[#111]',
-        rank > 3 && 'text-dim',
+        'display num inline-flex shrink-0 items-center justify-center border-[3px] border-edge',
+        large ? 'size-11 rounded-[14px] text-base shadow-[0_3px_0_var(--edge)]' : 'size-8 rounded-[10px] text-xs',
+        filled ? 'text-on-fill' : 'bg-surface-2 text-muted',
       )}
+      style={filled ? { background: rankColour(rank, faction) } : undefined}
     >
       {rank}
     </span>
