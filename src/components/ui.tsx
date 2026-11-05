@@ -21,12 +21,15 @@ export function Container({ children, className }: { children: ReactNode; classN
 }
 
 export function PageHeader({
+  tabs,
   eyebrow,
   title,
   description,
   actions,
   children,
 }: {
+  /** the home's own pages (SectionTabs), above the title */
+  tabs?: ReactNode;
   eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
@@ -36,6 +39,7 @@ export function PageHeader({
   return (
     <header>
       <Container className="pt-8 pb-4 sm:pt-10">
+        {tabs && <div className="mb-6">{tabs}</div>}
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             {eyebrow && <div className="eyebrow mb-3 flex items-center gap-2">{eyebrow}</div>}

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SectionTabs } from '@/components/section-tabs';
 import Link from 'next/link';
 import { AutoRefresh } from '@/components/client';
 import { KillList } from '@/components/game';
@@ -33,6 +34,7 @@ export default async function FeedPage({ searchParams }: PageProps<'/feed'>) {
     <>
       {!before && <AutoRefresh seconds={5} />}
       <PageHeader
+        tabs={<SectionTabs section="live" current="feed" />}
         eyebrow={
           <>
             <StatusDot online={!before} /> {before ? 'Archive' : 'Live · refreshes every 5s'}

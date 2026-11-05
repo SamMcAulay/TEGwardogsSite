@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { AutoRefresh } from '@/components/client';
-import { KillList } from '@/components/game';
+import { KillStack } from '@/components/game';
+import { SectionTabs } from '@/components/section-tabs';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
 import { ServerTabs } from '@/components/server-tabs';
@@ -51,14 +52,17 @@ export default async function Home() {
     safe(recentKills({ limit: 8 })),
     safe(endedRounds()),
   ]);
+  // Who's on which side right now, to colour the kill feed's names.
+  const factionOf = Object.fromEntries((servers instanceof Error ? [] : servers.data).flatMap((s) => s.players.map((p) => [p.steamId, p.faction])));
   const recent = ended instanceof Error ? null : [...ended].sort((a, b) => b.endedAt - a.endedAt).slice(0, 4);
 
   return (
     <>
       <AutoRefresh seconds={15} />
       <Container className="pt-6">
+        <SectionTabs section="live" current="home" />
         {/* The island shows through the gap on the left; the server tabs float on the right. */}
-        <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_400px]">
           <div data-scene-gap aria-hidden className="h-[38vh] lg:h-auto lg:min-h-[calc(100vh-190px)]" />
           <Section loaded={servers}>
             {(list) => (
@@ -97,7 +101,7 @@ export default async function Home() {
             )}
           </Panel>
           <Panel title="Kill feed" action={<PanelLink href="/feed">Full feed</PanelLink>} flush>
-            <Section loaded={feed}>{(k) => (k.length ? <KillList kills={k} showServer /> : <Empty>Quiet.</Empty>)}</Section>
+            <Section loaded={feed}>{(k) => (k.length ? <KillStack kills={k} factionOf={factionOf} showServer /> : <Empty>Quiet.</Empty>)}</Section>
           </Panel>
         </div>
       </Container>

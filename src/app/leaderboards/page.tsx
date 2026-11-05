@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
-import { StatsTabs } from '@/components/stats-tabs';
+import { SectionTabs } from '@/components/section-tabs';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, RankMove, Segmented, cx } from '@/components/ui';
 import { ago, duration, int, kd, money, pct } from '@/lib/format';
 import Link from 'next/link';
@@ -79,7 +79,7 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
   return (
     <>
       <PageHeader
-        eyebrow={<StatsTabs current="leaderboards" />}
+        tabs={<SectionTabs section="stats" current="leaderboards" />}
         title="Leaderboards"
         description="Ranked from every round played on TEG servers. Days are UTC."
       >

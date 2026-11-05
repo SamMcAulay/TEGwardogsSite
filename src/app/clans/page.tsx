@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Section, safe } from '@/components/section';
-import { StatsTabs } from '@/components/stats-tabs';
+import { SectionTabs } from '@/components/section-tabs';
 import { Container, Empty, PageHeader, Panel, RankCell, Segmented } from '@/components/ui';
 import { clanSlug } from '@/lib/clans';
 import { ago, duration, int, kd, pct } from '@/lib/format';
@@ -44,7 +44,7 @@ export default async function ClansPage({ searchParams }: PageProps<'/clans'>) {
   return (
     <>
       <PageHeader
-        eyebrow={<StatsTabs current="clans" />}
+        tabs={<SectionTabs section="stats" current="clans" />}
         title="Clans"
         description={`Players grouped by the clan tag in their in-game name, like [TEG] or (NOR). A tag needs at least ${MIN_CLAN_SIZE} players on the board to count.`}
       >
