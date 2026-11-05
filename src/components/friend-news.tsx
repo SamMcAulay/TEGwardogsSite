@@ -108,7 +108,7 @@ export function FriendToast({ news }: { news: FriendNews | null }) {
               {news.incoming === 1 ? 'A friend request is' : `${news.incoming} friend requests are`} waiting for you.
             </p>
           )}
-          <Link href="/friends" onClick={dismiss} className="link inline-block pt-1 font-display text-xs font-semibold uppercase tracking-[0.1em] text-accent">
+          <Link href="/friends" onClick={dismiss} className="link inline-block pt-1 text-xs font-bold text-accent">
             Open friends →
           </Link>
         </div>

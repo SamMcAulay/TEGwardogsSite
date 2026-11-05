@@ -147,7 +147,7 @@ function TeamTable({ name, rows, winner }: { name: string; rows: MatchPlayerRow[
         style={{ boxShadow: `inset 3px 0 0 ${factionColor(name)}` }}
       >
         <div className="flex items-center gap-2">
-          <h2 className="display text-[15px] tracking-[0.06em]">{name}</h2>
+          <h2 className="display text-[15px]">{name}</h2>
           {winner && <Badge tone="accent">Winner</Badge>}
         </div>
         <span className="num text-xs text-muted">

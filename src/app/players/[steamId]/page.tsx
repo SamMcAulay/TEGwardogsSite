@@ -122,16 +122,18 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   return (
     // A Premium or staff member's colour re-themes their whole profile, not just the header.
     <div className={colour ? 'profile-theme' : undefined} style={colour ? profileThemeStyle(colour) : undefined}>
-      <header className="grid-bg relative border-b border-line" style={colour ? { borderBottomColor: colour } : undefined}>
+      {/* The lead card: who they are and their headline numbers. */}
+      <Container className="pt-6">
+      <header className="panel relative overflow-hidden" style={colour ? { borderColor: colour } : undefined}>
         {colour && (
           // A custom profile colour washes the header from the left.
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
-            style={{ backgroundImage: `linear-gradient(110deg, color-mix(in srgb, ${colour} 24%, transparent), transparent 65%)`, borderTop: `3px solid ${colour}` }}
+            style={{ backgroundImage: `linear-gradient(110deg, color-mix(in srgb, ${colour} 24%, transparent), transparent 65%)` }}
           />
         )}
-        <Container className="relative py-10">
+        <div className="relative px-6 py-8 sm:px-8">
           <div className="eyebrow mb-5">
             <Link href="/players" className="link text-muted">
               Players
@@ -170,7 +172,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                     {featured.map((b) => (
                       <li
                         key={b}
-                        className="border px-2 py-0.5 font-display text-[11px] font-semibold uppercase tracking-[0.1em]"
+                        className="border px-2 py-0.5 text-[11px] font-bold"
                         style={{
                           borderColor: colour ?? 'var(--accent)',
                           color: colour ?? 'var(--accent)',
@@ -229,8 +231,9 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
               )}
             </div>
           </div>
-        </Container>
+        </div>
       </header>
+      </Container>
 
       <Container className="mt-8 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">

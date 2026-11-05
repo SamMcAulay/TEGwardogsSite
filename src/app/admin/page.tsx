@@ -93,7 +93,7 @@ async function LinkCard({ link, env }: { link: AccountLink; env: AccountsEnv }) 
             <select
               name="style"
               defaultValue={isNameStyle(link.nameStyle) ? link.nameStyle : 'default'}
-              className="border border-line-strong bg-surface-2 px-2 py-1 text-sm outline-none focus:border-accent"
+              className="rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1 text-sm outline-none focus:border-accent"
             >
               <option value="default">Tier default</option>
               {NAME_STYLES.map((s) => (
@@ -170,7 +170,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
               name="q"
               defaultValue={q}
               placeholder="Discord name, SteamID, Discord ID, or a profile link"
-              className="min-w-0 flex-1 border border-line-strong bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-2xl border-[3px] border-edge bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
             <button className={buttonClass('primary')}>Find</button>
           </form>

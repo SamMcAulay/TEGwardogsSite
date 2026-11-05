@@ -146,7 +146,7 @@ export function AreaChart({
               style={{ left: `${((hp.t - t0) / span) * 100}%`, top: `${(1 - hp.v / max) * 100}%`, background: color }}
             />
             <div
-              className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 border border-line-strong bg-surface-2 px-2 py-1 text-xs whitespace-nowrap shadow-lg"
+              className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1 text-xs whitespace-nowrap shadow-lg"
               style={{ left: `clamp(60px, ${((hp.t - t0) / span) * 100}%, calc(100% - 60px))` }}
             >
               <span className="num font-semibold text-text">
@@ -370,7 +370,7 @@ function DayChart({ day, usual, label }: { day: { m: number; v: number }[]; usua
                 />
               )}
               <div
-                className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 border border-line-strong bg-surface-2 px-2 py-1 text-xs whitespace-nowrap shadow-lg"
+                className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1 text-xs whitespace-nowrap shadow-lg"
                 style={{ left: `clamp(80px, ${x(at)}%, calc(100% - 80px))` }}
               >
                 <span className="text-muted">{hhmm(at)}</span>
@@ -481,7 +481,7 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
               onClick={() => pick(d)}
               aria-pressed={picked === d}
               className={cx(
-                'text-left font-display text-[11px] leading-[1.4rem] font-semibold uppercase tracking-[0.1em] transition-colors',
+                'text-left text-[11px] leading-[1.4rem] font-bold transition-colors',
                 picked === d || nowAt?.d === d ? 'text-accent' : 'text-dim hover:text-text',
               )}
             >
@@ -533,7 +533,7 @@ export function BusyTimes({ month, week }: { month: Series; week: Series }) {
       {picked != null && (
         <div className="mt-5 border-t border-line pt-4">
           <div className="mb-3 flex items-baseline justify-between gap-4">
-            <h3 className="display text-sm tracking-[0.06em]">{DAYS[picked]}</h3>
+            <h3 className="display text-sm">{DAYS[picked]}</h3>
             <button type="button" onClick={() => setPicked(null)} className="eyebrow !text-[0.66rem] transition-colors hover:!text-accent">
               Close
             </button>
@@ -602,7 +602,7 @@ export function FriendTimes({ stretches, names }: { stretches: { steamId: string
         </div>
         {grid.map((row, d) => (
           <div key={d} className="contents">
-            <span className="font-display text-[11px] leading-[1.4rem] font-semibold uppercase tracking-[0.1em] text-dim">{DAYS[d]}</span>
+            <span className=" text-[11px] leading-[1.4rem] font-bold text-dim">{DAYS[d]}</span>
             <div className="mb-0.5 grid grid-cols-[repeat(24,1fr)] gap-0.5" onPointerLeave={() => setHover(null)}>
               {row.map((ids, h) => (
                 <span

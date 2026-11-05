@@ -17,13 +17,26 @@ function sources(dir: string, exts: string[]): string[] {
 function offenders(exts: string[], bad: RegExp): string[] {
   return sources(root, exts).flatMap((file) => {
     const text = fs.readFileSync(file, 'utf8');
-    return [...text.matchAll(new RegExp(bad, 'g'))].map((m) => `${path.relative(root, file)}:${text.slice(0, m.index).split('\n').length}`);
+    return [...text.matchAll(new RegExp(bad, 'g'))].map(
+      (m) => `${path.relative(root, file)}:${text.slice(0, m.index).split('\n').length}`,
+    );
   });
 }
 
 describe('design guard', () => {
   test('no light theme left', () => {
     expect(offenders(['.ts', '.tsx', '.css'], /data-theme=['"]light['"]|@\/lib\/theme['"]|ThemeToggle/)).toEqual([]);
+  });
+
+  test('no uppercase wide-tracked labels', () => {
+    // The old generic look: uppercase text with wide letter spacing. Labels are plain bold text now.
+    const found = sources(root, ['.tsx']).flatMap((file) => {
+      const text = fs.readFileSync(file, 'utf8');
+      return [...text.matchAll(/className=(?:"[^"]*"|\{[^}]*\}|`[^`]*`)/g)]
+        .filter((m) => /\buppercase\b/.test(m[0]) && /tracking-\[0\.(0[4-9]|[1-9])/.test(m[0]))
+        .map((m) => `${path.relative(root, file)}:${text.slice(0, m.index).split('\n').length}`);
+    });
+    expect(found).toEqual([]);
   });
 
   test('no CDN scripts', () => {

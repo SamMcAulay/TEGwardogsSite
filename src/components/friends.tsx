@@ -8,7 +8,7 @@ import type { FriendStatus } from '@/lib/server/views';
 import { Avatar } from './avatar';
 import { cx, StatusDot } from './ui';
 
-const BUTTON = 'border px-2.5 py-1 font-display text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors';
+const BUTTON = 'border px-2.5 py-1 text-[11px] font-bold transition-colors';
 const QUIET = cx(BUTTON, 'border-line-strong text-muted hover:border-accent hover:text-accent');
 const ON = cx(BUTTON, 'border-accent bg-accent-soft text-accent');
 
@@ -88,7 +88,7 @@ export function FriendRow({ f, removable, fresh }: { f: FriendStatus; removable?
       <Link prefetch={false} href={`/players/${f.steamId}`} className="link flex min-w-0 flex-1 items-center gap-2.5">
         <Avatar name={name} steamId={f.steamId} url={f.avatarUrl} size={28} />
         <span className="truncate font-medium">{name}</span>
-        {fresh && <span className="shrink-0 bg-accent px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.1em] text-accent-ink">Accepted</span>}
+        {fresh && <span className="shrink-0 bg-accent px-1.5 py-0.5 text-xs font-bold text-accent-ink">Accepted</span>}
       </Link>
       {f.online ? (
         <Link href={`/servers/${f.online.serverSlug}`} className="link inline-flex items-center gap-2 text-sm">
@@ -120,7 +120,7 @@ export function FriendsOnline({ friends }: { friends: FriendStatus[] }) {
   return (
     <section className="panel">
       <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
-        <h2 className="display text-[15px] tracking-[0.06em] text-text">Friends online</h2>
+        <h2 className="display text-[15px] text-text">Friends online</h2>
         <Link href="/friends" className="text-xs text-muted hover:text-accent">
           All friends →
         </Link>

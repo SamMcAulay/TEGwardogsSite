@@ -158,7 +158,7 @@ export default async function LeaderboardsPage({ searchParams }: PageProps<'/lea
                       You&rsquo;re <span className="font-display text-base font-bold text-accent">#{int(mine.rank)}</span> on this board
                     </span>
                     {mine.page && mine.page !== page ? (
-                      <Link href={withParams('/leaderboards', sp, { page: mine.page > 1 ? mine.page : null })} scroll={false} className="link font-display text-xs font-semibold uppercase tracking-[0.1em] text-accent">
+                      <Link href={withParams('/leaderboards', sp, { page: mine.page > 1 ? mine.page : null })} scroll={false} className="link text-xs font-bold text-accent">
                         Jump to my rank
                       </Link>
                     ) : !mine.page ? (

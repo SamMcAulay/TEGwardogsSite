@@ -129,7 +129,7 @@ export function InstallPrompt({ auto }: { auto: boolean }) {
         e.preventDefault();
         close();
       }}
-      className="m-auto w-[min(26rem,calc(100vw-2rem))] border border-line-strong bg-surface p-0 text-text backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-2xl border-[3px] border-edge bg-surface p-0 text-text backdrop:bg-black/60 backdrop:backdrop-blur-sm"
     >
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-3">
@@ -169,7 +169,7 @@ export function InstallPrompt({ auto }: { auto: boolean }) {
           <button
             type="button"
             onClick={close}
-            className="border border-line-strong px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.1em] text-muted hover:border-accent hover:text-text"
+            className="pill !py-1  text-xs"
           >
             {how === 'ios' ? 'Got it' : 'Not now'}
           </button>
@@ -177,7 +177,7 @@ export function InstallPrompt({ auto }: { auto: boolean }) {
             <button
               type="button"
               onClick={install}
-              className="bg-accent px-4 py-2 font-display text-xs font-semibold uppercase tracking-[0.1em] text-accent-ink hover:opacity-90"
+              className="pill pill-on  text-xs"
             >
               Install
             </button>

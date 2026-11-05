@@ -38,7 +38,7 @@ function PlayerInput({ name, value, label, autoFocus }: { name: string; value?: 
         defaultValue={value}
         autoFocus={autoFocus}
         placeholder="Name or Steam ID"
-        className="h-11 w-full border border-line-strong bg-bg px-3 text-sm outline-none focus:border-accent"
+        className="h-11 w-full rounded-2xl border-[3px] border-edge bg-bg px-3 text-sm outline-none focus:border-accent"
       />
     </label>
   );
@@ -98,7 +98,7 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
           <PlayerInput name="a" value={qa} label="Player one" />
           {/* Arriving from a profile's "Compare with…": only the second player is left to pick. */}
           <PlayerInput name="b" value={qb} label="Player two" autoFocus={!!qa && !qb} />
-          <button className="h-11 bg-accent px-6 font-display text-sm font-bold uppercase tracking-[0.12em] text-accent-ink hover:opacity-90">
+          <button className="pill pill-on h-11">
             Compare
           </button>
         </form>

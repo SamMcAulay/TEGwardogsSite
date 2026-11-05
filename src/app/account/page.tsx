@@ -39,7 +39,7 @@ function Step({ n, title, done, children }: { n: number; title: string; done: bo
         {done ? '✓' : n}
       </span>
       <div className="min-w-0 flex-1">
-        <h2 className="display text-[15px] tracking-[0.06em]">{title}</h2>
+        <h2 className="display text-[15px]">{title}</h2>
         <div className="mt-2 text-sm text-muted">{children}</div>
       </div>
     </li>

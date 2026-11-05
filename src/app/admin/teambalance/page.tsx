@@ -105,10 +105,10 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
       <Container className="mt-8 space-y-4">
         <AdminNav active="teambalance" />
         {done && (
-          <p role="status" className="border border-line-strong bg-surface-2 px-4 py-3 text-sm">{done}</p>
+          <p role="status" className="rounded-2xl border-[3px] border-edge bg-surface-2 px-4 py-3 text-sm">{done}</p>
         )}
         {!canMove && (
-          <p role="status" className="border border-line-strong bg-surface-2 px-4 py-3 text-sm text-muted">
+          <p role="status" className="rounded-2xl border-[3px] border-edge bg-surface-2 px-4 py-3 text-sm text-muted">
             Watch-only for now: the site has no Warcon key that may move players (<code>WARCON_MOVE_TOKEN</code>). Watch-only runs work;
             a live run would be cancelled when its match starts.
           </p>
@@ -177,7 +177,7 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
                             name="message"
                             defaultValue={DEFAULT_MESSAGE}
                             maxLength={200}
-                            className="mt-1 w-full border border-line-strong bg-surface-2 px-2 py-1 outline-none focus:border-accent"
+                            className="mt-1 w-full rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1 outline-none focus:border-accent"
                           />
                         </label>
                         <div className="flex flex-wrap items-center gap-3">

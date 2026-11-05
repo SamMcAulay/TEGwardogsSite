@@ -93,7 +93,7 @@ export default async function ClansPage({ searchParams }: PageProps<'/clans'>) {
                             <RankCell rank={i + 1} />
                           </td>
                           <td>
-                            <Link href={withParams(`/clans/${clanSlug(c.tag)}`, {}, { period: period === '30d' ? null : period })} className="link font-display text-base font-bold tracking-[0.06em]">
+                            <Link href={withParams(`/clans/${clanSlug(c.tag)}`, {}, { period: period === '30d' ? null : period })} className="link font-display text-base font-bold">
                               [{c.tag}]
                             </Link>
                           </td>

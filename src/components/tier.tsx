@@ -10,7 +10,7 @@ const NAME_CLASS: Record<NameStyle, string> = { aurora: 'name-aurora', gold: 'na
 /** `compact`: the small size that sits beside a name in lists and tables. */
 export function TierBadge({ tier, compact }: { tier: Tier; compact?: boolean }) {
   return (
-    <Badge tone={TONE[tier]} className={compact ? 'shrink-0 !px-1 !py-0 !text-[9px] !tracking-[0.08em]' : undefined}>
+    <Badge tone={TONE[tier]} className={compact ? 'shrink-0 !px-1 !py-0 !text-[9px] !' : undefined}>
       {TIERS[tier].label}
     </Badge>
   );

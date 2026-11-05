@@ -237,12 +237,12 @@ function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: ke
         <div className="absolute inset-0 bg-gradient-to-t from-surface-2 via-surface-2/30 to-transparent" />
         <span
           className={cx(
-            'absolute top-2 left-2 px-1.5 py-0.5 font-display text-[10px] font-semibold uppercase tracking-[0.12em]',
+            'absolute top-2 left-2 px-1.5 py-0.5 text-xs font-bold',
             now ? 'bg-accent text-accent-ink' : 'bg-bg/80 text-muted',
           )}
         >
           {STOP_LABEL[role]}
-          {eta != null && <span className="normal-case tracking-normal"> · ≈{eta < 120 ? '1m' : duration(eta)}</span>}
+          {eta != null && <span className=""> · ≈{eta < 120 ? '1m' : duration(eta)}</span>}
         </span>
         {stop?.slot != null && (
           <span className="num absolute top-2 right-2 font-mono text-[10px] text-muted">#{stop.slot + 1}</span>
@@ -317,7 +317,7 @@ export function MapRotation({
                 {(isNow || isNext) && (
                   <span
                     className={cx(
-                      'absolute top-1 right-1 px-1 font-display text-[9px] font-semibold uppercase tracking-[0.1em]',
+                      'absolute top-1 right-1 px-1 text-xs font-bold',
                       isNow ? 'bg-accent text-accent-ink' : 'bg-bg/80 text-accent',
                     )}
                   >
@@ -326,7 +326,7 @@ export function MapRotation({
                 )}
               </div>
               <div className="px-1.5 pt-1 pb-1.5">
-                <div className={cx('truncate font-display text-xs font-semibold uppercase tracking-[0.06em]', isNow ? 'text-text' : 'text-muted')}>
+                <div className={cx('truncate text-xs font-bold', isNow ? 'text-text' : 'text-muted')}>
                   {mapName(r.map)}
                 </div>
                 <div className="flex items-center gap-1 text-[10px] text-dim">
@@ -354,7 +354,7 @@ export function MapWinBars({ maps }: { maps: MapWins[] }) {
       {maps.map((m) => (
         <li key={m.map}>
           <div className="mb-1.5 flex items-baseline justify-between gap-3">
-            <span className="display text-sm tracking-[0.06em]">{m.map}</span>
+            <span className="display text-sm">{m.map}</span>
             <span className="num text-xs text-dim">
               {m.rounds} round{m.rounds === 1 ? '' : 's'}
             </span>

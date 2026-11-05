@@ -102,7 +102,7 @@ export function MatchReplay({
           {clock(t)}
           <span className="text-base text-dim"> / {clock(length)}</span>
         </span>
-        <div role="group" aria-label="Speed" className="ml-auto inline-flex border border-line-strong bg-surface">
+        <div role="group" aria-label="Speed" className="ml-auto inline-flex rounded-2xl border-[3px] border-edge bg-surface">
           {SPEEDS.map((s) => (
             <button
               key={s}
@@ -158,7 +158,7 @@ export function MatchReplay({
             {factions.map((f, i) => (
               <li key={f.name}>
                 <div className="mb-1 flex justify-between text-sm">
-                  <span className="font-display font-semibold uppercase tracking-[0.06em]">{f.name}</span>
+                  <span className=" font-bold">{f.name}</span>
                   <span className="num font-semibold">{scores[i]}</span>
                 </div>
                 <div className="h-2 bg-surface-3">
@@ -223,7 +223,7 @@ export function MatchReplay({
         <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
           <span className="eyebrow mr-1 self-center !text-[0.66rem]">Jump to</span>
           {firstBlood && (
-            <button type="button" onClick={() => seek(firstBlood[0])} className="border border-line-strong px-2 py-1 text-xs text-muted transition-colors hover:border-accent hover:text-text">
+            <button type="button" onClick={() => seek(firstBlood[0])} className="pill !py-1  text-xs">
               <span className="num text-dim">{clock(firstBlood[0])}</span> First blood
             </button>
           )}
@@ -232,7 +232,7 @@ export function MatchReplay({
               key={p.t}
               type="button"
               onClick={() => seek(p.t)}
-              className="flex items-center gap-1.5 border border-line-strong px-2 py-1 text-xs text-muted transition-colors hover:border-accent hover:text-text"
+              className="pill !py-1 flex items-center gap-1.5 text-xs"
             >
               <span className="inline-block size-2" style={{ background: factions[p.faction].color }} />
               <span className="num text-dim">{clock(p.t)}</span>
