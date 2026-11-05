@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SectionTabs } from '@/components/section-tabs';
 import { LocalTime } from '@/components/local-time';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -42,6 +43,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
   return (
     <>
       <PageHeader
+        tabs={<SectionTabs section="live" current="matches" />}
         eyebrow="History"
         title="Match history"
         description="Every King of the Hill round played on TEG servers, with final scores and full scoreboards."

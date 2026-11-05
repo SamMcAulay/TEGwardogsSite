@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SectionTabs } from '@/components/section-tabs';
 import Link from 'next/link';
 import { AreaChart } from '@/components/charts';
 import { AutoRefresh } from '@/components/client';
@@ -36,6 +37,7 @@ export default async function ServersPage() {
     <>
       <AutoRefresh seconds={10} />
       <PageHeader
+        tabs={<SectionTabs section="live" current="servers" />}
         eyebrow={
           <>
             <StatusDot online={summary ? summary.serversOnline > 0 : null} />{' '}

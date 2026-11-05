@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { PlayerLink } from '@/components/player';
-import { StatsTabs } from '@/components/stats-tabs';
+import { SectionTabs } from '@/components/section-tabs';
 import { Container, Empty, PageHeader, Pagination, Panel, RankCell, RankMove } from '@/components/ui';
 import { ago, int } from '@/lib/format';
 import { viewer } from '@/lib/server/accounts';
@@ -29,7 +29,7 @@ export default async function SkillPage({ searchParams }: PageProps<'/skill'>) {
   return (
     <>
       <PageHeader
-        eyebrow={<StatsTabs current="skill" />}
+        tabs={<SectionTabs section="stats" current="skill" />}
         title="Skill rating"
         description="Who wins rounds, not just who gets kills. Every Season 2 round moves your rating by whether your side won, how strong both sides were, and how much of the round you played."
       />

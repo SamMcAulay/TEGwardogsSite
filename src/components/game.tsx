@@ -182,6 +182,68 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
   );
 }
 
+/** A name in a faction-coloured pill (plain when the faction isn't known); links to the profile. */
+function NamePill({ id, name, faction, bad }: { id: string | null; name: string | null; faction?: string; bad?: boolean }) {
+  const colour = faction ? factionColor(faction) : null;
+  const cls = cx(
+    'inline-flex max-w-full min-w-0 items-center rounded-full border-2 border-edge px-2.5 py-0.5 text-sm font-bold',
+    colour ? 'text-on-fill' : 'bg-surface-2 text-text',
+    bad && '!bg-bad !text-on-fill',
+  );
+  const label = <span className="truncate">{name ?? 'World'}</span>;
+  return id && name ? (
+    <Link prefetch={false} href={`/players/${id}`} className={cls} style={colour ? { background: colour } : undefined}>
+      {label}
+    </Link>
+  ) : (
+    <span className={cls} style={colour ? { background: colour } : undefined}>
+      {label}
+    </span>
+  );
+}
+
+/**
+ * A narrow kill feed for cards: killer → weapon → victim as pills, then distance, server and time.
+ * `factionOf`: steam id → faction for the players on the servers now, to colour their pills.
+ */
+export function KillStack({ kills, factionOf, showServer }: { kills: KillRow[]; factionOf?: Record<string, string>; showServer?: boolean }) {
+  const now = nowSec();
+  const f = (id: string | null) => (id ? factionOf?.[id] : undefined);
+  return (
+    <ol className="divide-y-2 divide-dashed divide-line">
+      {kills.map((k) => (
+        <li key={k.eventId} className="px-6 py-2.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {k.suicide ? (
+              <>
+                <NamePill id={k.victimSteamId} name={k.victimName} faction={f(k.victimSteamId)} />
+                <span className="shrink-0 text-sm text-muted">suicide</span>
+              </>
+            ) : (
+              <>
+                <span className="min-w-0 shrink">
+                  <NamePill id={k.killerSteamId} name={k.killerName} faction={f(k.killerSteamId)} bad={!!k.teamkill} />
+                </span>
+                <span className="shrink-0 text-xs font-bold text-muted">{causeInfo(k.cause).label} →</span>
+                <span className="min-w-0 shrink">
+                  <NamePill id={k.victimSteamId} name={k.victimName} faction={f(k.victimSteamId)} />
+                </span>
+              </>
+            )}
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+            <KillTags tags={k.tags} />
+            {k.teamkill ? <span className="font-extrabold text-bad">Teamkill</span> : null}
+            {k.distance != null && !k.suicide && <span className="num">{metres(k.distance)}</span>}
+            {showServer && <span>{k.serverName}</span>}
+            <span className="num ml-auto">{ago(k.ts, now)}</span>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function KillList({ kills, showServer }: { kills: KillRow[]; showServer?: boolean }) {
   const now = nowSec();
   return (

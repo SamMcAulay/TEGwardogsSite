@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { serverPath } from '@/lib/url';
 import { PlayerLink } from '@/components/player';
 import { Section, safe } from '@/components/section';
-import { StatsTabs } from '@/components/stats-tabs';
+import { SectionTabs } from '@/components/section-tabs';
 import { Container, Empty, PageHeader, Panel, RankCell } from '@/components/ui';
 import { int, metres } from '@/lib/format';
 import { causeLabel } from '@/lib/game';
@@ -41,7 +41,7 @@ export default async function RecordsPage() {
   return (
     <>
       <PageHeader
-        eyebrow={<StatsTabs current="records" />}
+        tabs={<SectionTabs section="stats" current="records" />}
         title="Records"
         description="The best of everything ever done on TEG WARDOGS servers. Banned players don't hold records."
       />
