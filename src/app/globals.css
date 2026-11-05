@@ -386,3 +386,52 @@ a:hover > * > .name-verified {
     animation: none;
   }
 }
+
+/* Page swipe (components/page-swipe.tsx): old cards out to the left, new ones in from the right,
+   with a little overshoot. The header, tab bar and scene stay put. */
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-old(.swipe-out) {
+  animation: swipe-out 320ms cubic-bezier(0.5, -0.4, 0.75, 0.4) both;
+}
+::view-transition-new(.swipe-in) {
+  animation: swipe-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes swipe-out {
+  to {
+    translate: -110vw 0;
+  }
+}
+@keyframes swipe-in {
+  from {
+    translate: 110vw 0;
+  }
+}
+::view-transition-group(site-header),
+::view-transition-group(site-tabbar),
+::view-transition-group(site-scene) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header),
+::view-transition-old(site-tabbar),
+::view-transition-old(site-scene) {
+  display: none;
+}
+::view-transition-new(site-header),
+::view-transition-new(site-tabbar),
+::view-transition-new(site-scene) {
+  animation: none;
+}
+::view-transition-group(site-scene) {
+  z-index: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}

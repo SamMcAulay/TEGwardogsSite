@@ -38,7 +38,7 @@ export function SiteNav({ me }: { me: Me }) {
   const count = newsCount(news);
   return (
     <>
-      <header className="sticky top-0 z-30 px-4 pt-4 sm:px-6 lg:px-8">
+      <header style={{ viewTransitionName: 'site-header' }} className="sticky top-0 z-30 px-4 pt-4 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-[1440px] items-center gap-3 sm:gap-4">
           <Link href="/" className="display shrink-0 text-xl" aria-label="TEG WARDOGS home">
             TEG <span className="text-accent">WARDOGS</span>
@@ -215,6 +215,7 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
       )}
       <nav
         aria-label="Main"
+        style={{ viewTransitionName: 'site-tabbar' }}
         className="fixed right-3 bottom-3 left-3 z-40 grid grid-flow-col auto-cols-fr gap-1 rounded-[24px] border-[3px] border-edge bg-surface-2 p-1.5 shadow-[0_6px_0_var(--edge)] md:hidden"
       >
         {TABS.map((t) => (

@@ -3,6 +3,7 @@ import { TimezoneNote } from '@/components/local-time';
 import { Rubik, Unbounded } from 'next/font/google';
 import Link from 'next/link';
 import { type Me, SiteNav } from '@/components/nav';
+import { PageSwipe } from '@/components/page-swipe';
 import { Scene } from '@/components/scene/scene';
 import { InstallLink, InstallPrompt } from '@/components/install';
 import { Container } from '@/components/ui';
@@ -80,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         )}
         {/* Room at the bottom on phones so the tab bar never covers the last card. */}
         <main id="main" className="relative z-10 flex-1 pb-28 md:pb-0">
-          {children}
+          <PageSwipe>{children}</PageSwipe>
         </main>
         <footer className="relative z-10 mt-16 pb-28 md:pb-0">
           <Container className="flex flex-col gap-4 py-8 text-sm text-muted md:flex-row md:items-center md:justify-between">

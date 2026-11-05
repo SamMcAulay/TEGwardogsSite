@@ -79,5 +79,5 @@ export function Scene() {
       dispose();
     };
   }, []);
-  return <canvas ref={ref} aria-hidden className="pointer-events-none fixed inset-0 z-0 h-full w-full" />;
+  return <canvas ref={ref} aria-hidden style={{ viewTransitionName: 'site-scene' }} className="pointer-events-none fixed inset-0 z-0 h-full w-full" />;
 }
