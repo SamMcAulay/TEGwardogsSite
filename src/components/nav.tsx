@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { signOut } from '@/app/account/actions';
-import { activeTab, TABS, youItems } from '@/lib/nav';
+import { activeTab, dismisses, TABS, youItems } from '@/lib/nav';
 import { FriendToast, newsCount, useFriendNews } from './friend-news';
 import { cx } from './ui';
 
@@ -39,7 +39,8 @@ export function SiteNav({ me }: { me: Me }) {
   return (
     <>
       <header style={{ viewTransitionName: 'site-header' }} className="sticky top-0 z-30 px-4 pt-4 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-3 sm:gap-4">
+        {/* A solid bar, so the logo never sits over the content scrolling under it. */}
+        <div className="mx-auto flex max-w-[1440px] items-center gap-3 rounded-[24px] border-[3px] border-edge bg-surface-2/90 py-2 pr-2 pl-4 shadow-[0_6px_0_var(--edge)] backdrop-blur sm:gap-4">
           <Link href="/" className="display shrink-0 text-xl" aria-label="TEG WARDOGS home">
             TEG <span className="text-accent">WARDOGS</span>
           </Link>
@@ -70,6 +71,31 @@ export function SiteNav({ me }: { me: Me }) {
   );
 }
 
+/** While `open`, closes on Escape or a press outside every element in `inside`. */
+function useDismiss(open: boolean, close: () => void, ...inside: React.RefObject<HTMLElement | null>[]) {
+  const latest = useRef(close);
+  useEffect(() => {
+    latest.current = close;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const on = (e: Event) => {
+      const hit = inside.some((r) => r.current?.contains(e.target as Node));
+      if (dismisses({ type: e.type, key: e instanceof KeyboardEvent ? e.key : undefined }, hit)) latest.current();
+    };
+    document.addEventListener('mousedown', on);
+    document.addEventListener('touchstart', on);
+    document.addEventListener('keydown', on);
+    return () => {
+      document.removeEventListener('mousedown', on);
+      document.removeEventListener('touchstart', on);
+      document.removeEventListener('keydown', on);
+    };
+    // the refs are stable; `inside` is a fresh array each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+}
+
 function YouMenu({
   me,
   count,
@@ -85,18 +111,7 @@ function YouMenu({
   const open = openOn === path;
   const setOpen = (v: boolean) => setOpenOn(v ? path : null);
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !box.current?.contains(e.target as Node)) setOpenOn(null);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', close);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', close);
-    };
-  }, [open]);
+  useDismiss(open, () => setOpenOn(null), box);
   return (
     <div ref={box} className="relative hidden md:block">
       <button
@@ -203,6 +218,9 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
   const [youOn, setYouOn] = useState<string | null>(null);
   const you = youOn === path;
   const setYou = (v: boolean) => setYouOn(v ? path : null);
+  const panel = useRef<HTMLDivElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  useDismiss(you, () => setYouOn(null), panel, toggle);
   const item = (on: boolean) =>
     cx(
       'flex flex-col items-center gap-1 rounded-2xl py-1.5 text-xs font-bold',
@@ -211,7 +229,9 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
   return (
     <>
       {you && me !== undefined && (
-        <YouPanel me={me} count={count} className="fixed right-3 bottom-24 left-3 md:hidden" />
+        <div ref={panel}>
+          <YouPanel me={me} count={count} className="fixed right-3 bottom-24 left-3 md:hidden" />
+        </div>
       )}
       <nav
         aria-label="Main"
@@ -230,7 +250,7 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
           </Link>
         ))}
         {me !== undefined && (
-          <button type="button" aria-expanded={you} onClick={() => setYou(!you)} className={item(tab === 'you' || you)}>
+          <button ref={toggle} type="button" aria-expanded={you} onClick={() => setYou(!you)} className={item(tab === 'you' || you)}>
             <span className="relative size-5 rounded-full border-2 border-current" aria-hidden>
               {count > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 size-2.5 rounded-full border-2 border-edge bg-accent" />

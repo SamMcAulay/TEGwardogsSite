@@ -36,3 +36,8 @@ export function youItems(me: { steamId: string | null } | null): { label: string
     { label: 'Account settings', href: '/account' },
   ];
 }
+
+/** An open menu closes on Escape, or on a press anywhere outside it (including its own toggle). */
+export function dismisses(e: { type: string; key?: string }, inside: boolean): boolean {
+  return e.type === 'keydown' ? e.key === 'Escape' : !inside;
+}

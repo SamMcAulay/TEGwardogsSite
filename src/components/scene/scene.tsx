@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { approach, viewOffset } from '@/lib/scene/framing';
 import { sceneMode } from '@/lib/scene/mode';
@@ -27,6 +28,13 @@ function gapBox() {
  */
 export function Scene() {
   const ref = useRef<HTMLCanvasElement>(null);
+  // Still mode draws only on demand: after a resize (which clears the canvas) and on each new page.
+  const redraw = useRef<(() => void) | null>(null);
+  const path = usePathname();
+  useEffect(() => {
+    const id = requestAnimationFrame(() => redraw.current?.());
+    return () => cancelAnimationFrame(id);
+  }, [path]);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -40,7 +48,10 @@ export function Scene() {
       const w = createWorld(canvas);
       dispose = w.dispose;
       const off = { x: 0, y: 0 };
-      const size = () => w.resize(window.innerWidth, window.innerHeight);
+      const size = () => {
+        w.resize(window.innerWidth, window.innerHeight);
+        redraw.current?.();
+      };
       size();
       window.addEventListener('resize', size);
       const prevDispose = dispose;
@@ -55,9 +66,13 @@ export function Scene() {
         w.setOffset(off.x, off.y);
       };
       if (mode === 'still') {
-        // One frame with the helicopter mid-circle.
+        // One frame with the helicopter mid-circle, redrawn (not advanced) when needed.
         place(0);
         w.frame(4, { phase: 'fly', t: 4 });
+        redraw.current = () => {
+          place(0);
+          w.frame(0, { phase: 'fly', t: 4 });
+        };
         return;
       }
       let story: Story = { phase: 'fly', t: 0 },
@@ -75,6 +90,7 @@ export function Scene() {
     });
     return () => {
       stop = true;
+      redraw.current = null;
       cancelAnimationFrame(raf);
       dispose();
     };

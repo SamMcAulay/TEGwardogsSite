@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activeTab, youItems } from './nav';
+import { activeTab, dismisses, youItems } from './nav';
 
 describe('activeTab', () => {
   it('puts live pages under Live', () => {
@@ -43,5 +43,18 @@ describe('youItems', () => {
 
   it('keeps account settings reachable without Steam', () => {
     expect(youItems({ steamId: null }).map((i) => i.href)).toEqual(['/account', '/friends']);
+  });
+});
+
+describe('dismisses', () => {
+  it('closes a menu on Escape or a press outside it', () => {
+    expect(dismisses({ type: 'keydown', key: 'Escape' }, false)).toBe(true);
+    expect(dismisses({ type: 'mousedown' }, false)).toBe(true);
+  });
+
+  it('stays open for other keys and presses inside', () => {
+    expect(dismisses({ type: 'keydown', key: 'Tab' }, false)).toBe(false);
+    expect(dismisses({ type: 'mousedown' }, true)).toBe(false);
+    expect(dismisses({ type: 'keydown', key: 'Escape' }, true)).toBe(true);
   });
 });
