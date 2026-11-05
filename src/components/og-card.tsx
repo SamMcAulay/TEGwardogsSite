@@ -3,15 +3,15 @@
 import type { CardModel } from '@/lib/server/card';
 
 const C = {
-  bg: '#07090c',
-  surface: '#0d1015',
-  line: '#1c222b',
-  lineStrong: '#29313c',
-  text: '#e8ebef',
-  muted: '#8d97a5',
-  dim: '#5c6674',
-  accent: '#f2b33d',
-  accentInk: '#1a1204',
+  bg: '#16131c',
+  surface: '#221e2b',
+  line: '#2c2738',
+  lineStrong: '#07060a',
+  text: '#f4efe6',
+  muted: '#b3aabd',
+  dim: '#8f869e',
+  accent: '#ffc93c',
+  accentInk: '#1d1606',
 };
 
 const label = {
@@ -73,7 +73,7 @@ function Initials({ name, accent }: { name: string; accent?: string | null }) {
         justifyContent: 'center',
         width: 168,
         height: 168,
-        background: '#181d25',
+        background: '#2c2738',
         border: accent ? `4px solid ${accent}` : `2px solid ${C.lineStrong}`,
         color: accent ?? C.accent,
         fontFamily: 'Barlow',
