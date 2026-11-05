@@ -132,76 +132,80 @@ export default async function Home() {
           </Section>
         </div>
 
+        {/* Three columns that each stack on their own, so a tall card never leaves a hole beside it. */}
         <div className="mt-6 grid items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <TopDogs kd={<Dogs loaded={kdBoard} value={(r) => kd(r.kills, r.deaths)} />} kills={<Dogs loaded={killsBoard} value={(r) => int(r.kills)} />} />
-          <Panel title="Just finished" action={<PanelLink href="/matches">All matches</PanelLink>}>
-            {recent === null ? (
-              <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
-            ) : recent.length ? (
-              <ul className="divide-y-2 divide-dashed divide-line">
-                {recent.map((r) => (
-                  <li key={`${r.serverId}-${r.matchId}`}>
-                    <Link prefetch={false} href={`/matches/${r.serverId}/${r.matchId}`} className="flex items-center gap-3 py-3 font-semibold hover:text-accent">
-                      <span className="min-w-0 flex-1 truncate">
-                        {shortNameOf(r.serverName)} · {mapName(r.map)}
-                      </span>
-                      <ScoreChips scores={r.scores} />
-                      <ClosenessChip scores={r.scores.map((s) => s.score)} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <Empty>No finished rounds yet.</Empty>
-            )}
-          </Panel>
-          <Panel title="Kill feed" action={<PanelLink href="/feed">Full feed</PanelLink>} flush>
-            <Section loaded={feed}>{(k) => (k.length ? <KillStack kills={k} factionOf={factionOf} showServer /> : <Empty>Quiet.</Empty>)}</Section>
-          </Panel>
-        </div>
-
-        <div className="mt-6 grid items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {onlineFriends.length > 0 && (
-            <Panel title="Friends online" action={<PanelLink href="/friends">All friends</PanelLink>}>
-              <ul className="grid gap-2">
-                {onlineFriends.map((f) => (
-                  <li key={f.steamId} className="flex items-center gap-3">
-                    <span className="size-2.5 shrink-0 rounded-full bg-good" aria-hidden />
-                    <PlayerLink steamId={f.steamId} name={f.name ?? 'A friend'} avatarUrl={f.avatarUrl} className="min-w-0 flex-1 font-bold" />
-                    <Link href={`/servers/${f.online!.serverSlug}`} className="text-sm font-bold text-muted hover:text-accent">
-                      {f.online!.serverName}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+          <div className="grid gap-6">
+            <TopDogs kd={<Dogs loaded={kdBoard} value={(r) => kd(r.kills, r.deaths)} />} kills={<Dogs loaded={killsBoard} value={(r) => int(r.kills)} />} />
+            <Panel title="Busiest guns today" action={<PanelLink href="/records">Records</PanelLink>}>
+              <Section loaded={recs}>
+                {(r) =>
+                  r.today.length ? (
+                    <MiniRows rows={r.today.slice(0, 3).map((x) => ({ ...x, value: `${int(x.value)} kills` }))} />
+                  ) : (
+                    <Empty>No kills in the last 24 hours.</Empty>
+                  )
+                }
+              </Section>
             </Panel>
-          )}
-          <Panel title="Busiest guns today" action={<PanelLink href="/records">Records</PanelLink>}>
-            <Section loaded={recs}>
-              {(r) =>
-                r.today.length ? (
-                  <MiniRows rows={r.today.slice(0, 3).map((x) => ({ ...x, value: `${int(x.value)} kills` }))} />
-                ) : (
-                  <Empty>No kills in the last 24 hours.</Empty>
-                )
-              }
-            </Section>
-          </Panel>
-          <Panel title="Climbing" action={<PanelLink href="/leaderboards?metric=kills&period=all">All-time board</PanelLink>}>
-            {climbers.length ? (
-              <MiniRows
-                rows={climbers.map(({ r, up }) => ({
-                  steamId: r.steamId,
-                  name: r.name,
-                  avatarUrl: r.avatarUrl,
-                  value: `#${r.rank}`,
-                  note: <span className="num text-sm font-extrabold text-good">▲{up}</span>,
-                }))}
-              />
-            ) : (
-              <Empty>Nobody has climbed the all-time board this week yet.</Empty>
+          </div>
+          <div className="grid gap-6">
+            <Panel title="Just finished" action={<PanelLink href="/matches">All matches</PanelLink>}>
+              {recent === null ? (
+                <Empty>Stats are temporarily unavailable. Try again in a minute.</Empty>
+              ) : recent.length ? (
+                <ul className="divide-y-2 divide-dashed divide-line">
+                  {recent.map((r) => (
+                    <li key={`${r.serverId}-${r.matchId}`}>
+                      <Link prefetch={false} href={`/matches/${r.serverId}/${r.matchId}`} className="flex items-center gap-3 py-3 font-semibold hover:text-accent">
+                        <span className="min-w-0 flex-1 truncate">
+                          {shortNameOf(r.serverName)} · {mapName(r.map)}
+                        </span>
+                        <ScoreChips scores={r.scores} />
+                        <ClosenessChip scores={r.scores.map((s) => s.score)} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <Empty>No finished rounds yet.</Empty>
+              )}
+            </Panel>
+            <Panel title="Climbing" action={<PanelLink href="/leaderboards?metric=kills&period=all">All-time board</PanelLink>}>
+              {climbers.length ? (
+                <MiniRows
+                  rows={climbers.map(({ r, up }) => ({
+                    steamId: r.steamId,
+                    name: r.name,
+                    avatarUrl: r.avatarUrl,
+                    value: `#${r.rank}`,
+                    note: <span className="num text-sm font-extrabold text-good">▲{up}</span>,
+                  }))}
+                />
+              ) : (
+                <Empty>Nobody has climbed the all-time board this week yet.</Empty>
+              )}
+            </Panel>
+          </div>
+          <div className="grid gap-6">
+            <Panel title="Kill feed" action={<PanelLink href="/feed">Full feed</PanelLink>} flush>
+              <Section loaded={feed}>{(k) => (k.length ? <KillStack kills={k} factionOf={factionOf} showServer /> : <Empty>Quiet.</Empty>)}</Section>
+            </Panel>
+            {onlineFriends.length > 0 && (
+              <Panel title="Friends online" action={<PanelLink href="/friends">All friends</PanelLink>}>
+                <ul className="grid gap-2">
+                  {onlineFriends.map((f) => (
+                    <li key={f.steamId} className="flex items-center gap-3">
+                      <span className="size-2.5 shrink-0 rounded-full bg-good" aria-hidden />
+                      <PlayerLink steamId={f.steamId} name={f.name ?? 'A friend'} avatarUrl={f.avatarUrl} className="min-w-0 flex-1 font-bold" />
+                      <Link href={`/servers/${f.online!.serverSlug}`} className="text-sm font-bold text-muted hover:text-accent">
+                        {f.online!.serverName}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
             )}
-          </Panel>
+          </div>
         </div>
       </Container>
     </>
