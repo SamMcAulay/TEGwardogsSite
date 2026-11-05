@@ -28,6 +28,7 @@ export default async function ServersPage() {
     ),
   );
 
+  const networkPop = await safe(population(null, '24h'));
   const activity = networkActivity();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -54,6 +55,14 @@ export default async function ServersPage() {
         }
       />
       <Container className="mt-8 space-y-10">
+        <Panel
+          title="Network population · 24h"
+          action={summary ? <span className="num">Peak on one server {int(summary.peakToday)}</span> : null}
+        >
+          <Section loaded={networkPop}>
+            {(points) => <AreaChart points={points.map((p) => ({ t: p.ts, v: p.players }))} height={220} unit=" players" />}
+          </Section>
+        </Panel>
         <Section loaded={servers}>
           {(rows) =>
             [...new Set(rows.map((s) => s.region))].map((region) => (

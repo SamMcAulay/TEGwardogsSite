@@ -115,6 +115,45 @@ function YouMenu({
   );
 }
 
+type OnlineFriend = { steamId: string; name: string; serverName: string; serverSlug: string };
+
+/** Friends on a server right now, fetched when the menu opens. */
+function FriendsOnline() {
+  const [online, setOnline] = useState<OnlineFriend[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch('/api/me/friends?online=1', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { online?: OnlineFriend[] } | null) => live && setOnline(d?.online ?? []))
+      .catch(() => live && setOnline([]));
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!online?.length) return null;
+  return (
+    <div className="mb-2 border-b-2 border-dashed border-line px-3 pb-3">
+      <div className="eyebrow mb-1.5">Friends playing now</div>
+      <ul className="grid gap-1 text-sm">
+        {online.slice(0, 5).map((f) => (
+          <li key={f.steamId} className="flex items-center gap-2">
+            <span className="size-2 shrink-0 rounded-full bg-good" aria-hidden />
+            <Link prefetch={false} href={`/players/${f.steamId}`} className="link min-w-0 truncate font-bold">
+              {f.name}
+            </Link>
+            <span className="ml-auto shrink-0 text-muted">{f.serverName}</span>
+          </li>
+        ))}
+      </ul>
+      {online.length > 5 && (
+        <Link href="/friends" className="mt-1.5 block text-sm font-bold text-accent">
+          All friends →
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function YouPanel({
   me,
   count,
@@ -126,6 +165,7 @@ function YouPanel({
 }) {
   return (
     <div className={cx('panel z-50 p-3', className)}>
+      {me?.steamId && <FriendsOnline />}
       <ul className="grid gap-1">
         {youItems(me).map((i) => (
           <li key={i.href}>
