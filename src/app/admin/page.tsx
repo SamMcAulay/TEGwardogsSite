@@ -13,7 +13,8 @@ import type { AccountsEnv } from '@/lib/server/accounts/env';
 import type { Link as AccountLink } from '@/lib/server/accounts/store';
 import { playerName } from '@/lib/server/data';
 import { one } from '@/lib/url';
-import { clearProfile, recheckAccount, setNameStyle, unlinkAccount } from './actions';
+import { slotSyncConfig, SLOT_GROUP } from '@/lib/server/warcon/slots';
+import { clearProfile, recheckAccount, setNameStyle, syncReservedSlots, unlinkAccount } from './actions';
 import { AdminNav } from './nav';
 
 // Staff only, and linked from nowhere: everyone else gets the ordinary 404.
@@ -28,6 +29,9 @@ const DONE: Record<string, { text: string; good: boolean }> = {
   'discord-down': { text: 'Discord did not answer; the tier was left as it was.', good: false },
   unconfirmed: { text: 'Tick the box to confirm before unlinking.', good: false },
   gone: { text: 'That account is no longer linked.', good: false },
+  'slots-started': { text: 'Reserved-slot sync started. The result shows in the audit log in a minute or two (refresh).', good: true },
+  'slots-busy': { text: 'A reserved-slot sync is already running.', good: false },
+  'slots-unset': { text: 'Reserved-slot sync is not set up: WARCON_SLOTS_TOKEN and WARCON_ORG_ID are needed.', good: false },
 };
 
 const ts = (sec: number | null) => (sec ? <LocalTime ts={sec} /> : '—');
@@ -192,6 +196,20 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
 
         {found && <LinkCard link={found} env={gate.a.env} />}
 
+        <Panel title="Warcon reserved slots">
+          <p className="text-sm text-muted">
+            Copies every linked Prio 1 and Prio 2 SteamID ({int(counts[1] + counts[2])} now) into the Warcon slot group &ldquo;{SLOT_GROUP}&rdquo; and
+            takes out anyone who lost the role. It does not switch the group on: players get a slot only once the group is switched on in Warcon
+            (org &rarr; Reserved slots). Servers pick changes up at their daily restart.
+          </p>
+          <form action={syncReservedSlots} className="mt-3">
+            <button className={buttonClass('secondary')} disabled={!slotSyncConfig()}>
+              Sync reserved slots now
+            </button>
+            {!slotSyncConfig() && <span className="ml-3 text-sm text-dim">Not set up (WARCON_SLOTS_TOKEN, WARCON_ORG_ID).</span>}
+          </form>
+        </Panel>
+
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Newest links" flush action={`${int(recent.length)} of ${int(counts.total)}`}>
             {recent.length ? (
@@ -229,7 +247,12 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
               <ul className="divide-y divide-line text-sm">
                 {log.map((e, i) => (
                   <li key={i} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5">
-                    {e.action === 'export' ? (
+                    {e.action === 'slots' ? (
+                      <span>
+                        <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
+                        synced reserved slots{e.detail && <span className="text-muted"> · {e.detail}</span>}
+                      </span>
+                    ) : e.action === 'export' ? (
                       <span>
                         <span className="font-medium">{e.adminName ?? <span className="font-mono text-xs">{e.adminDiscordId}</span>}</span>{' '}
                         downloaded the linked accounts{e.detail && <span className="text-muted"> · {e.detail}</span>}

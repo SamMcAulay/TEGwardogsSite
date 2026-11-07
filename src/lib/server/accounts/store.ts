@@ -64,7 +64,7 @@ const toLink = (r: Row): Link => ({
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export type AdminAction = 'unlink' | 'recheck' | 'style' | 'profile' | 'export';
+export type AdminAction = 'unlink' | 'recheck' | 'style' | 'profile' | 'export' | 'slots';
 
 export interface AdminLogEntry {
   at: number;
