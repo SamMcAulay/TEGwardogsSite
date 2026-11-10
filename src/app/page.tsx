@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Avatar } from '@/components/avatar';
 import { AutoRefresh } from '@/components/client';
 import { KillStack } from '@/components/game';
 import { SectionTabs } from '@/components/section-tabs';
@@ -8,11 +9,11 @@ import { Section, safe } from '@/components/section';
 import { ServerTabs } from '@/components/server-tabs';
 import { TopDogs } from '@/components/top-dogs';
 import { ClosenessChip, Container, Empty, Panel, PanelLink, RankCell, ScoreChips } from '@/components/ui';
-import { compact, int, kd } from '@/lib/format';
+import { compact, duration, int, kd } from '@/lib/format';
 import { mapName } from '@/lib/game';
 import { friendsByServer, toTabServer } from '@/lib/live';
 import { viewer } from '@/lib/server/accounts';
-import { endedRounds, friendsPage, getServers, leaderboard, networkSummary, recentKills, records, shortNameOf } from '@/lib/server/data';
+import { endedRounds, friendsPage, getPlayer, getServers, leaderboard, networkSummary, recentKills, records, shortNameOf } from '@/lib/server/data';
 import { boardMoves } from '@/lib/server/trends';
 import type { LeaderRow, Loaded } from '@/lib/server/views';
 
@@ -21,6 +22,13 @@ async function friendsOfViewer() {
   const me = await viewer();
   if (!me?.steamId) return [];
   return (await friendsPage(me.discordId).catch(() => null))?.friends.map((f) => f.status) ?? [];
+}
+
+/** The signed-in member's own Steam profile, for the corner card; null when signed out or unlinked. */
+async function viewerProfile() {
+  const me = await viewer();
+  if (!me?.steamId) return null;
+  return (await getPlayer(me.steamId).catch(() => null))?.data ?? null;
 }
 
 function TodayStat({ label, value }: { label: string; value: string }) {
@@ -71,9 +79,10 @@ function Dogs({ loaded, value }: { loaded: Loaded<{ rows: LeaderRow[] }> | Error
 }
 
 export default async function Home() {
-  const [servers, myFriends, kdBoard, killsBoard, feed, ended, allTime, recs] = await Promise.all([
+  const [servers, myFriends, me, kdBoard, killsBoard, feed, ended, allTime, recs] = await Promise.all([
     safe(getServers()),
     friendsOfViewer(),
+    viewerProfile(),
     safe(leaderboard({ metric: 'kd', period: '7d' })),
     safe(leaderboard({ metric: 'kills', period: '7d' })),
     safe(recentKills({ limit: 8 })),
@@ -108,6 +117,18 @@ export default async function Home() {
           {/* The scene frames the island on this whole column; today's numbers float at its foot. */}
           <div className="relative flex min-h-[38vh] flex-col justify-end lg:min-h-[calc(100vh-190px)]">
             <div data-scene-gap aria-hidden className="absolute inset-0" />
+            {me && (
+              // mb-auto lifts the card to the top while today's numbers stay at the foot.
+              <Link prefetch={false} href={`/players/${me.steamId}`} className="panel relative mb-auto flex items-center gap-3 self-start px-4 py-3">
+                <Avatar name={me.name} steamId={me.steamId} url={me.avatarUrl} size={48} />
+                <div className="min-w-0">
+                  <div className="truncate font-extrabold">{me.name}</div>
+                  <div className="text-sm font-bold text-muted">
+                    <span className="num">{duration(me.totals.playtime)}</span> played · <span className="num">{int(me.totals.kills)}</span> kills
+                  </div>
+                </div>
+              </Link>
+            )}
             <Section loaded={summary}>
               {(sm) => (
                 <section aria-label="Today on TEG" className="panel relative grid grid-cols-2 divide-dashed divide-line sm:grid-cols-4 sm:divide-x-2">

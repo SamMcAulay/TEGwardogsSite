@@ -204,6 +204,9 @@ export default async function AccountPage({ searchParams }: PageProps<'/account'
             Your status follows your Discord roles and refreshes every few minutes. Bulkhead&apos;s tiered queue
             isn&apos;t live yet, but link now: everyone already linked gets their priority from the day it starts.
           </p>
+          <p className="mt-3 rounded-lg border-2 border-dashed border-line px-3 py-2 text-xs font-bold text-muted">
+            Verified queue priority is coming soon.
+          </p>
         </Panel>
       </Container>
     </>
