@@ -30,7 +30,7 @@ const DONE: Record<string, { text: string; good: boolean }> = {
   unconfirmed: { text: 'Tick the box to confirm before unlinking.', good: false },
   gone: { text: 'That account is no longer linked.', good: false },
   'slots-started': { text: 'Reserved-slot sync started. The result shows in the audit log in a minute or two (refresh).', good: true },
-  'slots-busy': { text: 'A reserved-slot sync is already running.', good: false },
+  'slots-busy': { text: 'A reserved-slot sync is already running (it also runs on its own every 10 minutes).', good: false },
   'slots-unset': { text: 'Reserved-slot sync is not set up: WARCON_SLOTS_TOKEN and WARCON_ORG_ID are needed.', good: false },
 };
 
@@ -200,7 +200,7 @@ export default async function AdminPage({ searchParams }: PageProps<'/admin'>) {
           <p className="text-sm text-muted">
             Copies every linked Prio 1 and Prio 2 SteamID ({int(counts[1] + counts[2])} now) into the Warcon slot group &ldquo;{SLOT_GROUP}&rdquo; and
             takes out anyone who lost the role. It does not switch the group on: players get a slot only once the group is switched on in Warcon
-            (org &rarr; Reserved slots). Servers pick changes up at their daily restart.
+            (org &rarr; Reserved slots). It also runs on its own every 10 minutes; servers may only pick changes up at their daily restart.
           </p>
           <form action={syncReservedSlots} className="mt-3">
             <button className={buttonClass('secondary')} disabled={!slotSyncConfig()}>

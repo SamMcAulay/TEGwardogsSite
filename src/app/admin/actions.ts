@@ -8,7 +8,7 @@ import type { Link as AccountLink } from '@/lib/server/accounts/store';
 import { refreshTier } from '@/lib/server/accounts/sync';
 import { isNameStyle, NAME_STYLE_LABELS } from '@/lib/name-styles';
 import { siteEnv } from '@/lib/server/warcon/env';
-import { slotSyncConfig, syncSlotGroup } from '@/lib/server/warcon/slots';
+import { runSlotSync, slotSyncConfig } from '@/lib/server/warcon/slots';
 
 const SNOWFLAKE = /^\d{17,20}$/;
 
@@ -88,33 +88,28 @@ export async function clearProfile(form: FormData) {
   redirect(`/admin?q=${discordId}&done=${reset ? 'profile-reset' : 'bio-cleared'}`);
 }
 
-let slotSyncRunning = false;
-
 /**
- * Push linked Premium and staff SteamIDs into Warcon's "Premium (site)" reserved-slot group. Runs in
- * the background (a first run is ~120 adds, longer than Cloudflare waits); the result lands in the
- * audit log. It only fills the group: the group stays off until switched on in Warcon.
+ * Push linked Premium and staff SteamIDs into Warcon's "Premium (site)" reserved-slot group now,
+ * instead of waiting for the 10-minute timer. Runs in the background (a big run is longer than
+ * Cloudflare waits); the result lands in the audit log. It never switches the group on.
  */
 export async function syncReservedSlots() {
   const gate = await currentAdmin();
   if (!gate) notFound();
-  const cfg = slotSyncConfig();
-  if (!cfg) redirect('/admin?done=slots-unset');
-  if (slotSyncRunning) redirect('/admin?done=slots-busy');
-  slotSyncRunning = true;
+  if (!slotSyncConfig()) redirect('/admin?done=slots-unset');
   const { a, admin } = gate;
+  const run = runSlotSync(a.store, siteEnv().warconBaseUrl);
+  if (!run) redirect('/admin?done=slots-busy');
   const adminName = a.store.byDiscord(admin.discordId)?.discordName ?? admin.name;
-  const steamIds = a.store.tiered().filter((p) => p.tier === 1 || p.tier === 2).map((p) => p.steamId);
   const log = (detail: string) =>
     a.store.log({ adminDiscordId: admin.discordId, adminName, action: 'slots', targetDiscordId: admin.discordId, targetSteamId: null, targetName: null, detail });
-  void syncSlotGroup({ baseUrl: siteEnv().warconBaseUrl, ...cfg, steamIds })
+  void run.done
     .then((r) =>
-      log(`${steamIds.length} wanted: +${r.added} −${r.removed}${r.failed ? `, ${r.failed} failed` : ''}; group ${r.on ? 'ON in Warcon' : 'off in Warcon (not applied)'}`),
+      log(`${run.wanted} wanted: +${r.added} −${r.removed}${r.failed ? `, ${r.failed} failed` : ''}; group ${r.on ? 'ON in Warcon' : 'off in Warcon (not applied)'}`),
     )
     .catch((e) => {
       console.error('[slots] sync failed:', e instanceof Error ? e.message : e);
       log(`failed: ${e instanceof Error ? e.message : 'unknown error'}`);
-    })
-    .finally(() => (slotSyncRunning = false));
+    });
   redirect('/admin?done=slots-started');
 }

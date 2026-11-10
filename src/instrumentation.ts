@@ -19,10 +19,13 @@ export async function register() {
     const a = accounts();
     if (a) startTierSync(a.env, a.store);
     if (a) {
+      // Reserved slots: only when WARCON_SLOTS_TOKEN and WARCON_ORG_ID are set.
+      const { startSlotSync } = await import('./lib/server/warcon/slots');
+      const { siteEnv } = await import('./lib/server/warcon/env');
+      startSlotSync(a.store, siteEnv().warconBaseUrl);
       // Team balancer: idle until staff arm it on /admin/teambalance.
       const { startTeamBalancer } = await import('./lib/server/teambalance/run');
       const { warconActor } = await import('./lib/server/warcon/act');
-      const { siteEnv } = await import('./lib/server/warcon/env');
       const { warcon } = await import('./lib/server/warcon');
       const { ratings } = await import('./lib/server/history');
       startTeamBalancer({
