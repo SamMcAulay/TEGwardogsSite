@@ -119,11 +119,11 @@ export default async function Home() {
             <div data-scene-gap aria-hidden className="absolute inset-0" />
             {me && (
               // mb-auto lifts the card to the top while today's numbers stay at the foot.
-              <Link prefetch={false} href={`/players/${me.steamId}`} className="panel relative mb-auto flex items-center gap-3 self-start px-4 py-3">
-                <Avatar name={me.name} steamId={me.steamId} url={me.avatarUrl} size={48} />
+              <Link prefetch={false} href={`/players/${me.steamId}`} className="panel relative mb-auto flex items-center gap-4 self-start px-5 py-4">
+                <Avatar name={me.name} steamId={me.steamId} url={me.avatarUrl} size={64} />
                 <div className="min-w-0">
-                  <div className="truncate font-extrabold">{me.name}</div>
-                  <div className="text-sm font-bold text-muted">
+                  <div className="truncate text-lg font-extrabold">{me.name}</div>
+                  <div className="font-bold text-muted">
                     <span className="num">{duration(me.totals.playtime)}</span> played · <span className="num">{int(me.totals.kills)}</span> kills
                   </div>
                 </div>

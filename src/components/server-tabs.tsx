@@ -12,26 +12,26 @@ type Friends = Record<string, { steamId: string; name: string }[]>;
 const who = (names: string[]) =>
   names.length === 1 ? `${names[0]} is here` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)} are here`;
 
-function Tab({ s, open, onOpen, friends }: { s: TabServer; open: boolean; onOpen: () => void; friends: Friends[string] | undefined }) {
+function Tab({ s, open, full, onOpen, friends }: { s: TabServer; open: boolean; full: boolean; onOpen: () => void; friends: Friends[string] | undefined }) {
   const live = isLive(s);
   const art = s.map ? mapArt(s.map, s.lighting) : null;
   const line = s.online === false ? 'Offline' : s.online === null ? 'Status unavailable' : [s.map, lightingName(s.lighting), s.roundSeconds != null && `${duration(s.roundSeconds)} in`].filter(Boolean).join(' · ');
   return (
-    <div className={cx('overflow-hidden rounded-[22px] border-[3px] border-edge bg-surface-2 shadow-[0_4px_0_var(--edge)]', open && 'outline-[3px] -outline-offset-1 outline-accent outline', !live && 'opacity-55')}>
+    <div className={cx('flex flex-col overflow-hidden rounded-[22px] border-[3px] border-edge bg-surface-2 shadow-[0_4px_0_var(--edge)]', open && !full && 'outline-[3px] -outline-offset-1 outline-accent outline', full && 'flex-1', !live && 'opacity-55')}>
       <button
         type="button"
-        disabled={!live}
+        disabled={!live || full}
         aria-expanded={live ? open : undefined}
         onClick={onOpen}
-        className="block w-full text-left disabled:cursor-default"
+        className={cx('block w-full text-left disabled:cursor-default', full && 'flex flex-1 flex-col')}
       >
-        <div className={cx('relative overflow-hidden border-b-[3px] border-edge bg-surface-3 transition-[height] duration-300', open ? 'h-24' : 'h-14')}>
+        <div className={cx('relative overflow-hidden border-b-[3px] border-edge bg-surface-3 transition-[height] duration-300', full ? 'min-h-32 flex-1' : open ? 'h-24' : 'h-14')}>
           {art && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={art} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           )}
           <div className="absolute inset-0 bg-gradient-to-r from-bg/85 to-bg/25" />
-          <span className="display absolute bottom-2 left-4 text-lg">{s.shortName}</span>
+          <span className={cx('display absolute bottom-2 left-4', full ? 'text-2xl' : 'text-lg')}>{s.shortName}</span>
           <span className="num absolute right-3 bottom-2.5 rounded-full bg-black/60 px-2.5 text-sm font-extrabold">
             {s.online ? `${s.playerCount}/${s.maxPlayers ?? '—'}` : 'offline'}
           </span>
@@ -85,6 +85,8 @@ export function ServerTabs({ servers, friends, playing, up, total }: { servers: 
   const [picked, setPicked] = useState<string | null>(null);
   // A refresh brings new props; the viewer's pick stays open while that server is live.
   const open = keepOpen(picked, servers);
+  // With two servers there's room for both as full cards, so none collapse.
+  const full = servers.length <= 2;
   return (
     <aside className="panel flex flex-col gap-3 p-5">
       <div className="flex items-baseline justify-between gap-3">
@@ -94,7 +96,7 @@ export function ServerTabs({ servers, friends, playing, up, total }: { servers: 
         </Link>
       </div>
       {servers.map((s) => (
-        <Tab key={s.id} s={s} open={open === s.id} onOpen={() => setPicked(s.id)} friends={friends[s.id]} />
+        <Tab key={s.id} s={s} open={full || open === s.id} full={full} onOpen={() => setPicked(s.id)} friends={friends[s.id]} />
       ))}
     </aside>
   );
