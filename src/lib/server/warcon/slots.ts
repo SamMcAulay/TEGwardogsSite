@@ -1,8 +1,11 @@
 // Keeps a Warcon reserved-slot group ("Premium (site)") equal to the linked Premium and staff
-// SteamIDs. Run by hand from /admin. The group is created switched off and the site never switches
-// it on: until someone does that in Warcon, nothing here reaches a game server. Everything in the
-// group is the site's, so removing what is no longer wanted is safe. Needs WARCON_SLOTS_TOKEN, an
-// org API key with only "Org reserved slots" over every server, and WARCON_ORG_ID.
+// SteamIDs, every 10 minutes and from the /admin button. The group is created switched off and the
+// site never switches it on: until someone does that in Warcon, nothing here reaches a game server.
+// Everything in the group is the site's, so removing what is no longer wanted is safe. Needs
+// WARCON_SLOTS_TOKEN, an org API key with only "Org reserved slots" over every server, and WARCON_ORG_ID.
+
+import type { Store } from '../accounts/store';
+import { jobRan } from '../jobs';
 
 export const SLOT_GROUP = 'Premium (site)';
 const NOTE = 'TEG Premium/staff, synced from stats.tegwardogs.fyi';
@@ -75,4 +78,43 @@ export async function syncSlotGroup(opts: {
     }
   }
   return result;
+}
+
+/** Linked staff (Prio 1) and Premium (Prio 2) SteamIDs: what the group should hold. */
+export const wantedSlotIds = (store: Store) => store.tiered().filter((p) => p.tier === 1 || p.tier === 2).map((p) => p.steamId);
+
+const g = globalThis as unknown as { __slotSyncRunning?: boolean; __slotSync?: ReturnType<typeof setInterval> };
+
+/**
+ * One sync at a time, shared by the /admin button and the timer. Null when one is already running
+ * or nothing is wanted (an empty list would empty the group, which is never what anyone means).
+ */
+export function runSlotSync(store: Store, baseUrl: string): { wanted: number; done: Promise<SlotSyncResult> } | null {
+  const cfg = slotSyncConfig();
+  const steamIds = wantedSlotIds(store);
+  if (!cfg || g.__slotSyncRunning || steamIds.length === 0) return null;
+  g.__slotSyncRunning = true;
+  const done = syncSlotGroup({ baseUrl, ...cfg, steamIds }).finally(() => (g.__slotSyncRunning = false));
+  return { wanted: steamIds.length, done };
+}
+
+/** Keeps the group in step on its own, so new Premium links get a slot without anyone pressing the button. */
+export function startSlotSync(store: Store, baseUrl: string, intervalMs = 10 * 60_000): void {
+  if (g.__slotSync || !slotSyncConfig()) return;
+  const run = () => {
+    const r = runSlotSync(store, baseUrl);
+    r?.done.then(
+      (res) => {
+        if (res.added || res.removed || res.failed) console.log(`[slots] auto sync: +${res.added} −${res.removed}, ${res.failed} failed`);
+        jobRan('slotSync', { error: res.failed ? `${res.failed} failed` : null, note: `${r.wanted} wanted: +${res.added} −${res.removed}` });
+      },
+      (e) => {
+        console.error('[slots] auto sync failed:', e instanceof Error ? e.message : e);
+        jobRan('slotSync', { error: e instanceof Error ? e.message : String(e) });
+      },
+    );
+  };
+  run();
+  g.__slotSync = setInterval(run, intervalMs);
+  g.__slotSync.unref?.();
 }

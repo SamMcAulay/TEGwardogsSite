@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { slotSyncConfig, SLOT_GROUP, syncSlotGroup } from './slots';
+import type { Store } from '../accounts/store';
+import { runSlotSync, slotSyncConfig, SLOT_GROUP, syncSlotGroup } from './slots';
 
 /** A fake Warcon slot-groups API holding one org's groups, recording every call. */
 function fakeWarcon(groups: { id: string; name: string; on: boolean; entries: string[] }[], failAdd?: string) {
@@ -53,5 +54,29 @@ describe('syncSlotGroup', () => {
   it('is off without both settings', () => {
     expect(slotSyncConfig({ WARCON_SLOTS_TOKEN: 'k' })).toBeNull();
     expect(slotSyncConfig({ WARCON_SLOTS_TOKEN: ' k ', WARCON_ORG_ID: 'o' })).toEqual({ token: 'k', orgId: 'o' });
+  });
+});
+
+describe('runSlotSync', () => {
+  const store = (tiers: (1 | 2 | 3)[]) => ({ tiered: () => tiers.map((tier, i) => ({ steamId: `s${i}`, tier, linkedAt: 0 })) }) as unknown as Store;
+
+  it('runs one sync at a time, only Prio 1 and 2, and never with an empty list', async () => {
+    process.env.WARCON_SLOTS_TOKEN = 'k';
+    process.env.WARCON_ORG_ID = 'org1';
+    const real = globalThis.fetch;
+    const w = fakeWarcon([{ id: 'g1', name: SLOT_GROUP, on: true, entries: ['old'] }]);
+    globalThis.fetch = w.fetch;
+    try {
+      expect(runSlotSync(store([3]), 'https://w')).toBeNull();
+      const first = runSlotSync(store([1, 2, 3]), 'https://w');
+      expect(first?.wanted).toBe(2);
+      expect(runSlotSync(store([1]), 'https://w')).toBeNull();
+      expect(await first!.done).toEqual({ added: 2, removed: 1, failed: 0, on: true });
+      expect(runSlotSync(store([1, 2]), 'https://w')).not.toBeNull();
+    } finally {
+      globalThis.fetch = real;
+      delete process.env.WARCON_SLOTS_TOKEN;
+      delete process.env.WARCON_ORG_ID;
+    }
   });
 });

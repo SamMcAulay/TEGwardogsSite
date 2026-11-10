@@ -33,6 +33,7 @@ const JOBS: { name: JobName; label: string; everyS: number; what: string }[] = [
   { name: 'warmer', label: 'Page warmer', everyS: 60, what: 'Keeps the busiest pages loaded from Warcon' },
   { name: 'history', label: 'History', everyS: 300, what: 'Stores finished rounds (trends, skill ratings) and the daily board snapshot' },
   { name: 'tierSync', label: 'Tier sync', everyS: 120, what: 'Re-checks linked members’ Discord roles' },
+  { name: 'slotSync', label: 'Reserved slots', everyS: 600, what: 'Copies linked Prio 1 and 2 SteamIDs into the Warcon slot group' },
   { name: 'rounds', label: 'Round poster', everyS: 120, what: 'Posts finished rounds to Discord' },
   { name: 'alerts', label: 'Alerts', everyS: 60, what: 'Sends /notify DMs when servers fill up or maps start' },
   { name: 'teamBalance', label: 'Team balancer', everyS: 10, what: 'Evens the sides by skill on servers staff armed on Team balancer' },
