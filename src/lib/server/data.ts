@@ -10,7 +10,7 @@ import { TTL, type KillKind, type WarconApi } from './warcon/api';
 import type { WAnalytics, WBoardRow, WKill, WLive, WMatchSummary } from './warcon/schemas';
 import { orgBannedIds } from './bans';
 import { factionTag, NewPlayers, seasonOneMain, type LiveTag } from './live-tags';
-import { SEASON_TWO_START, seasonOne, seasonOneBoard, seasonView, withRetired, type Season, type SeasonView } from './seasons';
+import { SEASON_THREE_START, snapshot, snapshotBoard, snapshotOf, isFrozen, seasonView, withRetired, type Season, type SeasonView } from './seasons';
 import type {
   KillRow, LeaderRow, LivePlayer, Loaded, MatchAward, MatchPlayerRow, MatchRow, Metric, NetworkSummary, Period,
   PlayerProfile, PlayerSearchRow, PopulationPoint, Records, RecordRow, RecordShot, ServerRow, FriendStatus,
@@ -256,7 +256,7 @@ async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) => Prom
 /** Rows a board page shows; the same as Warcon's own page size. */
 const BOARD_PAGE_SIZE = 50;
 
-type BoardQuery = { scope: 'server' | 'org'; range: Exclude<Period, 's2'>; sort: Metric };
+type BoardQuery = { scope: 'server' | 'org'; range: Exclude<Period, 's2' | 's3'>; sort: Metric };
 interface Kept {
   kept: WBoardRow[];
   total: number;
@@ -303,34 +303,42 @@ async function keptFromPages(anchor: string, query: BoardQuery, banned: Readonly
   return { kept, total, pageSize, stale };
 }
 
-/** The season-two board's playtime floor, as Warcon's boards. */
-const SEASON_TWO_FLOOR_MINUTES = 60;
+/** A season board's playtime floor, as Warcon's boards. */
+const SEASON_FLOOR_MINUTES = 60;
 
 /**
- * Season two's whole board. Warcon has no "since" range, but season two is only played on today's
- * servers, so each one's all-time board less its season one (the snapshot) is its season two, and
- * the network board adds the servers up. One playtime-sorted export per server, every player on it,
- * serves every stat. Warcon caps an export at 10,000 players, which on a long-running server drops
- * only those with the least time there all time: a few minutes, far below the 60-minute floor.
+ * A season's whole board. Warcon has no "since" range, so on each of today's servers season three
+ * is its all-time board less everything before (the 'before' snapshot), and season two is that
+ * server's season-two snapshot; the network board adds the servers up. One playtime-sorted export
+ * per server, every player on it, serves every stat and the names. Warcon caps an export at 10,000
+ * players, which on a long-running server drops only those with the least time there all time: a
+ * few minutes, far below the 60-minute floor.
  */
-async function keptSeasonTwo(serverIds: string[], sort: Metric, banned: ReadonlySet<string>): Promise<Kept> {
+async function keptSeason(season: 's2' | 's3', serverIds: string[], sort: Metric, banned: ReadonlySet<string>): Promise<Kept> {
   const exports = await Promise.all(
     serverIds.map((id) => warcon().boardExport(id, { scope: 'server', range: 'all', sort: 'playtime', minMinutes: 0 })),
   );
   const sum = new Map<string, WBoardRow>();
   let stale = false;
   serverIds.forEach((id, i) => {
-    const before = seasonOneBoard(id);
-    if (before === 'unavailable') throw new Error('season one snapshot is not installed');
+    const snap = snapshotBoard(season === 's3' ? 'before' : 's2', id);
+    if (snap === 'unavailable') throw new Error(`${season} snapshot is not installed`);
     stale ||= exports[i].stale;
     for (const r of exports[i].value) {
-      const b = before.get(r.steamId);
+      const b = snap.get(r.steamId);
       const less = (all: number, s1: number) => Math.max(0, all - s1);
-      const two = b
-        ? { ...r, minutes: less(r.minutes, b.seconds / 60), kills: less(r.kills, b.kills), deaths: less(r.deaths, b.deaths),
-            headshots: less(r.headshots, b.headshots), matches: less(r.matches, b.matches), wins: less(r.wins, b.wins),
-            losses: less(r.losses, b.losses), draws: less(r.draws, b.draws), cash: less(r.cash, b.cash) }
-        : r;
+      let two: WBoardRow;
+      if (season === 's2') {
+        if (!b) continue;
+        two = { ...r, minutes: b.seconds / 60, kills: b.kills, deaths: b.deaths, headshots: b.headshots, matches: b.matches,
+                wins: b.wins, losses: b.losses, draws: b.draws, cash: b.cash };
+      } else {
+        two = b
+          ? { ...r, minutes: less(r.minutes, b.seconds / 60), kills: less(r.kills, b.kills), deaths: less(r.deaths, b.deaths),
+              headshots: less(r.headshots, b.headshots), matches: less(r.matches, b.matches), wins: less(r.wins, b.wins),
+              losses: less(r.losses, b.losses), draws: less(r.draws, b.draws), cash: less(r.cash, b.cash) }
+          : r;
+      }
       const had = sum.get(r.steamId);
       if (!had) {
         sum.set(r.steamId, { ...two, vehicleKills: 0, killStreak: 0 });
@@ -347,7 +355,7 @@ async function keptSeasonTwo(serverIds: string[], sort: Metric, banned: Readonly
     }
   });
   const kept = [...sum.values()]
-    .filter((r) => r.minutes >= SEASON_TWO_FLOOR_MINUTES && !banned.has(r.steamId))
+    .filter((r) => r.minutes >= SEASON_FLOOR_MINUTES && !banned.has(r.steamId))
     .sort((a, b) => metricValue(sort, b) - metricValue(sort, a) || b.kills - a.kills || a.steamId.localeCompare(b.steamId));
   return { kept, total: kept.length, pageSize: BOARD_PAGE_SIZE, stale };
 }
@@ -364,8 +372,8 @@ export async function leaderboard(q: { metric: Metric; period: Period; serverId?
   const banned = await orgBannedIds();
   const page = Math.min(Math.max(1, Math.floor(q.page ?? 1)), MAX_BOARD_PAGE);
   let board: Kept;
-  if (q.period === 's2') {
-    board = await keptSeasonTwo(await visibleIds(q.serverId), q.metric, banned.ids);
+  if (q.period === 's2' || q.period === 's3') {
+    board = await keptSeason(q.period, await visibleIds(q.serverId), q.metric, banned.ids);
   } else {
     const query: BoardQuery = { scope: q.serverId ? 'server' : 'org', range: q.period, sort: q.metric };
     try {
@@ -420,15 +428,16 @@ async function orgBoard(period: Period): Promise<{ rows: WBoardRow[]; stale: boo
   if (!ids.length) return { rows: [], stale: false };
   const banned = await orgBannedIds();
   const board =
-    period === 's2'
-      ? await keptSeasonTwo(ids, 'kills', banned.ids)
+    period === 's2' || period === 's3'
+      ? await keptSeason(period, ids, 'kills', banned.ids)
       : await keptFromExport(ids[0], { scope: 'org', range: period, sort: 'kills' }, banned.ids);
   return { rows: board.kept, stale: board.stale || banned.stale };
 }
 
-/** Season-two players' names by Steam id (staff balance page: names and clan tags for the stored rounds). */
+/** Season two and three players' names by Steam id (staff balance page: names and clan tags for the stored rounds). */
 export async function seasonNames(): Promise<Map<string, string>> {
-  return new Map((await orgBoard('s2')).rows.map((r) => [r.steamId, r.name]));
+  const [two, three] = await Promise.all([orgBoard('s2'), orgBoard('s3')]);
+  return new Map([...two.rows, ...three.rows].map((r) => [r.steamId, r.name]));
 }
 
 /** The clan table for a period: tags carried by MIN_CLAN_SIZE or more players, best first. */
@@ -715,23 +724,23 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       // Other hidden members in their recent kills go unnamed; the profile page decides about them.
       recentKills: (d.combat?.recent ?? []).filter((k) => shown(k.serverId)).map((k) => maskKill(killRow(k, k.serverId, shortNameOf(k.serverName)), othersHidden, nowS)),
   };
-  // Warcon no longer counts the deleted retired servers: put their season one back into all time.
-  const s1 = seasonOne(steamId);
-  const full = s1 === 'unavailable' ? profile : withRetired(profile, s1);
+  // Warcon no longer counts the deleted retired servers: put their earlier play back into all time.
+  const before = snapshot('before', steamId);
+  const full = before === 'unavailable' ? profile : withRetired(profile, before);
   if (full !== profile) [full.victims, full.nemeses] = await Promise.all([withAvatars(full.victims), withAvatars(full.nemeses)]);
   return loaded(full, dossier.stale || career.stale);
 }
 
-/** One season's slice of a profile (see seasons.ts); 'unavailable' without the season-one snapshot. */
+/** One season's slice of a profile (see seasons.ts); 'unavailable' without its snapshot. */
 export async function playerSeason(player: PlayerProfile, season: Exclude<Season, 'all'>): Promise<SeasonView | 'unavailable'> {
-  const s1 = seasonOne(player.steamId);
-  if (s1 === 'unavailable') return 'unavailable';
+  const snap = snapshot(snapshotOf(season), player.steamId);
+  if (snap === 'unavailable') return 'unavailable';
   const { list } = await serverList();
-  const view = seasonView(player, s1, season, {
+  const view = seasonView(player, snap, season, {
     name: new Map(list.map((s) => [s.id, s.name])),
     short: new Map(list.map((s) => [s.id, shortNameOf(s.name)])),
   });
-  if (season === 's1') {
+  if (isFrozen(season)) {
     const [victims, nemeses] = await Promise.all([withAvatars(view.profile.victims), withAvatars(view.profile.nemeses)]);
     view.profile = { ...view.profile, victims, nemeses };
   }
@@ -807,7 +816,7 @@ export async function mapWinRates(serverId: string): Promise<Loaded<MapWins[]>> 
   const rows = all
     .flatMap((r) => r.value.matches)
     .map((m) => ({ map: m.map ?? '', winner: m.winner, endedAt: sec(m.endedAt), peakPlayers: m.peakPlayers, startedAt: sec(m.startedAt)! }))
-    .filter((m) => m.startedAt >= SEASON_TWO_START);
+    .filter((m) => m.startedAt >= SEASON_THREE_START);
   return loaded(mapWins(rows), all.some((r) => r.stale), rest.some((r) => r == null) ? [serverId] : []);
 }
 

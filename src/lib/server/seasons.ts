@@ -1,9 +1,10 @@
-// Season tabs on a player's profile. Warcon only answers all time, so season one is a frozen
-// snapshot of its database (DATA_DIR/season-one.db, built by scripts/season-one.sql) and season
-// two is all time minus season one. Totals, maps, factions and servers subtract exactly; weapons
-// and rivals can only be taken off Warcon's all-time top lists; a season-two best (longest kill,
-// kill streak) is only known when it beat season one's. Warcon's all time also leaves out servers
-// deleted from it (the retired ones, 16 October 2026), so withRetired puts their season one back first.
+// Season tabs on a player's profile. Warcon only answers all time, so finished seasons are frozen
+// snapshots of its database (DATA_DIR/season-one.db and season-two.db, built by scripts/season-one.sql)
+// and the current season is all time minus everything before it (DATA_DIR/before-season-three.db).
+// Totals, maps, factions and servers subtract exactly; weapons and rivals can only be taken off
+// Warcon's all-time top lists; a current-season best (longest kill, kill streak) is only known when
+// it beat the earlier one. Warcon's all time also leaves out servers deleted from it (the retired
+// ones, 16 October 2026), so withRetired puts their earlier play back first.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -12,10 +13,20 @@ import type { PlayerMatchRow, PlayerProfile, Rival } from './views';
 
 /** Season two began when the server lineup changed: 2026-10-14 00:00 UTC. */
 export const SEASON_TWO_START = Date.UTC(2026, 9, 14) / 1000;
+/** Season three began 2026-11-12 14:00 UK time (GMT, so UTC). */
+export const SEASON_THREE_START = Date.UTC(2026, 10, 12, 14) / 1000;
 
-export const SEASONS = ['all', 's2', 's1'] as const;
+export const SEASONS = ['all', 's3', 's2', 's1'] as const;
 export type Season = (typeof SEASONS)[number];
-export const SEASON_LABELS: Record<Season, string> = { all: 'All time', s2: 'Season 2', s1: 'Season 1' };
+export const SEASON_LABELS: Record<Season, string> = { all: 'All time', s3: 'Season 3', s2: 'Season 2', s1: 'Season 1' };
+/** Finished seasons are shown straight from their snapshot. */
+export const isFrozen = (s: Season): s is 's1' | 's2' => s === 's1' || s === 's2';
+
+/** The snapshot files in DATA_DIR: two finished seasons, and everything before the current one. */
+const SNAPSHOTS = { s1: 'season-one.db', s2: 'season-two.db', before: 'before-season-three.db' } as const;
+export type Snapshot = keyof typeof SNAPSHOTS;
+/** The snapshot a season tab reads. */
+export const snapshotOf = (s: Exclude<Season, 'all'>): Snapshot => (s === 's3' ? 'before' : s);
 export const parseSeason = (v: unknown): Season => (SEASONS.includes(v as Season) ? (v as Season) : 'all');
 
 type Group = [key: string, matches: number, wins: number, kills: number, deaths: number];
@@ -78,29 +89,31 @@ export function openSeasonOne(file: string): SeasonOneFile {
   };
 }
 
-const g = globalThis as unknown as { __seasonOne?: SeasonOneFile };
+const g = globalThis as unknown as { __snapshots?: Map<Snapshot, SeasonOneFile> };
 
-function installed(): SeasonOneFile | null {
-  if (!g.__seasonOne) {
-    const file = join(process.env.DATA_DIR || './data', 'season-one.db');
+function installed(which: Snapshot): SeasonOneFile | null {
+  g.__snapshots ??= new Map();
+  if (!g.__snapshots.has(which)) {
+    const file = join(process.env.DATA_DIR || './data', SNAPSHOTS[which]);
     if (!existsSync(file)) return null;
-    g.__seasonOne = openSeasonOne(file);
+    g.__snapshots.set(which, openSeasonOne(file));
   }
-  return g.__seasonOne;
+  return g.__snapshots.get(which)!;
 }
 
 /**
- * A player's season one from DATA_DIR/season-one.db: null when they didn't play it, 'unavailable'
- * when the snapshot isn't installed (local dev, or before it's copied to the server; looked for
- * again on every call until it is).
+ * A player's numbers from a snapshot: null when they didn't play in it, 'unavailable' when the
+ * file isn't installed (local dev, or before it's copied to the server; looked for again on every
+ * call until it is).
  */
-export function seasonOne(steamId: string): SeasonOne | null | 'unavailable' {
-  return installed()?.player(steamId) ?? (installed() ? null : 'unavailable');
+export function snapshot(which: Snapshot, steamId: string): SeasonOne | null | 'unavailable' {
+  const file = installed(which);
+  return file ? file.player(steamId) : 'unavailable';
 }
 
-/** Every player's season one on a server, by Steam ID; 'unavailable' without the snapshot. */
-export function seasonOneBoard(serverId: string): Map<string, SeasonOneBoardRow> | 'unavailable' {
-  return installed()?.board(serverId) ?? 'unavailable';
+/** Every player's numbers on a server from a snapshot, by Steam ID; 'unavailable' without the file. */
+export function snapshotBoard(which: Snapshot, serverId: string): Map<string, SeasonOneBoardRow> | 'unavailable' {
+  return installed(which)?.board(serverId) ?? 'unavailable';
 }
 
 export interface SeasonView {
@@ -171,18 +184,21 @@ export function withRetired(player: PlayerProfile, s1: SeasonOne | null): Player
   };
 }
 
-/** servers: the visible ones, full and short names; others (retired servers) are left out. */
+/**
+ * snap: the player's snapshotOf(season). servers: the visible ones, full and short names; others
+ * (retired servers) are left out.
+ */
 export function seasonView(
   player: PlayerProfile,
-  s1: SeasonOne | null,
+  snap: SeasonOne | null,
   season: Exclude<Season, 'all'>,
   servers: { name: Map<string, string>; short: Map<string, string> },
 ): SeasonView {
-  const one = s1 ?? EMPTY;
-  return season === 's1' ? seasonOneView(player, one, servers) : seasonTwoView(player, one);
+  const one = snap ?? EMPTY;
+  return isFrozen(season) ? frozenView(player, one, servers) : currentView(player, one, SEASON_THREE_START);
 }
 
-function seasonOneView(player: PlayerProfile, s: SeasonOne, servers: { name: Map<string, string>; short: Map<string, string> }): SeasonView {
+function frozenView(player: PlayerProfile, s: SeasonOne, servers: { name: Map<string, string>; short: Map<string, string> }): SeasonView {
   const rival = ([steamId, name, count]: [string, string, number]): Rival => ({ steamId, name, avatarUrl: null, count });
   return {
     profile: {
@@ -212,7 +228,8 @@ function seasonOneView(player: PlayerProfile, s: SeasonOne, servers: { name: Map
   };
 }
 
-function seasonTwoView(player: PlayerProfile, s: SeasonOne): SeasonView {
+/** All time less s, everything before the season that began at `start`. */
+function currentView(player: PlayerProfile, s: SeasonOne, start: number): SeasonView {
   const t = player.totals;
   const less = <T extends { key: string; matches: number; wins: number; kills: number; deaths: number }>(rows: T[], s1: Group[]) => {
     const before = new Map(s1.map((r) => [r[0], r]));
@@ -254,10 +271,10 @@ function seasonTwoView(player: PlayerProfile, s: SeasonOne): SeasonView {
           return b ? { ...p, playtime: minus(p.playtime, b.seconds), kills: minus(p.kills, b.kills) } : p;
         })
         .filter((p) => p.playtime > 0),
-      matches: player.matches.filter((m) => m.startedAt >= SEASON_TWO_START),
+      matches: player.matches.filter((m) => m.startedAt >= start),
       maps: less(player.maps, s.maps),
       factions: less(player.factions, s.factions),
-      recentKills: player.recentKills.filter((k) => k.ts >= SEASON_TWO_START),
+      recentKills: player.recentKills.filter((k) => k.ts >= start),
     },
     unknownBest: { longest: longest === null, killStreak: killStreak === null },
     topListsOnly: true,

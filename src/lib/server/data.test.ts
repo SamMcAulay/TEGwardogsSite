@@ -23,7 +23,8 @@ vi.mock('./bans', () => ({ orgBannedIds: () => bans.orgBannedIds() }));
 const seasonBoards: { byServer: Record<string, Map<string, object>> | 'unavailable' } = { byServer: {} };
 vi.mock('./seasons', async (original) => ({
   ...(await original<typeof import('./seasons')>()),
-  seasonOneBoard: (id: string) => (seasonBoards.byServer === 'unavailable' ? 'unavailable' : (seasonBoards.byServer[id] ?? new Map())),
+  // One fake snapshot serves as both 'before' (season three) and 's2'.
+  snapshotBoard: (_which: string, id: string) => (seasonBoards.byServer === 'unavailable' ? 'unavailable' : (seasonBoards.byServer[id] ?? new Map())),
 }));
 
 // vi.mock is hoisted above imports, so this import already sees the mocked module.
@@ -292,7 +293,7 @@ describe('leaderboard without org-banned players', () => {
   });
 });
 
-describe('season two leaderboard', () => {
+describe('season leaderboards', () => {
   const A = '76561198000000001';
   const B = '76561198000000002';
   const C = '76561198000000003';
@@ -312,7 +313,7 @@ describe('season two leaderboard', () => {
   });
 
   test('each server less its season one, added up, under the 60-minute floor dropped', async () => {
-    const r = await leaderboard({ metric: 'kills', period: 's2' });
+    const r = await leaderboard({ metric: 'kills', period: 's3' });
     expect(api.boardExport).toHaveBeenCalledWith('s1', { scope: 'server', range: 'all', sort: 'playtime', minMinutes: 0 });
     expect(api.boardExport).toHaveBeenCalledWith('s2', { scope: 'server', range: 'all', sort: 'playtime', minMinutes: 0 });
     // A: (500-480) + 40 = 60 kills over (600-550) + 50 = 100 minutes. C: new, 60 kills in 70 minutes. B: 10 minutes this season.
@@ -322,19 +323,25 @@ describe('season two leaderboard', () => {
   });
 
   test('a single server is its own board less its season one', async () => {
-    const r = await leaderboard({ metric: 'kills', period: 's2', serverId: 's1' });
+    const r = await leaderboard({ metric: 'kills', period: 's3', serverId: 's1' });
     expect(api.boardExport).toHaveBeenCalledTimes(1);
     expect(r.data.rows).toEqual([]);
   });
 
+  test('season two is the snapshot itself, for players on the server', async () => {
+    const r = await leaderboard({ metric: 'kills', period: 's2' });
+    // A: 550 minutes, 480 kills on s1. B: 290 minutes, 80 kills. C has no snapshot row.
+    expect(r.data.rows.map((x) => [x.steamId, x.kills, x.playtime])).toEqual([[A, 480, 33_000], [B, 80, 17_400]]);
+  });
+
   test('banned players stay off it', async () => {
     bans.orgBannedIds.mockResolvedValue({ ids: new Set([C]), stale: false });
-    expect((await leaderboard({ metric: 'kills', period: 's2' })).data.rows.map((x) => x.steamId)).toEqual([A]);
+    expect((await leaderboard({ metric: 'kills', period: 's3' })).data.rows.map((x) => x.steamId)).toEqual([A]);
   });
 
   test('without the season-one snapshot the board is unavailable, not all time', async () => {
     seasonBoards.byServer = 'unavailable';
-    await expect(leaderboard({ metric: 'kills', period: 's2' })).rejects.toThrow(/snapshot/);
+    await expect(leaderboard({ metric: 'kills', period: 's3' })).rejects.toThrow(/snapshot/);
   });
 });
 

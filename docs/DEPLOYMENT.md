@@ -222,31 +222,35 @@ Back up `accounts.db`:
 
 ## 9b. Season stats
 
-Player profiles have All time, Season 2 and Season 1 tabs. Warcon only answers all time, so
-season one (everything before 2026-10-14 00:00 UTC) is a frozen snapshot of its database in
-`season-one.db` beside `accounts.db`, and season two is all time minus it. Without the file the
-season tabs and the Season 2 leaderboard say the stats aren't available; nothing else changes.
-The Season 2 leaderboard is each current server's all-time board less its season one (the file's
-`boards` table), added up; play on retired servers after the cutoff isn't counted.
+Player profiles have All time, Season 3, Season 2 and Season 1 tabs; leaderboards and clans have
+Season 3 and Season 2 periods. Warcon only answers all time, so three snapshot files of its database
+sit beside `accounts.db`:
+
+| File | Covers | Used for |
+| --- | --- | --- |
+| `season-one.db` | before 2026-10-14 00:00 UTC | Season 1 tab |
+| `season-two.db` | 2026-10-14 00:00 to 2026-11-12 14:00 UTC | Season 2 tab and board |
+| `before-season-three.db` | before 2026-11-12 14:00 UTC | Season 3 = all time minus it; retired servers |
+
+Without a file, the tab or board that needs it says the stats aren't available; nothing else
+changes. Season boards add up today's servers only (`SERVER_IDS`).
 
 Warcon leaves servers deleted from it out of a player's all time (the retired ones were deleted on
-16 October 2026). So each player's entry also holds `current`, season one on the servers Warcon
-still had when the file was made: profiles show all time as Warcon's numbers plus season one
-beyond `current`, and season two as all time less season one. **Rebuild the file whenever a server
-is deleted from Warcon**, or season two on profiles drops towards zero again. It is otherwise made once,
-from a machine with the deploy key (the query reads Warcon's database and changes nothing; ~20 s):
+16 October 2026). So each player's entry also holds `current`, the same numbers on the servers Warcon
+still had when the file was made: profiles show all time as Warcon's numbers plus what `current`
+leaves out of `before-season-three.db`. **Rebuild `before-season-three.db` whenever a server is
+deleted from Warcon**, or season three on profiles drops towards zero. Each file is otherwise made
+once, from a machine with the deploy key (the query reads Warcon's database and changes nothing;
+~20 s), with the bounds from the table (`-infinity` for "before"):
 
 ```sh
-ssh -i ~/.ssh/wardogs_deploy debian@57.129.156.97 \
-  'cd /home/debian/warcon && docker compose exec -T db sh -c "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB -At -F \"	\""' \
-  < scripts/season-one.sql | node scripts/season-one-db.mjs data/season-one.db
-scp -i ~/.ssh/wardogs_deploy data/season-one.db debian@57.129.156.97:/tmp/
-ssh -i ~/.ssh/wardogs_deploy debian@57.129.156.97 \
-  'docker cp /tmp/season-one.db teg-wardogs-site:/app/data/season-one.db && rm /tmp/season-one.db'
+scripts/season-snapshot.sh season-one -infinity 2026-10-14T00:00:00Z
+scripts/season-snapshot.sh season-two 2026-10-14T00:00:00Z 2026-11-12T14:00:00Z
+scripts/season-snapshot.sh before-season-three -infinity 2026-11-12T14:00:00Z
 ```
 
-(The `-F` argument is a literal tab.) The site picks the file up on the next profile view; no
-restart. It lives in the volume, so deploys keep it.
+The site picks a new file up on the next view; a file it has already opened is only re-read after
+a restart. They live in the volume, so deploys keep them.
 
 ## 10. Troubleshooting
 

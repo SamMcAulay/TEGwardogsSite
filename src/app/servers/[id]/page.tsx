@@ -372,7 +372,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
               {(h) => <BusyTimes month={h.month} week={h.week} />}
             </Section>
           </Panel>
-          <Panel title="Wins by map" action="Season 2 · rounds of 8+ players">
+          <Panel title="Wins by map" action="Season 3 · rounds of 8+ players">
             <Section loaded={wins}>
               {(maps) => (maps.length ? <MapWinBars maps={maps} /> : <Empty>No finished rounds this season yet.</Empty>)}
             </Section>
