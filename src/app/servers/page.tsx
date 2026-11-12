@@ -155,7 +155,7 @@ export default async function ServersPage() {
           }
         </Section>
         {activity && activity.length > 1 && (
-          <Panel title="Network activity" action="Season 2 · all servers · per UTC day">
+          <Panel title="Network activity" action="Since Season 2 · all servers · per UTC day">
             <NetworkActivity days={activity} from={new Date(SEASON_TWO_START * 1000).toISOString().slice(0, 10)} today={today} />
           </Panel>
         )}

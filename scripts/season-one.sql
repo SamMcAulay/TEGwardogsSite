@@ -1,11 +1,14 @@
--- Season one, frozen: every player's stats from before 2026-10-14 00:00 UTC, one JSON object per
--- line ("steam_id<TAB>json"), read from Warcon's database. Each part copies Warcon's own query for
--- the same number (leaderboards.ts `lines`/loadCareer, players.ts dossier and combatSummary) with
--- the cutoff added, so a profile's season two is exactly all time minus this. Warcon's all time
--- leaves out servers deleted from it, so `current` repeats the numbers for the servers it still
--- has: season two is all time less `current`, and all time on the site is season one plus that.
--- Run by scripts/season-one-snapshot.sh; see docs/DEPLOYMENT.md.
-\set cutoff '''2026-10-14T00:00:00Z'''
+-- A frozen season snapshot: every player's stats from :start up to :cutoff, one JSON object per
+-- line ("steam_id<TAB>json"), read from Warcon's database. The caller sets both (see
+-- docs/DEPLOYMENT.md §9b):
+--   season-one.db           start -infinity            cutoff 2026-10-14T00:00:00Z
+--   season-two.db           start 2026-10-14T00:00:00Z  cutoff 2026-11-12T14:00:00Z
+--   before-season-three.db  start -infinity            cutoff 2026-11-12T14:00:00Z
+-- Each part copies Warcon's own query for the same number (leaderboards.ts `lines`/loadCareer,
+-- players.ts dossier and combatSummary) with the bounds added, so the current season is exactly
+-- all time minus the before-season-three snapshot. Warcon's all time leaves out servers deleted
+-- from it, so `current` repeats the numbers for the servers it still has: the current season is
+-- all time less `current`, and all time on the site is Warcon's plus what `current` leaves out.
 WITH lines AS (
   SELECT p.steam_id, p.match_id, p.server_id, p.faction, p.seconds, p.kills, p.deaths, p.headshots,
          p.vehicle_kills, p.longest_m, p.kill_streak, m.started_at, m.ended_at, m.map,
@@ -20,7 +23,7 @@ WITH lines AS (
                           FROM jsonb_array_elements(m.final_scores) e) > 0 THEN 'draw'
               ELSE NULL END AS result
     FROM matches m JOIN match_players p ON p.match_id = m.id AND p.server_id = m.server_id
-   WHERE m.ended_at IS NOT NULL AND m.started_at < :cutoff
+   WHERE m.ended_at IS NOT NULL AND m.started_at >= :start AND m.started_at < :cutoff
 ),
 -- Every line twice over: once for season one everywhere ('all'), once more if on a current server.
 scoped AS (
@@ -52,7 +55,7 @@ rounds AS (
 feed AS (
   SELECT k.*, v.scope FROM kills k
    CROSS JOIN LATERAL (VALUES ('all'), (CASE WHEN k.server_id IN (SELECT id FROM servers) THEN 'cur' END)) v(scope)
-   WHERE k.ts < :cutoff AND v.scope IS NOT NULL
+   WHERE k.ts >= :start AND k.ts < :cutoff AND v.scope IS NOT NULL
 ),
 combat AS (
   SELECT id AS steam_id, scope, SUM(team_kills) AS team_kills, SUM(suicides) AS suicides FROM (
@@ -87,9 +90,10 @@ per_server AS (
            COALESCE(k.headshots, 0), COALESCE(k.matches, 0), COALESCE(k.wins, 0), COALESCE(k.losses, 0), COALESCE(k.draws, 0), COALESCE(s.cash, 0))
            ORDER BY s.seconds DESC NULLS LAST) AS rows FROM (
     SELECT steam_id, server_id,
-           round(SUM(EXTRACT(EPOCH FROM (LEAST(COALESCE(left_at, now()), :cutoff::timestamptz) - joined_at))))::bigint AS seconds,
-           SUM(cash) AS cash
-      FROM player_sessions WHERE joined_at < :cutoff GROUP BY 1, 2) s
+           round(SUM(EXTRACT(EPOCH FROM (LEAST(COALESCE(left_at, now()), :cutoff::timestamptz) - GREATEST(joined_at, :start::timestamptz)))))::bigint AS seconds,
+           -- shortcut: a session across a boundary puts all its cash in the season it began in
+           SUM(cash) FILTER (WHERE joined_at >= :start) AS cash
+      FROM player_sessions WHERE joined_at < :cutoff AND COALESCE(left_at, now()) > :start GROUP BY 1, 2) s
   FULL JOIN (SELECT steam_id, server_id, SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(headshots) AS headshots, COUNT(*) AS matches,
                     COUNT(*) FILTER (WHERE result = 'win') AS wins, COUNT(*) FILTER (WHERE result = 'loss') AS losses,
                     COUNT(*) FILTER (WHERE result = 'draw') AS draws

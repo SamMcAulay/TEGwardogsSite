@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { afterAll, describe, expect, test } from 'vitest';
-import { openSeasonOne, parseSeason, SEASON_TWO_START, seasonOne, seasonView, withRetired, type SeasonOne } from './seasons';
+import { openSeasonOne, parseSeason, SEASON_THREE_START, snapshot, seasonView, withRetired, type SeasonOne } from './seasons';
 import type { PlayerProfile } from './views';
 
-const S2 = SEASON_TWO_START;
+// The current season starts here; `one` stands for everything before it.
+const S2 = SEASON_THREE_START;
 const servers = {
   name: new Map([['eu2', 'EU#2 - TEG.gg']]),
   short: new Map([['eu2', 'EU#2']]),
@@ -47,8 +48,8 @@ const one: SeasonOne = {
   servers: [['eu2', 25_000, 90, 60, 15, 12, 6, 6, 0, 4_000], ['old-eu1', 5_000, 10, 10, 5, 3, 2, 1, 0, 500]],
 };
 
-describe('season two: all time minus season one', () => {
-  const v = seasonView(player(), one, 's2', servers);
+describe('season three: all time minus everything before', () => {
+  const v = seasonView(player(), one, 's3', servers);
 
   test('totals subtract exactly', () => {
     expect(v.profile.totals).toMatchObject({ kills: 50, deaths: 20, headshots: 10, suicides: 3, teamkills: 0, playtime: 6_000, matches: 5, wins: 4, losses: 1, vehicleKills: 0 });
@@ -81,7 +82,7 @@ describe('season two: all time minus season one', () => {
   });
 
   test('someone new this season sees their whole record', () => {
-    const fresh = seasonView(player(), null, 's2', servers);
+    const fresh = seasonView(player(), null, 's3', servers);
     expect(fresh.profile.totals).toEqual(player().totals);
     expect(fresh.unknownBest).toEqual({ longest: false, killStreak: false });
   });
@@ -101,6 +102,10 @@ describe('season one: the snapshot', () => {
     expect(v.profile.servers.map((s) => s.serverId)).toEqual(['eu2']);
     expect(v.profile.matches.map((m) => m.matchId)).toEqual([8]);
     expect(v.profile.matches[0].serverName).toBe('EU#2');
+  });
+
+  test('season two is frozen the same way', () => {
+    expect(seasonView(player(), one, 's2', servers)).toEqual(v);
   });
 
   test('a player who missed season one has an empty one', () => {
@@ -142,7 +147,7 @@ describe('servers deleted from Warcon', () => {
   });
 
   test('season two is only what was played since, not zero', () => {
-    const v = seasonView(all, s1, 's2', servers);
+    const v = seasonView(all, s1, 's3', servers);
     expect(v.profile.totals).toMatchObject({ kills: 45, deaths: 20, headshots: 10, playtime: 6_000, matches: 5, wins: 4, losses: 1 });
     expect(v.profile.factions).toEqual([{ key: 'Lonestar', matches: 5, wins: 4, kills: 45, deaths: 20 }]);
     expect(v.profile.weapons).toEqual([{ cause: 'AK', kills: 30 }]);
@@ -156,7 +161,8 @@ describe('servers deleted from Warcon', () => {
 
 test('parseSeason falls back to all time', () => {
   expect(parseSeason('s1')).toBe('s1');
-  expect(parseSeason('s3')).toBe('all');
+  expect(parseSeason('s3')).toBe('s3');
+  expect(parseSeason('s4')).toBe('all');
   expect(parseSeason(undefined)).toBe('all');
 });
 
@@ -180,7 +186,8 @@ describe('the snapshot file', () => {
     const before = process.env.DATA_DIR;
     process.env.DATA_DIR = join(dir, 'nothing-here');
     try {
-      expect(seasonOne('76561198000000001')).toBe('unavailable');
+      expect(snapshot('s1', '76561198000000001')).toBe('unavailable');
+      expect(snapshot('before', '76561198000000001')).toBe('unavailable');
     } finally {
       process.env.DATA_DIR = before;
     }

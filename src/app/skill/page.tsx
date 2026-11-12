@@ -11,7 +11,7 @@ import { one, pageParam, withParams } from '@/lib/url';
 
 export const metadata: Metadata = {
   title: 'Skill rating',
-  description: 'Season 2 skill ratings for TEG WARDOGS players, from who won the rounds they played.',
+  description: 'Skill ratings since Season 2 for TEG WARDOGS players, from who won the rounds they played.',
 };
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -31,11 +31,11 @@ export default async function SkillPage({ searchParams }: PageProps<'/skill'>) {
       <PageHeader
         tabs={<SectionTabs section="stats" current="skill" />}
         title="Skill rating"
-        description="Who wins rounds, not just who gets kills. Every Season 2 round moves your rating by whether your side won, how strong both sides were, and how much of the round you played."
+        description="Who wins rounds, not just who gets kills. Every round since Season 2 began moves your rating by whether your side won, how strong both sides were, and how much of the round you played."
       />
       <Container className="mt-8 space-y-4">
         <Panel
-          title="Season 2"
+          title="Since Season 2"
           flush
           action={board ? `${int(board.total)} ranked · ${int(board.rated)} rated` : undefined}
         >

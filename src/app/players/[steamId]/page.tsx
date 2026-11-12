@@ -21,7 +21,7 @@ import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam, standing, viewer } from '@/lib/server/accounts';
 import { withoutPresence } from '@/lib/server/presence';
 import { getPlayer, playerSeason } from '@/lib/server/data';
-import { parseSeason, SEASON_LABELS, SEASON_TWO_START, SEASONS } from '@/lib/server/seasons';
+import { isFrozen, parseSeason, SEASON_LABELS, SEASON_TWO_START, SEASONS } from '@/lib/server/seasons';
 import { playerSkill, playerTrends } from '@/lib/server/trends';
 import { PlayerTrends } from '@/components/trends';
 
@@ -100,7 +100,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   const [view, skill, trends] = await Promise.all([
     season === 'all' ? null : playerSeason(player, season),
     playerSkill(steamId, me).catch(() => null),
-    season === 's1' ? null : playerTrends(steamId, masked).catch(() => null),
+    isFrozen(season) ? null : playerTrends(steamId, masked).catch(() => null),
   ]);
   // The header is always all time; everything under the tabs is the chosen season.
   const p = view && view !== 'unavailable' ? view.profile : player;
@@ -243,7 +243,8 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
             items={SEASONS.map((k) => ({ key: k, label: SEASON_LABELS[k], href: k === 'all' ? `/players/${steamId}` : `?season=${k}` }))}
           />
           {season === 's1' && <span className="text-xs text-muted">Up to 14 October 2026</span>}
-          {season === 's2' && <span className="text-xs text-muted">Since 14 October 2026</span>}
+          {season === 's2' && <span className="text-xs text-muted">14 October to 12 November 2026</span>}
+          {season === 's3' && <span className="text-xs text-muted">Since 12 November 2026, 14:00 UTC</span>}
         </div>
 
         {view === 'unavailable' ? (
@@ -259,7 +260,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
             <Stat
               label="Longest kill"
               value={view?.unknownBest.longest ? '—' : metres(t.longest)}
-              sub={view?.unknownBest.longest ? 'Season 1 best not beaten' : undefined}
+              sub={view?.unknownBest.longest ? 'Earlier best not beaten' : undefined}
             />
             <Stat label="Playtime" value={duration(t.playtime)} />
             <Stat
@@ -274,7 +275,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
           {season === 'all' && <Milestones totals={milestoneTotals} />}
 
           {trends && trends.days.length > 0 && (
-            <Panel title="Trends" action="Season 2 · per UTC day">
+            <Panel title="Trends" action="Since Season 2 · per UTC day">
               <PlayerTrends
                 days={trends.days}
                 killsRank={trends.killsRank}
@@ -373,13 +374,13 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
 
           {season !== 's1' && (
             <p className="text-xs text-dim">
-              Kill feeds were down from 14 to 20 October 2026, so weapons, headshots, longest kills, streaks and kill lists from
-              those days are missing. Kills, deaths and rounds are complete.
-              {view?.topListsOnly && ' Season 2 weapons, targets and nemeses are counted from the all-time top lists, so a rare one can be missing.'}
+              {season !== 's3' && `Kill feeds were down from 14 to 20 October 2026, so weapons, headshots, longest kills, streaks and kill lists from
+              those days are missing. Kills, deaths and rounds are complete.`}
+              {view?.topListsOnly && ` ${SEASON_LABELS[season]} weapons, targets and nemeses are counted from the all-time top lists, so a rare one can be missing.`}
             </p>
           )}
 
-          <Panel title={season === 's1' ? 'Last rounds of season 1' : 'Recent rounds'} flush>
+          <Panel title={isFrozen(season) ? `Last rounds of ${SEASON_LABELS[season].toLowerCase()}` : 'Recent rounds'} flush>
             {p.matches.length ? (
               <div className="overflow-x-auto">
                 <table className="table">
@@ -437,7 +438,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
         )}
 
         <div className="grid gap-4 lg:grid-cols-3">
-          {season !== 's1' && (
+          {!isFrozen(season) && (
             <Panel title="Recent kills & deaths" flush className="lg:col-span-2">
               {p.recentKills.length ? <KillList kills={p.recentKills} showServer /> : <Empty>Nothing yet.</Empty>}
             </Panel>

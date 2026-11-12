@@ -1,8 +1,7 @@
 // Builds data/season-one.db from scripts/season-one.sql's output ("steam_id<TAB>json" per line on
 // stdin): one row per player, its JSON deflated (a profile inflates one row; whole, the file is ~35 MB),
 // and each player's per-server totals as plain rows, which a season-two leaderboard reads a server at a time. The site reads it from DATA_DIR; see
-// docs/DEPLOYMENT.md, "Season one stats".
-//   ssh … psql -At -F $'\t' < scripts/season-one.sql | node scripts/season-one-db.mjs data/season-one.db
+// docs/DEPLOYMENT.md §9b; scripts/season-snapshot.sh runs it.
 import { rmSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { DatabaseSync } from 'node:sqlite';
