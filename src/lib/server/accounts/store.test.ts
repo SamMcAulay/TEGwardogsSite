@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { MIGRATIONS, openStore, SteamTakenError } from './store';
+import { isSteamTaken, MIGRATIONS, openStore, SteamTakenError } from './store';
 
 const D1 = '111111111111111111';
 const D2 = '222222222222222222';
@@ -34,6 +34,7 @@ describe('accounts store', () => {
     const s = openStore(':memory:');
     s.link(D1, S1);
     expect(() => s.link(D2, S1)).toThrow(SteamTakenError);
+    expect(isSteamTaken(Object.assign(new Error('x'), { name: 'SteamTakenError' }))).toBe(true); // a copy of the class from another bundle
     expect(s.link(D1, S1).discordId).toBe(D1); // relinking your own is fine
   });
 
