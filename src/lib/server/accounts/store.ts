@@ -122,10 +122,14 @@ const toAlert = (r: AlertRow): Alert => ({
 });
 
 export class SteamTakenError extends Error {
+  override name = 'SteamTakenError';
   constructor() {
     super('That Steam account is already linked to another Discord account.');
   }
 }
+
+/** The store lives on globalThis, built from another bundle's copy of the class, so `instanceof` misses; match by name. */
+export const isSteamTaken = (e: unknown) => e instanceof Error && e.name === 'SteamTakenError';
 
 /**
  * Schema changes, in order; never edit or remove one that has shipped, only append. Each runs once,

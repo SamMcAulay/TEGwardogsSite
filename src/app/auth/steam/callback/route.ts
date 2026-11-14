@@ -3,7 +3,7 @@ import { accounts, callbackUrl, currentSession } from '@/lib/server/accounts';
 import { authError, clearState, redirectTo } from '@/lib/server/accounts/routes';
 import { safeEqual, STATE_COOKIE } from '@/lib/server/accounts/session';
 import { verifySteamLogin } from '@/lib/server/accounts/steam';
-import { SteamTakenError } from '@/lib/server/accounts/store';
+import { isSteamTaken } from '@/lib/server/accounts/store';
 import { refreshTier } from '@/lib/server/accounts/sync';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   try {
     a.store.link(session.discordId, steamId);
   } catch (e) {
-    if (e instanceof SteamTakenError) return clearState(authError('taken'));
+    if (isSteamTaken(e)) return clearState(authError('taken'));
     throw e;
   }
   await refreshTier(a.env, a.store, session.discordId).catch((e) => console.error('[auth] tier refresh failed:', e instanceof Error ? e.message : e));
