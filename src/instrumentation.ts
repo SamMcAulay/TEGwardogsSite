@@ -33,8 +33,8 @@ export async function register() {
         ratings,
         act: warconActor(siteEnv().warconBaseUrl, process.env.WARCON_MOVE_TOKEN),
         live: async (id) => {
-          const v = (await warcon().live(id)).value;
-          return v && { startedAt: v.startedAt, factions: (v.status?.scores ?? []).map((s) => s.name), players: v.players };
+          const [v, startedAt] = await Promise.all([warcon().live(id).then((c) => c.value), warcon().openMatchStart(id)]);
+          return v && { startedAt, factions: (v.status?.scores ?? []).map((s) => s.name), players: v.players };
         },
       });
     }
