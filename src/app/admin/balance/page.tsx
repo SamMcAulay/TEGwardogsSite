@@ -312,8 +312,9 @@ export default async function BalancePage({ searchParams }: PageProps<'/admin/ba
                         Each row is rounds where the side the ratings favoured had about that chance. If the ratings are right, the
                         favourite wins about as often as predicted in every row. Wins well below the prediction mean the ratings
                         overrate the favourite, so &ldquo;Stacked on skill&rdquo; and the team balancer lean on numbers that are too
-                        strong; well above, and they underrate it. Rows with few rounds swing on luck. The ratings count everyone who
-                        played the round, late joiners included.
+                        strong; well above, and they underrate it. Rows with few rounds swing on luck. Each player counts by how much of
+                        the round they played, so a side that lost players and refilled with joiners isn&apos;t counted as bigger than it
+                        was.
                       </Help>
                       {cal.length ? (
                         <div className="overflow-x-auto">

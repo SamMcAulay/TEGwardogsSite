@@ -116,10 +116,12 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
         <Panel title="How it works">
           <Help>
             <strong>Arm</strong> it on a server and it does nothing until the <strong>next</strong> match starts, never one already being
-            played. Then it sorts whoever is on with the fewest moves that bring each side&apos;s chance of winning (from everyone&apos;s
-            skill rating) closest together. After that, each player who joins is weighed up once as they arrive and moved if
-            another side needs them more. Player counts never end up more than {GAP} apart. Clan mates {STACK} or more strong on one
-            side count as stronger than their ratings, so a big stack is more likely to be split. A moved player is killed so they
+            played. Then it <strong>re-deals</strong> everyone on: best player to one side, next to the next, and back again, so the
+            sides end up within one player of each other and close in skill, and clan mates of similar skill land on different
+            sides. Of the ways to do that, it picks the one that keeps the most players where they are, which still usually moves
+            about half the server. The moves go out a second apart, so a full server takes about a minute. After that, each player
+            who joins is weighed up once as they arrive and moved if another side needs them more; player counts never end up more
+            than {GAP} apart, and clan mates {STACK} or more strong on one side count as stronger than their ratings. A moved player is killed so they
             respawn on the new side, and gets your whisper. Nobody is moved twice in a game; it stops when that match ends.
           </Help>
           <Help>

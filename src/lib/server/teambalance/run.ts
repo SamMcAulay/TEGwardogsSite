@@ -1,19 +1,19 @@
 // The team balancer job (staff /admin/teambalance). Staff arm it on a server; it waits for the next
-// match to start, then evens the sides by skill: one sort of who is on at the start, then each
-// player who arrives is placed as they come in. Nobody is moved twice in a game (balance_moves'
+// match to start, then deals everyone on out afresh by skill (plan.ts redeal), then places each
+// player who arrives as they come in. Nobody is moved twice in a game (balance_moves'
 // key), and it stops when that match ends. Watch mode decides and logs every move but sends none.
 import { clanTag } from '@/lib/clans';
 import { fresh } from '@/lib/rating';
 import type { Store } from '../accounts/store';
 import type { PlayerRating } from '../history/ratings';
 import { jobRan } from '../jobs';
-import { planMoves, type LivePlayer } from './plan';
+import { planMoves, redeal, type LivePlayer } from './plan';
 
 export const LOOK_MS = 10_000;
-/** Moves sent per look at most, so a full server's start sort goes out over a few looks. */
+/** Joiners placed per look at most. The start's re-deal goes out whole. */
 export const MAX_MOVES_PER_LOOK = 6;
-/** Gap between moves sent to Warcon, under its per-key rate limit. */
-const SEND_GAP_MS = 400;
+/** Gap between moves: Warcon allows a key 120 actions a minute, and a move with its whisper is two. */
+const SEND_GAP_MS = 1000;
 /** An armed run that never sees a new match is dropped after this long. */
 export const ARM_MAX_S = 3 * 3600;
 /** A running run that never sees its match end stops after this long. */
@@ -93,19 +93,17 @@ export async function balancerLook(deps: BalancerDeps, now = Math.floor(Date.now
     const candidates = new Set(live.players.filter((p) => p.faction && !moved.has(p.steamId) && !seen.has(p.steamId)).map((p) => p.steamId));
     if (!candidates.size) continue;
     const ratings = deps.ratings();
-    const moves = planMoves({
-      players: live.players,
-      factions: live.factions,
-      candidates,
-      skillOf: (id) => ratings?.get(id)?.skill ?? fresh(),
-      clanOf: (id) => {
-        const name = live.players.find((p) => p.steamId === id)?.name;
-        return name ? clanTag(name) : null;
-      },
-      max: MAX_MOVES_PER_LOOK,
-    });
-    // A full look leaves the rest to be weighed again next time, with these moves in place.
-    if (moves.length < MAX_MOVES_PER_LOOK) for (const id of candidates) seen.add(id);
+    const skillOf = (id: string) => ratings?.get(id)?.skill ?? fresh();
+    const clanOf = (id: string) => {
+      const name = live.players.find((p) => p.steamId === id)?.name;
+      return name ? clanTag(name) : null;
+    };
+    const moves =
+      kind === 'start'
+        ? redeal({ players: live.players, factions: live.factions, skillOf, clanOf })
+        : planMoves({ players: live.players, factions: live.factions, candidates, skillOf, clanOf, max: MAX_MOVES_PER_LOOK });
+    // A full look of joiners leaves the rest to be weighed again next time, with these moves in place.
+    if (kind === 'start' || moves.length < MAX_MOVES_PER_LOOK) for (const id of candidates) seen.add(id);
 
     for (const m of moves) {
       if (!deps.store.addBalanceMove(run.id, { ...m, kind }, now)) continue;
