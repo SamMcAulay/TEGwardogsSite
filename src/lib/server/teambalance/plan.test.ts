@@ -79,10 +79,17 @@ describe('redeal', () => {
     expect(moves[0].after).toBeLessThan(moves[0].before);
   });
 
-  it('keeps as many players where they are as the deal allows', () => {
-    // already dealt evenly: nobody needs to move
-    const ps = [p('a', 'Manticore', 30), p('b', 'Valkyra', 29), p('c', 'Lonestar', 28), p('d', 'Lonestar', 27), p('e', 'Valkyra', 26), p('f', 'Manticore', 25)];
-    expect(redeal({ players: ps, factions: F, skillOf, clanOf: noClan })).toEqual([]);
+  it('shuffles a full server for real: about half move, differently each time, still even', () => {
+    // 100 players already split evenly by skill: the old deal would have moved nobody
+    const ps = Array.from({ length: 100 }, (_, i) => p(`x${i}`, i % 2 ? 'Valkyra' : 'Manticore', 50 - i * 0.3));
+    const deals = Array.from({ length: 5 }, () => redeal({ players: ps, factions: ['Manticore', 'Valkyra'], skillOf, clanOf: noClan }));
+    for (const moves of deals) {
+      expect(moves.length).toBeGreaterThanOrEqual(35);
+      expect(moves.length).toBeLessThanOrEqual(50);
+      const sums = ['Manticore', 'Valkyra'].map((f) => sum(after(ps, moves).filter((x) => x.faction === f).map((x) => x.steamId)));
+      expect(Math.abs(sums[0] - sums[1])).toBeLessThan(3);
+    }
+    expect(new Set(deals.map((m) => m.map((x) => x.steamId).sort().join())).size).toBeGreaterThan(1);
   });
 
   it('leaves players not on a side yet alone, and needs two sides', () => {

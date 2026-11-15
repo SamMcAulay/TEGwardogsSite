@@ -1,6 +1,6 @@
 // The team balancer job (staff /admin/teambalance). Staff arm it on a server; it waits for the next
-// match to start, then deals everyone on out afresh by skill (plan.ts redeal), then places each
-// player who arrives as they come in. Nobody is moved twice in a game (balance_moves'
+// match to start, then, DEAL_AFTER_S in once players have loaded, deals everyone on out afresh by
+// skill (plan.ts redeal), then places each player who arrives as they come in. Nobody is moved twice in a game (balance_moves'
 // key), and it stops when that match ends. Watch mode decides and logs every move but sends none.
 import { clanTag } from '@/lib/clans';
 import { fresh } from '@/lib/rating';
@@ -12,6 +12,8 @@ import { planMoves, redeal, type LivePlayer } from './plan';
 export const LOOK_MS = 10_000;
 /** Joiners placed per look at most. The start's re-deal goes out whole. */
 export const MAX_MOVES_PER_LOOK = 6;
+/** The start's re-deal waits this long into the match: at the start most players are still loading in. */
+export const DEAL_AFTER_S = 90;
 /** Gap between moves: Warcon allows a key 120 actions a minute, and a move with its whisper is two. */
 const SEND_GAP_MS = 1000;
 /** An armed run that never sees a new match is dropped after this long. */
@@ -90,6 +92,7 @@ export async function balancerLook(deps: BalancerDeps, now = Math.floor(Date.now
     const moved = new Set(deps.store.balanceMoves(run.id).map((m) => m.steamId));
     const seen = seenOf(run.id);
     const kind = seen.size || moved.size ? 'join' : 'start';
+    if (kind === 'start' && live.startedAt && now - Date.parse(live.startedAt) / 1000 < DEAL_AFTER_S) continue;
     const candidates = new Set(live.players.filter((p) => p.faction && !moved.has(p.steamId) && !seen.has(p.steamId)).map((p) => p.steamId));
     if (!candidates.size) continue;
     const ratings = deps.ratings();

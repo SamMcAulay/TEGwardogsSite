@@ -115,35 +115,45 @@ export function planMoves(o: {
 const orderings = <T>(items: T[]): T[][] =>
   items.length <= 1 ? [items] : items.flatMap((x, i) => orderings([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [x, ...rest]));
 
+/** Random deals tried; the evenest is kept. */
+const DEALS = 60;
+
 /**
- * The match-start shuffle: everyone on a side dealt out afresh by skill, snake order (best to side
- * 1, 2, 3, then 3, 2, 1, ...), so counts end within one and strengths close, and clan mates of
- * like skill land on different sides. Of the ways to name the dealt sides, the one that leaves
- * most players where they are; the moves are everyone else. None when the deal is no fairer.
+ * The match-start shuffle: everyone on a side dealt out afresh. Players are ranked by skill and
+ * taken a block of one-per-side at a time; each block goes to the sides in a random order, so
+ * every side gets one of each skill level but who plays with whom is down to chance (groups and
+ * stacks break up). Of DEALS such deals, the one with the closest skill totals. Of the ways to
+ * name the dealt sides, the one that leaves most players where they are: with two sides about half
+ * the server moves, the most that means anything (moving more is the same teams with names swapped).
  */
-export function redeal(o: { players: LivePlayer[]; factions: string[]; skillOf: (id: string) => Skill; clanOf: (id: string) => string | null }): Move[] {
+export function redeal(o: { players: LivePlayer[]; factions: string[]; skillOf: (id: string) => Skill; clanOf: (id: string) => string | null; random?: () => number }): Move[] {
   const k = o.factions.length;
   if (k < 2) return [];
+  const rand = o.random ?? Math.random;
   const on = o.players.filter((p) => p.faction && o.factions.includes(p.faction));
-  const sorted = [...on].sort((a, b) => o.skillOf(b.steamId).mu - o.skillOf(a.steamId).mu || a.steamId.localeCompare(b.steamId));
-  const dealt: LivePlayer[][] = Array.from({ length: k }, () => []);
-  sorted.forEach((p, i) => {
-    const pos = i % k;
-    dealt[Math.floor(i / k) % 2 ? k - 1 - pos : pos].push(p);
-  });
+  const mu = (p: LivePlayer) => o.skillOf(p.steamId).mu;
+  const sorted = [...on].sort((a, b) => mu(b) - mu(a) || a.steamId.localeCompare(b.steamId));
+  const spread = (d: LivePlayer[][]) => {
+    const t = d.map((side) => side.reduce((a, p) => a + mu(p), 0));
+    return Math.max(...t) - Math.min(...t);
+  };
+  let dealt: LivePlayer[][] = [];
+  for (let n = 0; n < DEALS; n++) {
+    const d: LivePlayer[][] = Array.from({ length: k }, () => []);
+    for (let i = 0; i < sorted.length; i += k) {
+      // the last, short block goes to the sides with fewest so counts stay within one
+      const order = d.map((_, s) => s).sort((a, b) => d[a].length - d[b].length || rand() - 0.5);
+      sorted.slice(i, i + k).forEach((p, j) => d[order[j]].push(p));
+    }
+    if (!dealt.length || spread(d) < spread(dealt)) dealt = d;
+  }
   const stays = (names: string[]) => dealt.reduce((a, side, i) => a + side.filter((p) => p.faction === names[i]).length, 0);
   const names = orderings(o.factions).reduce((best, n) => (stays(n) > stays(best) ? n : best));
 
   const sidesOf = (place: (p: LivePlayer) => string): Sides => new Map(o.factions.map((f) => [f, on.filter((p) => place(p) === f).map((p) => p.steamId)]));
   const target = new Map(dealt.flatMap((side, i) => side.map((p) => [p.steamId, names[i]] as const)));
-  const now = sidesOf((p) => p.faction!);
-  const next = sidesOf((p) => target.get(p.steamId)!);
-  const totals = (s: Sides) => [...s.values()].map((ids) => ids.reduce((a, id) => a + o.skillOf(id).mu, 0));
-  const muSpread = (s: Sides) => Math.max(...totals(s)) - Math.min(...totals(s));
-  // Gated on skill totals: the odds of a lopsided server read 100/0 before and after alike.
-  if (muSpread(next) >= muSpread(now) - 1e-9) return [];
-  const before = spreadOf(chances(now, o.skillOf, o.clanOf));
-  const after = spreadOf(chances(next, o.skillOf, o.clanOf));
+  const before = spreadOf(chances(sidesOf((p) => p.faction!), o.skillOf, o.clanOf));
+  const after = spreadOf(chances(sidesOf((p) => target.get(p.steamId)!), o.skillOf, o.clanOf));
   return on
     .filter((p) => target.get(p.steamId) !== p.faction)
     .map((p) => ({ steamId: p.steamId, name: p.name, from: p.faction!, to: target.get(p.steamId)!, before, after }));

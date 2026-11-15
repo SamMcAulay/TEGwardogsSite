@@ -36,7 +36,10 @@ describe('balancerLook', () => {
     expect(t.sent).toEqual([]);
 
     t.set({ startedAt: m(1005) });
+    // players are still loading in: no deal yet, and nobody is counted as weighed up
     await balancerLook(t.deps, 1010);
+    expect(t.store.balanceMoves(t.id)).toEqual([]);
+    await balancerLook(t.deps, 1100);
     // a strong player and a weak one swap sides
     const first = t.store.balanceMoves(t.id);
     expect(first.map((m) => [m.from, m.to, m.kind, m.sent])).toEqual([
@@ -49,7 +52,7 @@ describe('balancerLook', () => {
     const now = (id: string, f: string) => first.find((m) => m.steamId === id)?.to ?? f;
     const strongOnV = ['s1', 's2'].find((id) => now(id, 'Manticore') === 'Valkyra')!;
     t.set({ players: [pl('s1', now('s1', 'Manticore')), pl('s2', now('s2', 'Manticore')), pl('w1', now('w1', 'Valkyra')), pl('w2', now('w2', 'Valkyra')), pl('j1', 'Valkyra'), pl('j3', 'Valkyra')] });
-    await balancerLook(t.deps, 1020);
+    await balancerLook(t.deps, 1110);
     const after = t.store.balanceMoves(t.id);
     const joins = after.filter((m) => m.kind === 'join');
     expect(joins).toHaveLength(1);
@@ -58,11 +61,11 @@ describe('balancerLook', () => {
     expect(after.filter((m) => m.steamId === strongOnV)).toHaveLength(1);
     // nobody already weighed up is moved again on later looks
     const count = after.length;
-    await balancerLook(t.deps, 1030);
+    await balancerLook(t.deps, 1120);
     expect(t.store.balanceMoves(t.id).length).toBe(count);
 
-    t.set({ startedAt: m(1035) });
-    await balancerLook(t.deps, 1040);
+    t.set({ startedAt: m(1135) });
+    await balancerLook(t.deps, 1140);
     expect(t.store.activeBalanceRuns()).toEqual([]);
     expect(t.store.balanceRuns()[0]).toMatchObject({ status: 'done', note: 'The match ended.' });
   });
@@ -71,6 +74,7 @@ describe('balancerLook', () => {
     const t = setup('watch');
     t.set({ startedAt: m(1005), players: [pl('s1', 'Manticore'), pl('s2', 'Manticore'), pl('w1', 'Valkyra'), pl('w2', 'Valkyra')] });
     await balancerLook(t.deps, 1000);
+    await balancerLook(t.deps, 1100);
     expect(t.store.balanceMoves(t.id)).toHaveLength(2);
     expect(t.store.balanceMoves(t.id).every((m) => !m.sent)).toBe(true);
     expect(t.sent).toEqual([]);
@@ -79,7 +83,9 @@ describe('balancerLook', () => {
   it('records a refused move and cancels a live run with no move key', async () => {
     const t = setup('live');
     t.set({ startedAt: m(1005), players: [pl('s1', 'Manticore'), pl('s2', 'Manticore'), pl('w1', 'Valkyra'), pl('w2', 'Valkyra')] });
-    await balancerLook({ ...t.deps, act: async () => Promise.reject(new Error('changeTeam: Warcon answered HTTP 403')) }, 1000);
+    const refuse = { ...t.deps, act: async () => Promise.reject(new Error('changeTeam: Warcon answered HTTP 403')) };
+    await balancerLook(refuse, 1000);
+    await balancerLook(refuse, 1100);
     expect(t.store.balanceMoves(t.id)[0]).toMatchObject({ sent: false, error: 'changeTeam: Warcon answered HTTP 403' });
 
     const u = setup('live');
@@ -106,7 +112,7 @@ describe('match-start re-deal', () => {
     }
     t.deps.ratings = () => ratings;
     t.set({ startedAt: m(1005), players });
-    await balancerLook(t.deps, 1010);
+    await balancerLook(t.deps, 1100);
     const moves = t.store.balanceMoves(t.id);
     expect(moves.length).toBeGreaterThan(6);
     expect(moves.every((x) => x.kind === 'start' && x.sent)).toBe(true);
