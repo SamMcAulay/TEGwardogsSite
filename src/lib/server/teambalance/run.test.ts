@@ -93,3 +93,25 @@ describe('balancerLook', () => {
     expect(t.store.armBalance({ serverId: 'eu1', mode: 'watch', message: '', armedBy: '1', armedByName: null })).toBeNull();
   });
 });
+
+describe('match-start re-deal', () => {
+  it('deals a stacked full server out in one go, past the per-look cap for joiners', async () => {
+    const t = setup('live');
+    const ratings = new Map<string, PlayerRating>();
+    const players: ReturnType<typeof pl>[] = [];
+    for (let i = 0; i < 30; i++) {
+      // the 15 best all on Manticore
+      ratings.set(`p${i}`, rating(50 - i));
+      players.push(pl(`p${i}`, i < 15 ? 'Manticore' : 'Valkyra'));
+    }
+    t.deps.ratings = () => ratings;
+    t.set({ startedAt: m(1005), players });
+    await balancerLook(t.deps, 1010);
+    const moves = t.store.balanceMoves(t.id);
+    expect(moves.length).toBeGreaterThan(6);
+    expect(moves.every((x) => x.kind === 'start' && x.sent)).toBe(true);
+    const side = (id: string) => moves.find((x) => x.steamId === id)?.to ?? players.find((p) => p.steamId === id)!.faction;
+    const total = (f: string) => players.filter((p) => side(p.steamId) === f).reduce((a, p) => a + (50 - Number(p.steamId.slice(1))), 0);
+    expect(Math.abs(total('Manticore') - total('Valkyra'))).toBeLessThan(20);
+  });
+});

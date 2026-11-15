@@ -82,7 +82,8 @@ export function preRounds(): Map<string, PreRound> | null {
         `${round.serverId}:${round.matchId}`,
         teams.map((t, i) => ({
           faction: t.faction,
-          rating: t.steamIds.reduce((a, id) => a + (players.get(id)?.rating ?? newcomer), 0) / Math.max(1, t.steamIds.length),
+          // by share of the round, like the chances
+          rating: t.steamIds.reduce((a, id, j) => a + t.weights[j] * (players.get(id)?.rating ?? newcomer), 0) / Math.max(1e-9, t.weights.reduce((a, w) => a + w, 0)),
           chance: odds[i].chance,
         })),
       );

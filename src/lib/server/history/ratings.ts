@@ -55,13 +55,13 @@ export function sidesOf(round: StoredRound & { lines: StoredLine[] }): { teams: 
  */
 export function buildRatings(
   rounds: (StoredRound & { lines: StoredLine[] })[],
-  before?: (round: StoredRound, teams: { faction: string; steamIds: string[] }[], players: Map<string, PlayerRating>) => void,
+  before?: (round: StoredRound, teams: { faction: string; steamIds: string[]; weights: number[] }[], players: Map<string, PlayerRating>) => void,
 ): Map<string, PlayerRating> {
   const players = new Map<string, PlayerRating>();
   for (const round of [...rounds].sort((a, b) => a.endedAt - b.endedAt)) {
     const sides = sidesOf(round);
     if (!sides) continue;
-    before?.(round, sides.teams.map((t) => ({ faction: t.faction, steamIds: t.seats.map((s) => s.steamId) })), players);
+    before?.(round, sides.teams.map((t) => ({ faction: t.faction, steamIds: t.seats.map((s) => s.steamId), weights: t.seats.map((s) => s.weight) })), players);
     const seats: Seat[][] = sides.teams.map((t) => t.seats.map((s) => ({ skill: players.get(s.steamId)?.skill ?? fresh(), weight: s.weight })));
     const after = rate(seats, sides.places);
     const day = dayOf(round.endedAt);
@@ -94,23 +94,47 @@ export function ratingOn(p: PlayerRating, day: string): number | null {
 }
 
 /**
- * Each side's strength right now: the summed skill of who's on it (unrated players count as
- * newcomers), and the chance each side would win if the round started like this.
+ * Each side's strength: the summed skill of its players (unrated players count as newcomers), each
+ * counted by their share of the round (weights; 1 each when left out, as for who's on right now),
+ * and the chance each side wins from there. Unweighted, a side that lost players and refilled
+ * with joiners counted every one of them in full and came out the favourite: that was the losers.
  */
-export function sideStrength(sides: { faction: string; steamIds: string[] }[], ratings: Map<string, PlayerRating>): { faction: string; players: number; mu: number; chance: number }[] {
+export function sideStrength(
+  sides: { faction: string; steamIds: string[]; weights?: number[] }[],
+  ratings: Map<string, PlayerRating>,
+): { faction: string; players: number; mu: number; chance: number }[] {
   const teams = sides.map((s) => {
+    const w = (i: number) => s.weights?.[i] ?? 1;
     const skills = s.steamIds.map((id) => ratings.get(id)?.skill ?? fresh());
-    return { faction: s.faction, players: s.steamIds.length, mu: skills.reduce((a, k) => a + k.mu, 0), sigmaSq: skills.reduce((a, k) => a + k.sigma ** 2, 0) };
+    return {
+      faction: s.faction,
+      players: s.steamIds.length,
+      mu: skills.reduce((a, k, i) => a + w(i) * k.mu, 0),
+      sigmaSq: skills.reduce((a, k, i) => a + w(i) * k.sigma ** 2, 0),
+    };
   });
   const odds = chancesOf(teams);
   return teams.map((t, i) => ({ faction: t.faction, players: t.players, mu: t.mu, chance: odds[i] }));
 }
 
-/** Each side's chance of winning from its summed skill (mu) and summed variance (sigma squared). */
-export function chancesOf(teams: { mu: number; sigmaSq: number }[]): number[] {
+/**
+ * How much surer the odds are than the rating maths alone makes them: fitted on the 831 rated
+ * season-two and three rounds to 15 Nov 2026 (log-loss 0.785 at 1, 0.669 at 2.5), when a 54%
+ * favourite was winning about 80% of the time. Predictions only: ratings move as before.
+ */
+export const ODDS_STRETCH = 2.5;
+
+/**
+ * Each side's chance of winning from its summed skill (mu) and summed variance (sigma squared).
+ * stretch 1: the rating maths' own, smoother odds, for comparing moves (stretched, a lopsided
+ * server reads as 100/0 and no single move seems to help).
+ */
+export function chancesOf(teams: { mu: number; sigmaSq: number }[], stretch = ODDS_STRETCH): number[] {
   const beta = fresh().sigma / 2;
   const c = Math.sqrt(teams.reduce((a, t) => a + t.sigmaSq + beta ** 2, 0)) || 1;
-  const exp = teams.map((t) => Math.exp(t.mu / c));
+  // Relative to the strongest side, so a big stretch can't overflow.
+  const top = Math.max(...teams.map((t) => t.mu));
+  const exp = teams.map((t) => Math.exp((stretch * (t.mu - top)) / c));
   const sum = exp.reduce((a, e) => a + e, 0) || 1;
   return exp.map((e) => e / sum);
 }

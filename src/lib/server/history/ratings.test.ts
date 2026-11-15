@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRatings, ratingOn, sideStrength, sidesOf } from './ratings';
+import { buildRatings, chancesOf, ODDS_STRETCH, ratingOn, sideStrength, sidesOf } from './ratings';
 import type { StoredLine, StoredRound } from './store';
 
 const A = '76561198000000001';
@@ -64,5 +64,31 @@ describe('sideStrength', () => {
     const uneven = sideStrength([{ faction: 'Valkyra', steamIds: [A, C] }, { faction: 'Lonestar', steamIds: [B] }], new Map());
     expect(uneven[0].chance).toBeGreaterThan(0.6);
     expect(uneven[0].chance + uneven[1].chance).toBeCloseTo(1);
+  });
+
+  it('counts each player by their share of the round, so a side that churned through joiners is not the favourite', () => {
+    // Valkyra kept its 2 all round; Lonestar's 2 left halfway and 3 joiners played a third each:
+    // the same time on the field, so even (counted by heads, Lonestar was a 96% favourite).
+    const s = sideStrength(
+      [
+        { faction: 'Valkyra', steamIds: [A, B], weights: [1, 1] },
+        { faction: 'Lonestar', steamIds: [C, 'd', 'e', 'f', 'g'], weights: [0.5, 0.5, 0.34, 0.33, 0.33] },
+      ],
+      new Map(),
+    );
+    expect(s[1].chance).toBeCloseTo(0.5, 1);
+    expect(s[1].players).toBe(5);
+  });
+});
+
+describe('chancesOf', () => {
+  it('is stretched by ODDS_STRETCH: the same skill gap gives a surer favourite', () => {
+    const teams = [{ mu: 130, sigmaSq: 20 }, { mu: 125, sigmaSq: 20 }];
+    const c = Math.sqrt(40 + 2 * (25 / 6) ** 2);
+    const plain = Math.exp(130 / c) / (Math.exp(130 / c) + Math.exp(125 / c));
+    expect(ODDS_STRETCH).toBe(2.5);
+    expect(chancesOf(teams)[0]).toBeGreaterThan(plain);
+    expect(chancesOf(teams)[0]).toBeCloseTo(1 / (1 + Math.exp((-ODDS_STRETCH * 5) / c)));
+    expect(chancesOf(teams, 1)[0]).toBeCloseTo(plain);
   });
 });

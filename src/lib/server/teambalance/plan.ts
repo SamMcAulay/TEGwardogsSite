@@ -36,7 +36,7 @@ const countSpread = (sides: Sides) => {
 };
 
 /** Each side's chance of winning, with big clan stacks counted stronger. */
-export function chances(sides: Sides, skillOf: (id: string) => Skill, clanOf: (id: string) => string | null): Map<string, number> {
+export function chances(sides: Sides, skillOf: (id: string) => Skill, clanOf: (id: string) => string | null, stretch?: number): Map<string, number> {
   const teams = [...sides.values()].map((ids) => {
     const clans = new Map<string, number>();
     for (const id of ids) {
@@ -53,7 +53,7 @@ export function chances(sides: Sides, skillOf: (id: string) => Skill, clanOf: (i
     }
     return { mu, sigmaSq };
   });
-  const odds = chancesOf(teams);
+  const odds = chancesOf(teams, stretch);
   return new Map([...sides.keys()].map((f, i) => [f, odds[i]]));
 }
 
@@ -84,7 +84,8 @@ export function planMoves(o: {
   const moves: Move[] = [];
   const done = new Set<string>();
   while (moves.length < o.max) {
-    const now = spreadOf(chances(sides, o.skillOf, o.clanOf));
+    // Decided on the smooth odds; the move records the stretched ones staff see.
+    const now = spreadOf(chances(sides, o.skillOf, o.clanOf, 1));
     const allowed = Math.max(GAP, countSpread(sides));
     let best: { id: string; to: string; after: number } | null = null;
     for (const id of o.candidates) {
@@ -94,17 +95,56 @@ export function planMoves(o: {
         if (to === from) continue;
         const trial: Sides = new Map([...sides].map(([f, ids]) => [f, f === from ? ids.filter((x) => x !== id) : f === to ? [...ids, id] : ids]));
         if (countSpread(trial) > allowed) continue;
-        const after = spreadOf(chances(trial, o.skillOf, o.clanOf));
+        const after = spreadOf(chances(trial, o.skillOf, o.clanOf, 1));
         if (!best || after < best.after) best = { id, to, after };
       }
     }
     if (!best || now - best.after < MIN_GAIN) break;
     const from = sideOf.get(best.id)!;
+    const shown = spreadOf(chances(sides, o.skillOf, o.clanOf));
     sides.set(from, sides.get(from)!.filter((x) => x !== best.id));
     sides.get(best.to)!.push(best.id);
     sideOf.set(best.id, best.to);
     done.add(best.id);
-    moves.push({ steamId: best.id, name: byId.get(best.id)!.name, from, to: best.to, before: now, after: best.after });
+    moves.push({ steamId: best.id, name: byId.get(best.id)!.name, from, to: best.to, before: shown, after: spreadOf(chances(sides, o.skillOf, o.clanOf)) });
   }
   return moves;
+}
+
+/** Every ordering of `items` (sides are 2 or 3, so at most 6). */
+const orderings = <T>(items: T[]): T[][] =>
+  items.length <= 1 ? [items] : items.flatMap((x, i) => orderings([...items.slice(0, i), ...items.slice(i + 1)]).map((rest) => [x, ...rest]));
+
+/**
+ * The match-start shuffle: everyone on a side dealt out afresh by skill, snake order (best to side
+ * 1, 2, 3, then 3, 2, 1, ...), so counts end within one and strengths close, and clan mates of
+ * like skill land on different sides. Of the ways to name the dealt sides, the one that leaves
+ * most players where they are; the moves are everyone else. None when the deal is no fairer.
+ */
+export function redeal(o: { players: LivePlayer[]; factions: string[]; skillOf: (id: string) => Skill; clanOf: (id: string) => string | null }): Move[] {
+  const k = o.factions.length;
+  if (k < 2) return [];
+  const on = o.players.filter((p) => p.faction && o.factions.includes(p.faction));
+  const sorted = [...on].sort((a, b) => o.skillOf(b.steamId).mu - o.skillOf(a.steamId).mu || a.steamId.localeCompare(b.steamId));
+  const dealt: LivePlayer[][] = Array.from({ length: k }, () => []);
+  sorted.forEach((p, i) => {
+    const pos = i % k;
+    dealt[Math.floor(i / k) % 2 ? k - 1 - pos : pos].push(p);
+  });
+  const stays = (names: string[]) => dealt.reduce((a, side, i) => a + side.filter((p) => p.faction === names[i]).length, 0);
+  const names = orderings(o.factions).reduce((best, n) => (stays(n) > stays(best) ? n : best));
+
+  const sidesOf = (place: (p: LivePlayer) => string): Sides => new Map(o.factions.map((f) => [f, on.filter((p) => place(p) === f).map((p) => p.steamId)]));
+  const target = new Map(dealt.flatMap((side, i) => side.map((p) => [p.steamId, names[i]] as const)));
+  const now = sidesOf((p) => p.faction!);
+  const next = sidesOf((p) => target.get(p.steamId)!);
+  const totals = (s: Sides) => [...s.values()].map((ids) => ids.reduce((a, id) => a + o.skillOf(id).mu, 0));
+  const muSpread = (s: Sides) => Math.max(...totals(s)) - Math.min(...totals(s));
+  // Gated on skill totals: the odds of a lopsided server read 100/0 before and after alike.
+  if (muSpread(next) >= muSpread(now) - 1e-9) return [];
+  const before = spreadOf(chances(now, o.skillOf, o.clanOf));
+  const after = spreadOf(chances(next, o.skillOf, o.clanOf));
+  return on
+    .filter((p) => target.get(p.steamId) !== p.faction)
+    .map((p) => ({ steamId: p.steamId, name: p.name, from: p.faction!, to: target.get(p.steamId)!, before, after }));
 }

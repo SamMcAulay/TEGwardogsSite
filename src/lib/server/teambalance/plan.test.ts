@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fresh, type Skill } from '@/lib/rating';
-import { chances, planMoves, type LivePlayer } from './plan';
+import { chances, planMoves, redeal, type LivePlayer } from './plan';
 
 const F = ['Manticore', 'Valkyra', 'Lonestar'];
 const skills: Record<string, Skill> = {};
@@ -53,5 +53,43 @@ describe('chances', () => {
     const stacked = chances(sides, skillOf, (id) => (Number(id) <= 4 ? 'TEG' : null));
     expect(plain.get('A')).toBeCloseTo(0.5);
     expect(stacked.get('A')!).toBeGreaterThan(0.55);
+  });
+});
+
+describe('redeal', () => {
+  const sum = (ids: string[]) => ids.reduce((a, id) => a + skillOf(id).mu, 0);
+  const after = (ps: LivePlayer[], moves: { steamId: string; to: string }[]) => {
+    const to = new Map(moves.map((m) => [m.steamId, m.to]));
+    return ps.map((x) => ({ ...x, faction: to.get(x.steamId) ?? x.faction }));
+  };
+
+  it('deals a stacked server out evenly: counts within one, strengths close', () => {
+    const ps = [
+      ...Array.from({ length: 10 }, (_, i) => p(`m${i}`, 'Manticore', 40 - i)),
+      ...Array.from({ length: 10 }, (_, i) => p(`v${i}`, 'Valkyra', 20 - i)),
+      ...Array.from({ length: 10 }, (_, i) => p(`l${i}`, 'Lonestar', 20 - i)),
+    ];
+    const moves = redeal({ players: ps, factions: F, skillOf, clanOf: noClan });
+    const now = after(ps, moves);
+    const sides = F.map((f) => now.filter((x) => x.faction === f).map((x) => x.steamId));
+    expect(Math.max(...sides.map((x) => x.length)) - Math.min(...sides.map((x) => x.length))).toBeLessThanOrEqual(1);
+    const sums = sides.map(sum);
+    expect(Math.max(...sums) - Math.min(...sums)).toBeLessThan(15);
+    expect(moves.every((m) => m.from !== m.to)).toBe(true);
+    expect(moves[0].after).toBeLessThan(moves[0].before);
+  });
+
+  it('keeps as many players where they are as the deal allows', () => {
+    // already dealt evenly: nobody needs to move
+    const ps = [p('a', 'Manticore', 30), p('b', 'Valkyra', 29), p('c', 'Lonestar', 28), p('d', 'Lonestar', 27), p('e', 'Valkyra', 26), p('f', 'Manticore', 25)];
+    expect(redeal({ players: ps, factions: F, skillOf, clanOf: noClan })).toEqual([]);
+  });
+
+  it('leaves players not on a side yet alone, and needs two sides', () => {
+    const ps = [p('a', null, 40), p('b', 'Manticore', 40), p('c', 'Manticore', 10)];
+    const m = redeal({ players: ps, factions: ['Manticore', 'Valkyra'], skillOf, clanOf: noClan });
+    expect(m.map((x) => x.steamId)).not.toContain('a');
+    expect(m).toHaveLength(1);
+    expect(redeal({ players: ps, factions: ['Manticore'], skillOf, clanOf: noClan })).toEqual([]);
   });
 });
