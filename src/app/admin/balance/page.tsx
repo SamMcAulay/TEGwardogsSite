@@ -314,7 +314,10 @@ export default async function BalancePage({ searchParams }: PageProps<'/admin/ba
                         overrate the favourite, so &ldquo;Stacked on skill&rdquo; and the team balancer lean on numbers that are too
                         strong; well above, and they underrate it. Rows with few rounds swing on luck. Each player counts by how much of
                         the round they played, so a side that lost players and refilled with joiners isn&apos;t counted as bigger than it
-                        was.
+                        was. That still flatters the ratings a little: players leave the losing side, so the time each side kept tells
+                        on the result. The site now records who was on each side two minutes into every match (
+                        {int(history()?.startRosterCount() ?? 0)} so far); once a few hundred are in, the ratings are tested on those
+                        starting teams instead.
                       </Help>
                       {cal.length ? (
                         <div className="overflow-x-auto">

@@ -58,6 +58,17 @@ export const HISTORY_MIGRATIONS = [
   `ALTER TABLE rounds ADD COLUMN teamplay TEXT;`,
   // {faction: {deaths, traded}} now, counted over 20s: the history job reads every feed again.
   `UPDATE rounds SET teamplay = NULL;`,
+  // Who was on each side two minutes into a match (./rosters.ts): the starting teams, which the
+  // finished round's lines can't tell apart from late joiners and early leavers. Ratings and K/D
+  // going in are rebuilt from the rounds before, so only the sides are kept.
+  `CREATE TABLE start_rosters (
+     server_id TEXT NOT NULL,
+     match_id  INTEGER NOT NULL,
+     steam_id  TEXT NOT NULL,
+     faction   TEXT NOT NULL,
+     taken_at  INTEGER NOT NULL,
+     PRIMARY KEY (server_id, match_id, steam_id)
+   );`,
 ];
 
 export interface StoredRound {
@@ -178,6 +189,10 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
     playerSnaps: db.prepare('SELECT * FROM snapshots WHERE steam_id = ? ORDER BY day'),
     getMeta: db.prepare('SELECT value FROM meta WHERE key = ?'),
     setMeta: db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)'),
+    hasRoster: db.prepare('SELECT 1 FROM start_rosters WHERE server_id = ? AND match_id = ? LIMIT 1'),
+    addRoster: db.prepare('INSERT OR IGNORE INTO start_rosters (server_id, match_id, steam_id, faction, taken_at) VALUES (?, ?, ?, ?, ?)'),
+    rosterCount: db.prepare('SELECT count(*) AS n FROM (SELECT DISTINCT server_id, match_id FROM start_rosters)'),
+    roster: db.prepare('SELECT steam_id, faction FROM start_rosters WHERE server_id = ? AND match_id = ? ORDER BY faction, steam_id'),
   };
 
   const tx = <T>(fn: () => T): T => {
@@ -273,6 +288,17 @@ export function openHistory(file: string, migrations: string[] = HISTORY_MIGRATI
     playerSnapshots: (steamId: string) =>
       (q.playerSnaps.all(steamId) as Record<string, unknown>[]).map((r) => ({ day: String(r.day), ...totalsOf(r) })),
 
+    hasStartRoster: (serverId: string, matchId: number) => !!q.hasRoster.get(serverId, matchId),
+    /** Who was on each side early in a match; once per match. */
+    addStartRoster(serverId: string, matchId: number, players: { steamId: string; faction: string }[], takenAt: number) {
+      tx(() => {
+        for (const p of players) q.addRoster.run(serverId, matchId, p.steamId, p.faction, takenAt);
+      });
+    },
+    startRoster: (serverId: string, matchId: number) =>
+      (q.roster.all(serverId, matchId) as { steam_id: string; faction: string }[]).map((r) => ({ steamId: r.steam_id, faction: r.faction })),
+    /** How many matches have a starting roster. */
+    startRosterCount: () => (q.rosterCount.get() as { n: number }).n,
     meta: (key: string) => (q.getMeta.get(key) as { value: string } | undefined)?.value ?? null,
     setMeta: (key: string, value: string) => void q.setMeta.run(key, value),
     close: () => db.close(),
