@@ -8,11 +8,11 @@ import { clanTag } from '@/lib/clans';
 import { ago, int } from '@/lib/format';
 import { fresh } from '@/lib/rating';
 import { currentAdmin } from '@/lib/server/accounts/admin';
-import type { BalanceMove, BalanceRun } from '@/lib/server/accounts/store';
+import type { BalanceMove, BalanceRun, BalanceSide } from '@/lib/server/accounts/store';
 import { getServers } from '@/lib/server/data';
 import { ratings } from '@/lib/server/history';
 import { chances, GAP, STACK } from '@/lib/server/teambalance/plan';
-import { DEFAULT_MESSAGE } from '@/lib/server/teambalance/run';
+import { DEFAULT_MESSAGE, HOLD_GRACE_S } from '@/lib/server/teambalance/run';
 import { one } from '@/lib/url';
 import { AdminNav } from '../nav';
 import { armBalancer, cancelBalancer } from './actions';
@@ -33,8 +33,10 @@ function Help({ children, flush }: { children: ReactNode; flush?: boolean }) {
   return <p className={flush ? 'border-b border-line px-4 py-3 text-sm text-muted' : 'mb-4 max-w-3xl text-sm text-muted'}>{children}</p>;
 }
 
-function RunSummary({ run, server, moves }: { run: BalanceRun; server: string; moves: BalanceMove[] }) {
+function RunSummary({ run, server, moves, sides }: { run: BalanceRun; server: string; moves: BalanceMove[]; sides: BalanceSide[] }) {
   const failed = moves.filter((m) => m.error).length;
+  const held = sides.filter((x) => x.held > 0);
+  const holds = held.reduce((a, x) => a + x.held, 0);
   return (
     <details>
       <summary className="flex cursor-pointer flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2">
@@ -45,10 +47,22 @@ function RunSummary({ run, server, moves }: { run: BalanceRun; server: string; m
           armed {ago(run.armedAt)} by {run.armedByName ?? run.armedBy}
           {run.startedAt && ` · match began ${ago(run.startedAt)}`} · {int(moves.length)} {run.mode === 'live' ? 'moved' : 'would move'}
           {failed > 0 && ` · ${failed} failed`}
+          {holds > 0 && ` · ${int(holds)} ${run.mode === 'live' ? 'held back' : 'switches'} (${int(held.length)} players)`}
           {run.note && ` · ${run.note}`}
         </span>
       </summary>
       <div className="border-t border-line bg-surface-2/40">
+        {held.length > 0 && (
+          <Help flush>
+            {run.mode === 'live' ? 'Moved back after switching sides' : 'Switched sides (live would have moved them back)'}:{' '}
+            {held.map((x, i) => (
+              <span key={x.steamId}>
+                {i > 0 && ', '}
+                <Link prefetch={false} href={`/players/${x.steamId}`} className="link">{x.name}</Link> ×{x.held} (<FactionTag name={x.faction} />)
+              </span>
+            ))}
+          </Help>
+        )}
         {moves.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm tabular-nums">
@@ -100,7 +114,7 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
       <PageHeader
         eyebrow="Staff"
         title="Team balancer"
-        description="Arm it on a server and it shuffles everyone into even sides by skill rating 90 seconds into the next match, then places each player who joins. Nobody is moved more than once a game."
+        description="Arm it on a server and it shuffles everyone into even sides by skill rating 90 seconds into the next match, then places each player who joins. Players who switch sides are moved back."
       />
       <Container className="mt-8 space-y-4">
         <AdminNav active="teambalance" />
@@ -123,7 +137,10 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
             60%; moving more would just be the same teams with the names swapped. The moves go out a second apart, so a full server takes about a minute. After that, each player
             who joins is weighed up once as they arrive and moved if another side needs them more; player counts never end up more
             than {GAP} apart, and clan mates {STACK} or more strong on one side count as stronger than their ratings. A moved player is killed so they
-            respawn on the new side, and gets your whisper. Nobody is moved twice in a game; it stops when that match ends.
+            respawn on the new side, and gets your whisper. Everyone it has dealt or placed is then <strong>held</strong> to that side for
+            the match: switch sides and they are moved back with a whisper saying teams are locked, every time (it waits {HOLD_GRACE_S}{' '}
+            seconds after placing someone before counting a switch). Players linked on this site as staff may switch freely. It
+            stops when that match ends.
           </Help>
           <Help>
             <strong>Watch-only</strong> works out and logs every move it would make, and moves nobody: run it on a match or two and
@@ -209,7 +226,7 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
             <ul className="divide-y divide-line">
               {runs.map((r) => (
                 <li key={r.id}>
-                  <RunSummary run={r} server={found instanceof Error ? r.serverId : (found.data.find((s) => s.id === r.serverId)?.shortName ?? r.serverId)} moves={store.balanceMoves(r.id)} />
+                  <RunSummary run={r} server={found instanceof Error ? r.serverId : (found.data.find((s) => s.id === r.serverId)?.shortName ?? r.serverId)} moves={store.balanceMoves(r.id)} sides={store.balanceSides(r.id)} />
                 </li>
               ))}
             </ul>

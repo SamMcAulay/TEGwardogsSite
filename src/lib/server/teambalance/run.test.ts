@@ -121,3 +121,49 @@ describe('match-start re-deal', () => {
     expect(Math.abs(total('Manticore') - total('Valkyra'))).toBeLessThan(20);
   });
 });
+
+describe('holding the sides', () => {
+  const four = (a: string, b: string, c: string, d: string) => [pl('s1', a), pl('s2', b), pl('w1', c), pl('w2', d)];
+
+  it('moves anyone who switches back to their side, every time; staff may switch', async () => {
+    const t = setup('live');
+    t.store.link('d-staff', 'w2');
+    t.store.setTier('d-staff', 1);
+    t.set({ startedAt: m(1005), players: four('Manticore', 'Valkyra', 'Manticore', 'Valkyra') });
+    await balancerLook(t.deps, 1100);
+    // everyone weighed up is held to the side they were dealt (moved or not)
+    const side = new Map(t.store.balanceSides(t.id).map((x) => [x.steamId, x.faction]));
+    expect(side.size).toBe(4);
+    const other = (id: string) => (side.get(id) === 'Manticore' ? 'Valkyra' : 'Manticore');
+    const sentBefore = t.sent.length;
+
+    // s2 and staff w2 switch sides; inside the grace nothing happens
+    t.set({ players: (['s1', 's2', 'w1', 'w2'] as const).map((id) => pl(id, id === 's2' || id === 'w2' ? other(id) : side.get(id)!)) });
+    await balancerLook(t.deps, 1110);
+    expect(t.sent.length).toBe(sentBefore);
+    await balancerLook(t.deps, 1140);
+    const back = side.get('s2');
+    expect(t.sent.slice(sentBefore)).toEqual([`changeTeam s2 ${back}`, `whisper s2 Teams are locked this match to keep it balanced: you were moved back to ${back}.`]);
+
+    // they switch again (the game never moved them): held again
+    await balancerLook(t.deps, 1180);
+    expect(t.sent.slice(sentBefore).filter((x) => x.startsWith('changeTeam'))).toEqual([`changeTeam s2 ${back}`, `changeTeam s2 ${back}`]);
+    expect(t.store.balanceSides(t.id).find((x) => x.steamId === 's2')).toMatchObject({ faction: back, held: 2 });
+    expect(t.store.balanceSides(t.id).find((x) => x.steamId === 'w2')).toMatchObject({ held: 0 });
+  });
+
+  it('watch-only counts each switch once and moves nobody', async () => {
+    const t = setup('watch');
+    t.set({ startedAt: m(1005), players: four('Manticore', 'Valkyra', 'Manticore', 'Valkyra') });
+    await balancerLook(t.deps, 1100);
+    const went = 'Manticore';
+    t.set({ players: [pl('s1', 'Manticore'), pl('s2', went), pl('w1', 'Manticore'), pl('w2', 'Valkyra')] });
+    await balancerLook(t.deps, 1140);
+    await balancerLook(t.deps, 1180);
+    expect(t.sent).toEqual([]);
+    const sides = t.store.balanceSides(t.id);
+    expect(sides.find((x) => x.steamId === 's2')).toMatchObject({ faction: went, held: 1 });
+    // the rest never moved, so none of them count as switching
+    expect(sides.filter((x) => x.steamId !== 's2').every((x) => x.held === 0)).toBe(true);
+  });
+});

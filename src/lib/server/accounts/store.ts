@@ -251,6 +251,17 @@ export const MIGRATIONS: string[] = [
      score     REAL NOT NULL,
      PRIMARY KEY (server_id, entry_key)
    );`,
+  // v12: the side the team balancer gave (or left) each player it weighed up in a run, which it
+  // holds them to for the match: how often it moved them back, and when it last acted on them.
+  `CREATE TABLE balance_sides (
+     run_id   INTEGER NOT NULL,
+     steam_id TEXT NOT NULL,
+     name     TEXT NOT NULL,
+     faction  TEXT NOT NULL,
+     held     INTEGER NOT NULL DEFAULT 0,
+     at       INTEGER NOT NULL,
+     PRIMARY KEY (run_id, steam_id)
+   );`,
 ];
 
 export interface RotationServer {
@@ -296,6 +307,17 @@ export interface BalanceRun {
   startedAt: number | null;
   endedAt: number | null;
   note: string | null;
+}
+
+/** The side the balancer holds a player to for the rest of a run's match. */
+export interface BalanceSide {
+  steamId: string;
+  name: string;
+  faction: string;
+  /** times they switched off it and were moved back (or, watch-only, would have been) */
+  held: number;
+  /** unix seconds the balancer last placed or moved them */
+  at: number;
 }
 
 export interface BalanceMove {
@@ -420,6 +442,10 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
     moveResult: db.prepare('UPDATE balance_moves SET sent = ?, error = ? WHERE run_id = ? AND steam_id = ?'),
     moves: db.prepare('SELECT * FROM balance_moves WHERE run_id = ? ORDER BY at, rowid'),
+    setSide: db.prepare(`INSERT INTO balance_sides (run_id, steam_id, name, faction, at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (run_id, steam_id) DO UPDATE SET faction = excluded.faction, at = excluded.at`),
+    holdSide: db.prepare('UPDATE balance_sides SET held = held + 1, at = ? WHERE run_id = ? AND steam_id = ?'),
+    sides: db.prepare('SELECT * FROM balance_sides WHERE run_id = ? ORDER BY held DESC, name'),
     rotationServer: db.prepare('SELECT * FROM rotation_servers WHERE server_id = ?'),
     rotationServers: db.prepare('SELECT * FROM rotation_servers ORDER BY server_id'),
     rotationSwitch: db.prepare(`INSERT INTO rotation_servers (server_id, enabled, saved, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)
@@ -590,6 +616,18 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     addBalanceMove: (runId: number, m: Omit<BalanceMove, 'at' | 'sent' | 'error'>, at = now()) =>
       Number(q.addMove.run(runId, m.steamId, m.name, m.from, m.to, m.kind, m.before, m.after, at).changes) > 0,
     setBalanceMoveResult: (runId: number, steamId: string, sent: boolean, error: string | null) => void q.moveResult.run(sent ? 1 : 0, error, runId, steamId),
+    /** Records the side a player is held to in a run (or changes it). */
+    setBalanceSide: (runId: number, steamId: string, name: string, faction: string, at = now()) => void q.setSide.run(runId, steamId, name, faction, at),
+    /** Counts one move back to their side. */
+    holdBalanceSide: (runId: number, steamId: string, at = now()) => void q.holdSide.run(at, runId, steamId),
+    balanceSides: (runId: number): BalanceSide[] =>
+      (q.sides.all(runId) as Record<string, unknown>[]).map((r) => ({
+        steamId: String(r.steam_id),
+        name: String(r.name),
+        faction: String(r.faction),
+        held: Number(r.held),
+        at: Number(r.at),
+      })),
     balanceMoves: (runId: number): BalanceMove[] =>
       (q.moves.all(runId) as Record<string, unknown>[]).map((r) => ({
         steamId: String(r.steam_id),
