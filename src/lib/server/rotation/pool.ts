@@ -22,16 +22,20 @@ export const STEP: Record<Kind, number> = { clear: 1, morning: 1.25, rain: 1.5 }
 export const LEAN = 2;
 
 const LIGHTING: Record<Kind, string> = { clear: 'DayClear', morning: 'DayStartClear', rain: 'DayLateRain' };
-const MAPS: { map: string; mapId: string; experiences: string; kinds: Kind[] }[] = [
-  // Sabatulo has no early-morning lighting.
-  { map: 'Sabatulo', mapId: 'Russia', experiences: 'Moscow_KOTH_01+KOTH_LimitedGear', kinds: ['clear', 'rain'] },
+const MAPS: { map: string; mapId: string; experiences: string; kinds: Kind[]; lighting?: Partial<Record<Kind, string>> }[] = [
+  // Sabatulo has no morning lighting (the game takes DayClear, DayLateClear, DayLateGray, DayLateRain):
+  // clear late afternoon stands in, so it has three settings with the same odds as the other maps.
+  { map: 'Sabatulo', mapId: 'Russia', experiences: 'Moscow_KOTH_01+KOTH_LimitedGear', kinds: ['clear', 'morning', 'rain'], lighting: { morning: 'DayLateClear' } },
   { map: 'Bakurani', mapId: 'Kavkazi', experiences: 'Bakurani_KOTH_02+KOTH_LimitedGear', kinds: ['clear', 'morning', 'rain'] },
   { map: 'Ozeti', mapId: 'Europe', experiences: 'Madrid_KOTH_01+KOTH_LimitedGear', kinds: ['clear', 'morning', 'rain'] },
   { map: 'Zestafona', mapId: 'NorthAmerica', experiences: 'Detroit_KOTH_01+KOTH_LimitedGear', kinds: ['clear', 'morning', 'rain'] },
 ];
 
 export const POOL: readonly PoolEntry[] = MAPS.flatMap((m) =>
-  m.kinds.map((kind) => ({ key: `${m.map}/${LIGHTING[kind]}`, map: m.map, mapId: m.mapId, experiences: m.experiences, lighting: LIGHTING[kind], kind })),
+  m.kinds.map((kind) => {
+    const lighting = m.lighting?.[kind] ?? LIGHTING[kind];
+    return { key: `${m.map}/${lighting}`, map: m.map, mapId: m.mapId, experiences: m.experiences, lighting, kind };
+  }),
 );
 
 /** The pool entry for what a server is playing, by in-game name or id; null for anything else. */

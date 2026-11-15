@@ -2,9 +2,13 @@ import { describe, expect, test } from 'vitest';
 import { chances, configEntry, entryOf, pickNext, POOL, scoresOf } from './pool';
 
 describe('weighted rotation pool', () => {
-  test('11 entries: Sabatulo without early morning', () => {
-    expect(POOL).toHaveLength(11);
-    expect(POOL.filter((e) => e.map === 'Sabatulo').map((e) => e.lighting)).toEqual(['DayClear', 'DayLateRain']);
+  test('12 entries: Sabatulo with clear late afternoon in place of early morning', () => {
+    expect(POOL).toHaveLength(12);
+    expect(POOL.filter((e) => e.map === 'Sabatulo').map((e) => [e.lighting, e.kind])).toEqual([
+      ['DayClear', 'clear'],
+      ['DayLateClear', 'morning'],
+      ['DayLateRain', 'rain'],
+    ]);
   });
 
   test('scores start at 0 / 0.75 / 1.5 by lighting, stored ones win', () => {
