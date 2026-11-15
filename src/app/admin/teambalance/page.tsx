@@ -100,7 +100,7 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
       <PageHeader
         eyebrow="Staff"
         title="Team balancer"
-        description="Arm it on a server and it evens the sides by skill rating when the next match starts, then places each player who joins. Nobody is moved more than once a game."
+        description="Arm it on a server and it shuffles everyone into even sides by skill rating 90 seconds into the next match, then places each player who joins. Nobody is moved more than once a game."
       />
       <Container className="mt-8 space-y-4">
         <AdminNav active="teambalance" />
@@ -116,10 +116,11 @@ export default async function TeamBalancePage({ searchParams }: PageProps<'/admi
         <Panel title="How it works">
           <Help>
             <strong>Arm</strong> it on a server and it does nothing until the <strong>next</strong> match starts, never one already being
-            played. Then it <strong>re-deals</strong> everyone on: best player to one side, next to the next, and back again, so the
-            sides end up within one player of each other and close in skill, and clan mates of similar skill land on different
-            sides. Of the ways to do that, it picks the one that keeps the most players where they are, which still usually moves
-            about half the server. The moves go out a second apart, so a full server takes about a minute. After that, each player
+            played. 90 seconds in, once players have loaded, it <strong>shuffles</strong> everyone on: players are ranked by skill
+            and each group of equals is split across the sides at random, so the sides end up within one player of each other
+            and close in skill, but who plays with whom is down to chance, which breaks up stacks and groups. It always
+            shuffles, even if the sides already look even. With two sides about half the server moves, with three about
+            60%; moving more would just be the same teams with the names swapped. The moves go out a second apart, so a full server takes about a minute. After that, each player
             who joins is weighed up once as they arrive and moved if another side needs them more; player counts never end up more
             than {GAP} apart, and clan mates {STACK} or more strong on one side count as stronger than their ratings. A moved player is killed so they
             respawn on the new side, and gets your whisper. Nobody is moved twice in a game; it stops when that match ends.
