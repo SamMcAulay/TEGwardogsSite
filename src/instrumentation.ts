@@ -33,10 +33,17 @@ export async function register() {
         ratings,
         act: warconActor(siteEnv().warconBaseUrl, process.env.WARCON_MOVE_TOKEN),
         live: async (id) => {
-          const [v, startedAt] = await Promise.all([warcon().live(id).then((c) => c.value), warcon().openMatchStart(id)]);
+          const [v, startedAt] = await Promise.all([warcon().live(id).then((c) => c.value), warcon().openMatch(id).then((m) => m?.startedAt ?? null)]);
           return v && { startedAt, factions: (v.status?.scores ?? []).map((s) => s.name), players: v.players };
         },
       });
+      // Weighted map rotation: idle until staff switch it on for a server on /admin/rotation.
+      const { rotationConfig } = await import('./lib/server/warcon/rotation-config');
+      const config = rotationConfig(siteEnv().warconBaseUrl, process.env.WARCON_ROTATION_TOKEN);
+      if (config) {
+        const { startWeightedRotation } = await import('./lib/server/rotation/run');
+        startWeightedRotation({ store: a.store, config, openMatch: (id) => warcon().openMatch(id) });
+      }
     }
     if (a?.env.roundsChannelId) {
       const { startRoundAnnouncer, botPoster } = await import('./lib/server/rounds');

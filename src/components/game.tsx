@@ -279,7 +279,7 @@ function WeatherIcon({ weather }: { weather: Weather }) {
 
 const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next' } as const;
 
-function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL; eta?: number | null }) {
+function RotationCard({ stop, role, eta, weighted }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL; eta?: number | null; weighted?: boolean }) {
   const weather = weatherOf(stop?.lighting ?? null);
   const art = stop && mapArt(stop.map, stop.lighting);
   const now = role === 'now';
@@ -320,7 +320,7 @@ function RotationCard({ stop, role, eta }: { stop: RotationStop | null; role: ke
               <WeatherIcon weather={weather} />
               {/* The side cards are narrow on phones: the icon alone there. */}
               <span className={cx('truncate', !now && 'sr-only sm:not-sr-only')}>{lightingName(stop.lighting) || 'Day'}</span>
-              {now && stop.slot == null && <span className="truncate text-accent">· off rotation</span>}
+              {now && stop.slot == null && !weighted && <span className="truncate text-accent">· off rotation</span>}
             </>
           ) : (
             <span>Off rotation</span>
@@ -340,12 +340,23 @@ export function MapRotation({
   eta,
   starts,
   list = ROTATION,
+  picked,
 }: {
   status: ServerStatus;
   eta?: number | null;
   starts?: (number | null)[] | null;
   list?: readonly { map: string; lighting: string }[];
+  /** the weighted rotation's pick for the next map: shown instead of the fixed rotation */
+  picked?: { map: string; lighting: string } | null;
 }) {
+  if (picked) {
+    return (
+      <div className="grid grid-cols-2 items-end gap-2 sm:gap-3">
+        <RotationCard stop={{ map: status.map, lighting: status.lighting, slot: null }} role="now" weighted />
+        <RotationCard stop={{ ...picked, slot: null }} role="next" eta={eta} weighted />
+      </div>
+    );
+  }
   const view = rotationView(status, list);
   if (!view) return null;
   const { prev, now, next } = view;

@@ -1,7 +1,7 @@
 // The tabs across the staff pages. Shown only on them, so nothing public links here.
 import { buttonClass, Segmented } from '@/components/ui';
 
-export function AdminNav({ active }: { active: 'accounts' | 'teamkills' | 'balance' | 'teambalance' | 'health' }) {
+export function AdminNav({ active }: { active: 'accounts' | 'teamkills' | 'balance' | 'teambalance' | 'rotation' | 'health' }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <Segmented
@@ -13,6 +13,7 @@ export function AdminNav({ active }: { active: 'accounts' | 'teamkills' | 'balan
           { key: 'teamkills', label: 'Team kills', href: '/admin/teamkills' },
           { key: 'balance', label: 'Balance', href: '/admin/balance' },
           { key: 'teambalance', label: 'Team balancer', href: '/admin/teambalance' },
+          { key: 'rotation', label: 'Map rotation', href: '/admin/rotation' },
           { key: 'health', label: 'Health', href: '/admin/health' },
         ]}
       />
