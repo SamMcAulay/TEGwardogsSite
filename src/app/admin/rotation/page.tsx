@@ -74,7 +74,7 @@ export default async function RotationPage({ searchParams }: PageProps<'/admin/r
             more likely: one point lower is about {Math.round(Math.exp(LEAN))}× as likely. So the least-played map is the
             favourite but never certain. The map being played is never picked to come next, so the same map never comes up twice
             in a row. Rain starts higher and climbs faster, so over time it is about 41% clear, 32% early morning and 27% rain.
-            Each server keeps its own scores. Sabatulo has no early-morning lighting, so it only comes up clear or in the rain.
+            Each server keeps its own scores. Sabatulo has no early-morning lighting in the game, so it uses clear late afternoon in its place, with the same odds.
           </Help>
           <Help>
             <strong>How it reaches the server:</strong> as soon as a match starts, the site writes its pick into the server&apos;s
