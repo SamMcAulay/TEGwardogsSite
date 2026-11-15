@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { LocalTime } from '@/components/local-time';
+import { accounts } from '@/lib/server/accounts';
 import { accountsEnv } from '@/lib/server/accounts/env';
+import { entryOf } from '@/lib/server/rotation/pool';
 import Link from 'next/link';
 import { withParams } from '@/lib/url';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -180,6 +182,9 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   // Until the round ends: the score-based guess, else what a typical round has left. Nobody playing: no guess.
   const untilNext = waiting ? null : (eta ?? (elapsed != null && roundLength ? Math.max(0, roundLength - elapsed) : null));
   const starts = st ? rotationStarts(st.rotation.now, ROTATION.length, untilNext, roundLength) : null;
+  // The weighted rotation (staff /admin/rotation) replaces the fixed list with its pick.
+  const weighted = accounts()?.store.rotationServer(server.id);
+  const picked = weighted?.enabled && weighted.nextKey ? entryOf(...(weighted.nextKey.split('/') as [string, string])) : null;
 
   return (
     <>
@@ -256,13 +261,20 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Section>
         </StatGrid>
 
-        {st && rotationView(st) && (
-          <Panel
-            title="Map rotation"
-            action={st.rotation.now != null && st.rotation.now >= 0 ? `Map ${(st.rotation.now % ROTATION.length) + 1} of ${ROTATION.length}` : 'Off rotation'}
-          >
-            <MapRotation status={st} eta={eta} starts={starts} />
+        {st && picked ? (
+          <Panel title="Map rotation" action="Weighted: least-played maps come up most">
+            <MapRotation status={st} eta={eta} picked={picked} />
           </Panel>
+        ) : (
+          st &&
+          rotationView(st) && (
+            <Panel
+              title="Map rotation"
+              action={st.rotation.now != null && st.rotation.now >= 0 ? `Map ${(st.rotation.now % ROTATION.length) + 1} of ${ROTATION.length}` : 'Off rotation'}
+            >
+              <MapRotation status={st} eta={eta} starts={starts} />
+            </Panel>
+          )
         )}
 
         {/* Lead card: the round being played, over its map. */}

@@ -231,7 +231,56 @@ export const MIGRATIONS: string[] = [
      error        TEXT,
      PRIMARY KEY (run_id, steam_id)
    );`,
+  // v11: the weighted map rotation on /admin/rotation. Per server: switched on or not, the rotation
+  // it had before (put back when switched off), the pick for the next map and the match it was
+  // made in, and each rotation entry's score.
+  `CREATE TABLE rotation_servers (
+     server_id  TEXT PRIMARY KEY,
+     enabled    INTEGER NOT NULL DEFAULT 0,
+     saved      TEXT,
+     match      TEXT,
+     next_key   TEXT,
+     written    INTEGER NOT NULL DEFAULT 0,
+     note       TEXT,
+     changed_by TEXT,
+     changed_at INTEGER
+   );
+   CREATE TABLE rotation_scores (
+     server_id TEXT NOT NULL,
+     entry_key TEXT NOT NULL,
+     score     REAL NOT NULL,
+     PRIMARY KEY (server_id, entry_key)
+   );`,
 ];
+
+export interface RotationServer {
+  serverId: string;
+  enabled: boolean;
+  /** the rotation lines from before it was switched on */
+  saved: string[] | null;
+  /** start of the match the pick was made in */
+  match: string | null;
+  /** pool key of the map picked to come next */
+  nextKey: string | null;
+  /** whether the pick reached the server */
+  written: boolean;
+  /** the last problem; null when all is well */
+  note: string | null;
+  changedBy: string | null;
+  changedAt: number | null;
+}
+
+const toRotationServer = (r: Record<string, unknown>): RotationServer => ({
+  serverId: String(r.server_id),
+  enabled: !!r.enabled,
+  saved: r.saved ? (JSON.parse(String(r.saved)) as string[]) : null,
+  match: (r.match as string | null) ?? null,
+  nextKey: (r.next_key as string | null) ?? null,
+  written: !!r.written,
+  note: (r.note as string | null) ?? null,
+  changedBy: (r.changed_by as string | null) ?? null,
+  changedAt: (r.changed_at as number | null) ?? null,
+});
 
 export interface BalanceRun {
   id: number;
@@ -371,6 +420,15 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
     moveResult: db.prepare('UPDATE balance_moves SET sent = ?, error = ? WHERE run_id = ? AND steam_id = ?'),
     moves: db.prepare('SELECT * FROM balance_moves WHERE run_id = ? ORDER BY at, rowid'),
+    rotationServer: db.prepare('SELECT * FROM rotation_servers WHERE server_id = ?'),
+    rotationServers: db.prepare('SELECT * FROM rotation_servers ORDER BY server_id'),
+    rotationSwitch: db.prepare(`INSERT INTO rotation_servers (server_id, enabled, saved, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (server_id) DO UPDATE SET enabled = excluded.enabled, saved = COALESCE(excluded.saved, saved),
+        match = NULL, next_key = NULL, written = 0, note = NULL, changed_by = excluded.changed_by, changed_at = excluded.changed_at`),
+    rotationPick: db.prepare('UPDATE rotation_servers SET match = ?, next_key = ?, written = ?, note = ? WHERE server_id = ?'),
+    rotationScores: db.prepare('SELECT entry_key, score FROM rotation_scores WHERE server_id = ?'),
+    rotationScore: db.prepare(`INSERT INTO rotation_scores (server_id, entry_key, score) VALUES (?, ?, ?)
+      ON CONFLICT (server_id, entry_key) DO UPDATE SET score = score + ?`),
   };
   const one = (r: unknown) => (r ? toLink(r as Row) : null);
 
@@ -545,6 +603,22 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
         sent: !!r.sent,
         error: (r.error as string | null) ?? null,
       })),
+
+    rotationServer: (serverId: string) => {
+      const r = q.rotationServer.get(serverId) as Record<string, unknown> | undefined;
+      return r ? toRotationServer(r) : null;
+    },
+    rotationServers: () => (q.rotationServers.all() as Record<string, unknown>[]).map(toRotationServer),
+    /** Switches the weighted rotation on (keeping `saved`, the rotation to put back later) or off; either starts the pick afresh. */
+    setRotationEnabled: (serverId: string, enabled: boolean, saved: string[] | null, by: string, at = now()) =>
+      void q.rotationSwitch.run(serverId, enabled ? 1 : 0, saved ? JSON.stringify(saved) : null, by, at),
+    setRotationPick: (serverId: string, p: { match: string; nextKey: string | null; written: boolean; note: string | null }) =>
+      void q.rotationPick.run(p.match, p.nextKey, p.written ? 1 : 0, p.note, serverId),
+    /** Stored scores only; an entry never played isn't there (see rotation/pool.ts scoresOf). */
+    rotationScores: (serverId: string) =>
+      new Map((q.rotationScores.all(serverId) as { entry_key: string; score: number }[]).map((r) => [r.entry_key, r.score])),
+    /** Adds `step` to an entry's score, which starts at `start` the first time. */
+    addRotationScore: (serverId: string, key: string, start: number, step: number) => void q.rotationScore.run(serverId, key, start + step, step),
     close: () => db.close(),
   };
 }

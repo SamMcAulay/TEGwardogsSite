@@ -91,7 +91,7 @@ describe('player lookups', () => {
   });
 });
 
-describe('openMatchStart', () => {
+describe('openMatch', () => {
   const m = (id: number, startedAt: string, endedAt: string | null) => ({
     id, startedAt, endedAt, map: null, experiences: null, lighting: null, peakPlayers: 0, players: 0, finalScores: null, winner: null,
   });
@@ -100,15 +100,15 @@ describe('openMatchStart', () => {
   test('is the newest match while it has no end, read fresh each time', async () => {
     const { client, json } = fake(list([m(2, '2026-11-15T01:48:40.262Z', null), m(1, '2026-11-15T00:23:21.948Z', '2026-11-15T01:48:40.262Z')]));
     const api = createApi(client, new TtlCache());
-    await expect(api.openMatchStart('s1')).resolves.toBe('2026-11-15T01:48:40.262Z');
-    await api.openMatchStart('s1');
+    await expect(api.openMatch('s1')).resolves.toEqual({ startedAt: '2026-11-15T01:48:40.262Z', map: null, lighting: null });
+    await api.openMatch('s1');
     expect(json).toHaveBeenCalledTimes(2);
     expect(json.mock.calls[0][0]).toBe('/api/servers/s1/matches');
   });
 
   test('is null between matches or with none', async () => {
-    await expect(createApi(fake(list([m(1, '2026-11-15T00:23:21.948Z', '2026-11-15T01:48:40.262Z')])).client, new TtlCache()).openMatchStart('s1')).resolves.toBeNull();
-    await expect(createApi(fake(list([])).client, new TtlCache()).openMatchStart('s1')).resolves.toBeNull();
+    await expect(createApi(fake(list([m(1, '2026-11-15T00:23:21.948Z', '2026-11-15T01:48:40.262Z')])).client, new TtlCache()).openMatch('s1')).resolves.toBeNull();
+    await expect(createApi(fake(list([])).client, new TtlCache()).openMatch('s1')).resolves.toBeNull();
   });
 });
 

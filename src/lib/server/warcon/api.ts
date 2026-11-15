@@ -136,13 +136,14 @@ export function createApi(
     },
 
     /**
-     * When the match being played began, or null between matches. Not cached: the team balancer
-     * needs to see a new match within a look. The live summary's startedAt is when the game
-     * server booted, so it doesn't change from one match to the next.
+     * The match being played (its start, map and lighting as it opened), or null between matches.
+     * Not cached: the team balancer and the weighted rotation need to see a new match within a
+     * look. The live summary's startedAt is when the game server booted, so it doesn't change
+     * from one match to the next, and its lighting follows weather changes mid-match.
      */
-    async openMatchStart(serverId: string): Promise<string | null> {
+    async openMatch(serverId: string): Promise<{ startedAt: string; map: string | null; lighting: string | null } | null> {
       const latest = (await client.json(`/api/servers/${enc(serverId)}/matches`, matchListBody)).matches[0];
-      return latest && !latest.endedAt ? latest.startedAt : null;
+      return latest && !latest.endedAt ? { startedAt: latest.startedAt, map: latest.map, lighting: latest.lighting } : null;
     },
 
     match(serverId: string, matchId: number): Promise<Cached<WMatchView>> {

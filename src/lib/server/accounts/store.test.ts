@@ -404,3 +404,25 @@ describe('accounts.db on disk', () => {
     expect(existsSync(`${file}.pre-v${MIGRATIONS.length}`)).toBe(true);
   });
 });
+
+describe('weighted rotation state', () => {
+  test('switching on keeps the old rotation; switching off keeps it too; a pick is recorded', () => {
+    const s = openStore(':memory:');
+    expect(s.rotationServer('s1')).toBeNull();
+    s.setRotationEnabled('s1', true, ['A', 'B'], 'staff', 100);
+    s.setRotationPick('s1', { match: 'm1', nextKey: 'Ozeti/DayClear', written: true, note: null });
+    expect(s.rotationServer('s1')).toMatchObject({ enabled: true, saved: ['A', 'B'], match: 'm1', nextKey: 'Ozeti/DayClear', written: true, changedAt: 100 });
+    s.setRotationEnabled('s1', false, null, 'staff', 200);
+    expect(s.rotationServer('s1')).toMatchObject({ enabled: false, saved: ['A', 'B'], match: null, nextKey: null, written: false });
+    expect(s.rotationServers()).toHaveLength(1);
+  });
+
+  test('scores start at the given value and add up, per server', () => {
+    const s = openStore(':memory:');
+    s.addRotationScore('s1', 'Ozeti/DayLateRain', 1.5, 1.5);
+    s.addRotationScore('s1', 'Ozeti/DayLateRain', 1.5, 1.5);
+    s.addRotationScore('s2', 'Ozeti/DayClear', 0, 1);
+    expect(s.rotationScores('s1')).toEqual(new Map([['Ozeti/DayLateRain', 4.5]]));
+    expect(s.rotationScores('s2')).toEqual(new Map([['Ozeti/DayClear', 1]]));
+  });
+});
