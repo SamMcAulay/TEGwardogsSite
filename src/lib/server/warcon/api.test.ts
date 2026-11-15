@@ -91,6 +91,27 @@ describe('player lookups', () => {
   });
 });
 
+describe('openMatchStart', () => {
+  const m = (id: number, startedAt: string, endedAt: string | null) => ({
+    id, startedAt, endedAt, map: null, experiences: null, lighting: null, peakPlayers: 0, players: 0, finalScores: null, winner: null,
+  });
+  const list = (matches: unknown[]) => ({ ok: true, matches, live: [], page: 1, pages: 1, total: matches.length });
+
+  test('is the newest match while it has no end, read fresh each time', async () => {
+    const { client, json } = fake(list([m(2, '2026-11-15T01:48:40.262Z', null), m(1, '2026-11-15T00:23:21.948Z', '2026-11-15T01:48:40.262Z')]));
+    const api = createApi(client, new TtlCache());
+    await expect(api.openMatchStart('s1')).resolves.toBe('2026-11-15T01:48:40.262Z');
+    await api.openMatchStart('s1');
+    expect(json).toHaveBeenCalledTimes(2);
+    expect(json.mock.calls[0][0]).toBe('/api/servers/s1/matches');
+  });
+
+  test('is null between matches or with none', async () => {
+    await expect(createApi(fake(list([m(1, '2026-11-15T00:23:21.948Z', '2026-11-15T01:48:40.262Z')])).client, new TtlCache()).openMatchStart('s1')).resolves.toBeNull();
+    await expect(createApi(fake(list([])).client, new TtlCache()).openMatchStart('s1')).resolves.toBeNull();
+  });
+});
+
 describe('bannedPage', () => {
   test('asks for banned players 100 at a time from an offset, cached for 10 minutes', async () => {
     const { client, json } = fake({ ok: true, players: [], total: 0 });

@@ -135,6 +135,16 @@ export function createApi(
       return cached(path, TTL.stats, () => client.json(path, matchListBody));
     },
 
+    /**
+     * When the match being played began, or null between matches. Not cached: the team balancer
+     * needs to see a new match within a look. The live summary's startedAt is when the game
+     * server booted, so it doesn't change from one match to the next.
+     */
+    async openMatchStart(serverId: string): Promise<string | null> {
+      const latest = (await client.json(`/api/servers/${enc(serverId)}/matches`, matchListBody)).matches[0];
+      return latest && !latest.endedAt ? latest.startedAt : null;
+    },
+
     match(serverId: string, matchId: number): Promise<Cached<WMatchView>> {
       const path = `/api/servers/${enc(serverId)}/matches/${matchId}`;
       // An ended match never changes; one still running is refreshed like a list.
