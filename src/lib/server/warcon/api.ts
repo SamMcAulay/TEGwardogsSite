@@ -141,9 +141,9 @@ export function createApi(
      * look. The live summary's startedAt is when the game server booted, so it doesn't change
      * from one match to the next, and its lighting follows weather changes mid-match.
      */
-    async openMatch(serverId: string): Promise<{ startedAt: string; map: string | null; lighting: string | null } | null> {
+    async openMatch(serverId: string): Promise<{ id: number; startedAt: string; map: string | null; lighting: string | null } | null> {
       const latest = (await client.json(`/api/servers/${enc(serverId)}/matches`, matchListBody)).matches[0];
-      return latest && !latest.endedAt ? { startedAt: latest.startedAt, map: latest.map, lighting: latest.lighting } : null;
+      return latest && !latest.endedAt ? { id: latest.id, startedAt: latest.startedAt, map: latest.map, lighting: latest.lighting } : null;
     },
 
     match(serverId: string, matchId: number): Promise<Cached<WMatchView>> {

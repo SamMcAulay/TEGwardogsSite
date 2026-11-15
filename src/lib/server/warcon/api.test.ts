@@ -100,7 +100,7 @@ describe('openMatch', () => {
   test('is the newest match while it has no end, read fresh each time', async () => {
     const { client, json } = fake(list([m(2, '2026-11-15T01:48:40.262Z', null), m(1, '2026-11-15T00:23:21.948Z', '2026-11-15T01:48:40.262Z')]));
     const api = createApi(client, new TtlCache());
-    await expect(api.openMatch('s1')).resolves.toEqual({ startedAt: '2026-11-15T01:48:40.262Z', map: null, lighting: null });
+    await expect(api.openMatch('s1')).resolves.toEqual({ id: 2, startedAt: '2026-11-15T01:48:40.262Z', map: null, lighting: null });
     await api.openMatch('s1');
     expect(json).toHaveBeenCalledTimes(2);
     expect(json.mock.calls[0][0]).toBe('/api/servers/s1/matches');

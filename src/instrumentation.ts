@@ -13,6 +13,19 @@ export async function register() {
   const { startHistory } = await import('./lib/server/history');
   const { historyBoard, roundKills, visibleServerIds } = await import('./lib/server/data');
   startHistory({ serverIds: visibleServerIds, board: historyBoard, kills: roundKills });
+  // The starting teams two minutes into each match, for honest prediction tests (history/rosters.ts).
+  const { history } = await import('./lib/server/history/store');
+  const { startRosterCapture } = await import('./lib/server/history/rosters');
+  const { warcon } = await import('./lib/server/warcon');
+  const h = history();
+  if (h) {
+    startRosterCapture({
+      history: h,
+      serverIds: visibleServerIds,
+      openMatch: (id) => warcon().openMatch(id),
+      players: async (id) => (await warcon().live(id)).value?.players ?? [],
+    });
+  }
   const { accounts } = await import('./lib/server/accounts');
   const { startTierSync } = await import('./lib/server/accounts/sync');
   try {
@@ -26,7 +39,6 @@ export async function register() {
       // Team balancer: idle until staff arm it on /admin/teambalance.
       const { startTeamBalancer } = await import('./lib/server/teambalance/run');
       const { warconActor } = await import('./lib/server/warcon/act');
-      const { warcon } = await import('./lib/server/warcon');
       const { ratings } = await import('./lib/server/history');
       startTeamBalancer({
         store: a.store,
