@@ -71,7 +71,7 @@ export function Panel({
   return (
     <section className={cx('panel min-w-0 overflow-hidden', className)}>
       {(title || action) && (
-        <div className="flex items-center justify-between gap-4 px-6 pt-5 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 pt-5 pb-3">
           <h2 className="display text-xl text-text">{title}</h2>
           {action && <div className="text-sm text-muted">{action}</div>}
         </div>

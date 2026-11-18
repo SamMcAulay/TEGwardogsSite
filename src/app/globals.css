@@ -220,6 +220,21 @@ body {
     text-align: right;
     font-variant-numeric: tabular-nums;
   }
+  /* Phones: tighter cells so ordinary tables fit the card instead of chopping a column at the edge. */
+  @media (max-width: 639px) {
+    .table th,
+    .table td {
+      padding: 0.6rem 0.4rem;
+    }
+    .table th:first-child,
+    .table td:first-child {
+      padding-left: 0.85rem;
+    }
+    .table th:last-child,
+    .table td:last-child {
+      padding-right: 0.85rem;
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

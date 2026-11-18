@@ -95,9 +95,9 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                           <th>Map</th>
                           <th>Server</th>
                           <th>Started</th>
-                          <th className="r">Length</th>
-                          <th className="r">Players</th>
-                          <th className="w-56">Final score</th>
+                          <th className="r hidden sm:table-cell">Length</th>
+                          <th className="r hidden sm:table-cell">Players</th>
+                          <th className="hidden w-56 sm:table-cell">Final score</th>
                           <th>Winner</th>
                         </tr>
                       </thead>
@@ -111,10 +111,10 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                               <div className="text-xs text-dim">{lightingName(m.lighting)}</div>
                             </td>
                             <td className="text-muted">{m.serverName}</td>
-                            <td className="text-muted"><LocalTime ts={m.startedAt} /></td>
-                            <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
-                            <td className="r">{m.players}</td>
-                            <td>
+                            <td className="whitespace-normal text-muted"><LocalTime ts={m.startedAt} /></td>
+                            <td className="r hidden sm:table-cell">{duration((m.endedAt ?? now) - m.startedAt)}</td>
+                            <td className="r hidden sm:table-cell">{m.players}</td>
+                            <td className="hidden sm:table-cell">
                               <div className="flex h-2 w-48 gap-px bg-surface-3">
                                 {m.scores.map((s) => (
                                   <div
@@ -131,7 +131,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                                 {m.scores.map((s) => s.score).join(' · ')}
                               </div>
                             </td>
-                            <td>
+                            <td className="whitespace-normal">
                               {m.endedAt ? <FactionTag name={m.winner} /> : <Badge tone="good">Live</Badge>}
                               {m.endedAt && <CloseBadge scores={m.scores.map((s) => s.score)} />}
                             </td>
