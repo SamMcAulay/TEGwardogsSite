@@ -128,6 +128,20 @@ describe('rotationLook', () => {
     expect(store.rotationScores('s1').size).toBe(0);
   });
 
+  test('a short plan (from before AHEAD grew) is topped up at once, keeping its maps and writing nothing', async () => {
+    const { store, write, deps } = setup(M1);
+    store.setRotationEnabled('s1', true, ['old'], 'staff');
+    store.setRotationPick('s1', { match: M1.startedAt, nextKey: 'Ozeti/DayClear', later: ['Zestafona/DayClear', 'Bakurani/DayClear'], written: true, note: null });
+    await rotationLook(deps);
+    const s = store.rotationServer('s1')!;
+    expect(s.nextKey).toBe('Ozeti/DayClear');
+    expect(s.later.slice(0, 2)).toEqual(['Zestafona/DayClear', 'Bakurani/DayClear']);
+    expect(s.later).toHaveLength(AHEAD - 1);
+    expect(write).not.toHaveBeenCalled();
+    await rotationLook(deps);
+    expect(store.rotationServer('s1')!.later).toEqual(s.later);
+  });
+
   test('between matches: waits', async () => {
     const { store, write, deps } = setup(null);
     store.setRotationEnabled('s1', true, ['old'], 'staff');

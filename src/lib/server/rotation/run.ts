@@ -7,7 +7,7 @@
 import type { Store } from '../accounts/store';
 import { jobRan } from '../jobs';
 import type { RotationConfig } from '../warcon/rotation-config';
-import { configEntry, entryOf, plan, scoresOf, START, STEP } from './pool';
+import { AHEAD, configEntry, entryOf, plan, scoresOf, START, STEP } from './pool';
 
 export const LOOK_MS = 15_000;
 
@@ -46,7 +46,14 @@ export async function rotationLook(deps: RotationDeps): Promise<{ notes: string[
 
       const same = open.startedAt === s.match;
       if (same && s.nextKey) {
-        // The same match: only a pick that didn't reach the server needs anything.
+        // The same match: only a pick that didn't reach the server, or a plan shorter than AHEAD, needs anything.
+        if (s.written && s.later.length < AHEAD - 1) {
+          // Topped up behind the pick, which stays, so the server needs no write.
+          const [, ...later] = plan(scoresOf(deps.store.rotationScores(id)), entryOf(open.map, open.lighting)?.map ?? open.map, [s.nextKey, ...s.later], deps.random);
+          deps.store.setRotationPick(id, { match: s.match!, nextKey: s.nextKey, later, written: true, note: s.note });
+          notes.push(`${id.slice(0, 8)}: plan topped up to ${AHEAD}`);
+          continue;
+        }
         if (s.written) continue;
         await write(s.nextKey);
         deps.store.setRotationPick(id, { match: open.startedAt, nextKey: s.nextKey, later: s.later, written: true, note: null });
