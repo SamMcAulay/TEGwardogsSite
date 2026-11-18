@@ -21,7 +21,8 @@ export const STEP: Record<Kind, number> = { clear: 1, morning: 1.25, rain: 1.5 }
 /** How hard the pick leans to the lowest scores: an entry 1 point above the lowest is e² ≈ 7× less likely. */
 export const LEAN = 2;
 
-const LIGHTING: Record<Kind, string> = { clear: 'DayClear', morning: 'DayStartClear', rain: 'DayLateRain' };
+// Not DayStartClear: the game takes that as "any time of day" and loads a random lighting (seen 2026-11-16..18).
+const LIGHTING: Record<Kind, string> = { clear: 'DayClear', morning: 'DayEarlyClear', rain: 'DayLateRain' };
 const MAPS: { map: string; mapId: string; experiences: string; kinds: Kind[]; lighting?: Partial<Record<Kind, string>> }[] = [
   // Sabatulo has no morning lighting (the game takes DayClear, DayLateClear, DayLateGray, DayLateRain):
   // clear late afternoon stands in, so it has three settings with the same odds as the other maps.
@@ -70,6 +71,34 @@ export function pickNext(scores: Map<string, number>, playing: string | null, ra
     if (r < 0) return POOL.find((e) => e.key === key)!;
   }
   return POOL.find((e) => e.key === odds[odds.length - 1][0])!;
+}
+
+/** How many maps ahead the rotation is planned (the next one included). */
+export const AHEAD = 3;
+
+/**
+ * Tops `queue` (keys already planned after the map being played) up to AHEAD entries. Each pick sees
+ * the scores as they will be once the maps before it have played, so the plan is what picking one
+ * map at a time would give.
+ */
+export function plan(scores: Map<string, number>, playing: string | null, queue: string[], random: () => number = Math.random): string[] {
+  // A key the pool no longer has (and everything after it, picked around it) is planned afresh.
+  const bad = queue.findIndex((k) => !POOL.some((e) => e.key === k));
+  const out = queue.slice(0, bad < 0 ? AHEAD : Math.min(bad, AHEAD));
+  const sim = new Map(scores);
+  const play = (key: string) => {
+    const e = POOL.find((p) => p.key === key)!;
+    sim.set(key, sim.get(key)! + STEP[e.kind]);
+    return e.map;
+  };
+  let last = playing;
+  for (const k of out) last = play(k);
+  while (out.length < AHEAD) {
+    const next = pickNext(sim, last, random);
+    out.push(next.key);
+    last = play(next.key);
+  }
+  return out;
 }
 
 /** The entry as a config document rotation line's value. */

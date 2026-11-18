@@ -262,6 +262,11 @@ export const MIGRATIONS: string[] = [
      at       INTEGER NOT NULL,
      PRIMARY KEY (run_id, steam_id)
    );`,
+  // v13: the weighted rotation plans a few maps ahead: the keys planned after next_key, as JSON.
+  // Old picks named DayStartClear, which the game plays as a random time of day: planned afresh.
+  `ALTER TABLE rotation_servers ADD COLUMN later TEXT;
+   UPDATE rotation_servers SET next_key = NULL WHERE next_key LIKE '%/DayStartClear';
+   DELETE FROM rotation_scores WHERE entry_key LIKE '%/DayStartClear';`,
 ];
 
 export interface RotationServer {
@@ -273,6 +278,8 @@ export interface RotationServer {
   match: string | null;
   /** pool key of the map picked to come next */
   nextKey: string | null;
+  /** pool keys planned to come after it, in order */
+  later: string[];
   /** whether the pick reached the server */
   written: boolean;
   /** the last problem; null when all is well */
@@ -287,6 +294,7 @@ const toRotationServer = (r: Record<string, unknown>): RotationServer => ({
   saved: r.saved ? (JSON.parse(String(r.saved)) as string[]) : null,
   match: (r.match as string | null) ?? null,
   nextKey: (r.next_key as string | null) ?? null,
+  later: r.later ? (JSON.parse(String(r.later)) as string[]) : [],
   written: !!r.written,
   note: (r.note as string | null) ?? null,
   changedBy: (r.changed_by as string | null) ?? null,
@@ -450,8 +458,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     rotationServers: db.prepare('SELECT * FROM rotation_servers ORDER BY server_id'),
     rotationSwitch: db.prepare(`INSERT INTO rotation_servers (server_id, enabled, saved, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)
       ON CONFLICT (server_id) DO UPDATE SET enabled = excluded.enabled, saved = COALESCE(excluded.saved, saved),
-        match = NULL, next_key = NULL, written = 0, note = NULL, changed_by = excluded.changed_by, changed_at = excluded.changed_at`),
-    rotationPick: db.prepare('UPDATE rotation_servers SET match = ?, next_key = ?, written = ?, note = ? WHERE server_id = ?'),
+        match = NULL, next_key = NULL, later = NULL, written = 0, note = NULL, changed_by = excluded.changed_by, changed_at = excluded.changed_at`),
+    rotationPick: db.prepare('UPDATE rotation_servers SET match = ?, next_key = ?, later = ?, written = ?, note = ? WHERE server_id = ?'),
     rotationScores: db.prepare('SELECT entry_key, score FROM rotation_scores WHERE server_id = ?'),
     rotationScore: db.prepare(`INSERT INTO rotation_scores (server_id, entry_key, score) VALUES (?, ?, ?)
       ON CONFLICT (server_id, entry_key) DO UPDATE SET score = score + ?`),
@@ -650,8 +658,8 @@ export function openStore(file: string, migrations: string[] = MIGRATIONS) {
     /** Switches the weighted rotation on (keeping `saved`, the rotation to put back later) or off; either starts the pick afresh. */
     setRotationEnabled: (serverId: string, enabled: boolean, saved: string[] | null, by: string, at = now()) =>
       void q.rotationSwitch.run(serverId, enabled ? 1 : 0, saved ? JSON.stringify(saved) : null, by, at),
-    setRotationPick: (serverId: string, p: { match: string; nextKey: string | null; written: boolean; note: string | null }) =>
-      void q.rotationPick.run(p.match, p.nextKey, p.written ? 1 : 0, p.note, serverId),
+    setRotationPick: (serverId: string, p: { match: string; nextKey: string | null; later?: string[]; written: boolean; note: string | null }) =>
+      void q.rotationPick.run(p.match, p.nextKey, JSON.stringify(p.later ?? []), p.written ? 1 : 0, p.note, serverId),
     /** Stored scores only; an entry never played isn't there (see rotation/pool.ts scoresOf). */
     rotationScores: (serverId: string) =>
       new Map((q.rotationScores.all(serverId) as { entry_key: string; score: number }[]).map((r) => [r.entry_key, r.score])),

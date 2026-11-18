@@ -184,7 +184,10 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
   const starts = st ? rotationStarts(st.rotation.now, ROTATION.length, untilNext, roundLength) : null;
   // The weighted rotation (staff /admin/rotation) replaces the fixed list with its pick.
   const weighted = accounts()?.store.rotationServer(server.id);
-  const picked = weighted?.enabled && weighted.nextKey ? entryOf(...(weighted.nextKey.split('/') as [string, string])) : null;
+  const upcoming =
+    weighted?.enabled && weighted.nextKey
+      ? [weighted.nextKey, ...weighted.later].map((k) => entryOf(...(k.split('/') as [string, string]))).filter((e) => e != null)
+      : [];
 
   return (
     <>
@@ -261,9 +264,9 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Section>
         </StatGrid>
 
-        {st && picked ? (
+        {st && upcoming.length ? (
           <Panel title="Map rotation" action="Weighted: least-played maps come up most">
-            <MapRotation status={st} eta={eta} picked={picked} />
+            <MapRotation status={st} eta={eta} upcoming={upcoming} />
           </Panel>
         ) : (
           st &&

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { chances, configEntry, entryOf, pickNext, POOL, scoresOf } from './pool';
+import { AHEAD, chances, configEntry, entryOf, pickNext, plan, POOL, scoresOf } from './pool';
 
 describe('weighted rotation pool', () => {
   test('12 entries: Sabatulo with clear late afternoon in place of early morning', () => {
@@ -14,7 +14,7 @@ describe('weighted rotation pool', () => {
   test('scores start at 0 / 0.75 / 1.5 by lighting, stored ones win', () => {
     const s = scoresOf(new Map([['Ozeti/DayClear', 4]]));
     expect(s.get('Bakurani/DayClear')).toBe(0);
-    expect(s.get('Bakurani/DayStartClear')).toBe(0.75);
+    expect(s.get('Bakurani/DayEarlyClear')).toBe(0.75);
     expect(s.get('Bakurani/DayLateRain')).toBe(1.5);
     expect(s.get('Ozeti/DayClear')).toBe(4);
   });
@@ -30,8 +30,8 @@ describe('weighted rotation pool', () => {
     expect([...odds.keys()].some((k) => k.startsWith('Bakurani'))).toBe(false);
     expect([...odds.values()].reduce((a, b) => a + b, 0)).toBeCloseTo(1);
     // the clear entries (0) each beat early morning (0.75), which beats rain (1.5)
-    expect(odds.get('Ozeti/DayClear')!).toBeGreaterThan(odds.get('Ozeti/DayStartClear')!);
-    expect(odds.get('Ozeti/DayStartClear')!).toBeGreaterThan(odds.get('Ozeti/DayLateRain')!);
+    expect(odds.get('Ozeti/DayClear')!).toBeGreaterThan(odds.get('Ozeti/DayEarlyClear')!);
+    expect(odds.get('Ozeti/DayEarlyClear')!).toBeGreaterThan(odds.get('Ozeti/DayLateRain')!);
     expect(odds.get('Ozeti/DayLateRain')!).toBeGreaterThan(0);
   });
 
@@ -45,5 +45,42 @@ describe('weighted rotation pool', () => {
 
   test('config line in the game format', () => {
     expect(configEntry(entryOf('Bakurani', 'DayClear')!)).toBe('(Map="Kavkazi",Experiences="Bakurani_KOTH_02+KOTH_LimitedGear",Lighting="DayClear")');
+  });
+});
+
+describe('plan', () => {
+  const mapOf = (k: string) => k.split('/')[0];
+
+  test('plans AHEAD maps, never the same map twice in a row', () => {
+    for (let i = 0; i < 50; i++) {
+      const p = plan(scoresOf(new Map()), 'Sabatulo', []);
+      expect(p).toHaveLength(AHEAD);
+      ['Sabatulo', ...p.map(mapOf)].forEach((m, j, all) => j && expect(m).not.toBe(all[j - 1]));
+    }
+  });
+
+  test('keeps what was planned and only tops it up', () => {
+    const p = plan(scoresOf(new Map()), 'Sabatulo', ['Ozeti/DayClear', 'Zestafona/DayClear'], () => 0);
+    expect(p.slice(0, 2)).toEqual(['Ozeti/DayClear', 'Zestafona/DayClear']);
+    expect(mapOf(p[2])).not.toBe('Zestafona');
+  });
+
+  test('counts planned maps as played', () => {
+    // Ozeti/DayClear far lowest: picked first; scored once it is planned, it loses its lead over Bakurani/DayClear
+    const scores = new Map(POOL.map((e) => [e.key, 10]));
+    scores.set('Ozeti/DayClear', 0).set('Zestafona/DayClear', 0).set('Bakurani/DayClear', 0.6);
+    const p = plan(scores, 'Sabatulo', ['Ozeti/DayClear', 'Zestafona/DayClear'], () => 0.3);
+    expect(p[2]).toBe('Bakurani/DayClear');
+  });
+
+  test('a key the pool no longer has is planned afresh, with what came after it', () => {
+    const p = plan(scoresOf(new Map()), 'Sabatulo', ['Ozeti/DayClear', 'Zestafona/DayStartClear', 'Bakurani/DayClear'], () => 0);
+    expect(p[0]).toBe('Ozeti/DayClear');
+    expect(p.every((k) => POOL.some((e) => e.key === k))).toBe(true);
+  });
+
+  test('morning is DayEarlyClear, never DayStartClear (the game plays that as a random time of day)', () => {
+    expect(POOL.some((e) => e.lighting === 'DayStartClear')).toBe(false);
+    expect(entryOf('Ozeti', 'DayEarlyClear')?.kind).toBe('morning');
   });
 });

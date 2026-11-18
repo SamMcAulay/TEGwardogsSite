@@ -66,6 +66,27 @@ describe('rotationLook', () => {
     expect(store.rotationScores('s1').get('Sabatulo/DayLateRain')).toBe(3);
   });
 
+  test('plans ahead, moves the plan on when the pick loads, and plans afresh when it does not', async () => {
+    const { store, deps } = setup(M1);
+    store.setRotationEnabled('s1', true, ['old'], 'staff');
+    await rotationLook(deps);
+    const first = store.rotationServer('s1')!;
+    expect(first.later).toHaveLength(2);
+    const [map, lighting] = first.nextKey!.split('/');
+    deps.openMatch.mockResolvedValue({ startedAt: '2026-11-16T11:00:00.000Z', map, lighting });
+    await rotationLook(deps);
+    const second = store.rotationServer('s1')!;
+    expect([second.nextKey, ...second.later.slice(0, 1)]).toEqual(first.later);
+    expect(second.later).toHaveLength(2);
+    // the server loads something else: the old plan is dropped
+    deps.random = () => 0.999;
+    deps.openMatch.mockResolvedValue({ startedAt: '2026-11-16T12:00:00.000Z', map: 'Sabatulo', lighting: 'DayLateRain' });
+    await rotationLook(deps);
+    const third = store.rotationServer('s1')!;
+    expect(third.nextKey!.startsWith('Sabatulo')).toBe(false);
+    expect(third.later).toHaveLength(2);
+  });
+
   test('between matches: waits', async () => {
     const { store, write, deps } = setup(null);
     store.setRotationEnabled('s1', true, ['old'], 'staff');

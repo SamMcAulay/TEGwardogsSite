@@ -7,7 +7,7 @@ import { ago, int } from '@/lib/format';
 import { lightingName } from '@/lib/game';
 import { currentAdmin } from '@/lib/server/accounts/admin';
 import { getServers } from '@/lib/server/data';
-import { chances, entryOf, LEAN, POOL, scoresOf, START, STEP } from '@/lib/server/rotation/pool';
+import { AHEAD, chances, entryOf, LEAN, POOL, scoresOf, START, STEP } from '@/lib/server/rotation/pool';
 import { one } from '@/lib/url';
 import { AdminNav } from '../nav';
 import { switchRotation } from './actions';
@@ -73,13 +73,14 @@ export default async function RotationPage({ searchParams }: PageProps<'/admin/r
             {START.morning} and {START.rain}. When a match starts, the next map is drawn at random, but lower scores are much
             more likely: one point lower is about {Math.round(Math.exp(LEAN))}× as likely. So the least-played map is the
             favourite but never certain. The map being played is never picked to come next, so the same map never comes up twice
-            in a row. Rain starts higher and climbs faster, so over time it is about 41% clear, 32% early morning and 27% rain.
+            in a row. The site plans {AHEAD} maps ahead (shown on the server page), drawing each as if the ones before it had
+            been played; if a server loads anything other than the planned map, the plan is drawn again. Rain starts higher and climbs faster, so over time it is about 41% clear, 32% early morning and 27% rain.
             Each server keeps its own scores. Sabatulo has no early-morning lighting in the game, so it uses clear late afternoon in its place, with the same odds.
           </Help>
           <Help>
             <strong>How it reaches the server:</strong> as soon as a match starts, the site writes its pick into the server&apos;s
             rotation (in the config), so the server goes to it when the round ends. Warcon&apos;s Rotation tab shows the pick
-            listed twice; that is expected. If you edit the rotation in Warcon while this is on, your edit only lasts until the
+            listed twice; that is expected, and it is also why a server that restarts starts on the pick. If you edit the rotation in Warcon while this is on, your edit only lasts until the
             next match starts, when the site writes its next pick. To play something else, switch it off first. Switching it off
             puts back the rotation the server had before it was switched on.
           </Help>
@@ -118,6 +119,11 @@ export default async function RotationPage({ searchParams }: PageProps<'/admin/r
                           <>
                             Up next: <strong>{next.map}</strong>, {lightingName(next.lighting)}
                             {!state!.written && <span className="text-muted"> (not on the server yet; retrying)</span>}
+                            {state!.later.length > 0 && (
+                              <span className="text-muted">
+                                {' '}· then {state!.later.map((k) => k.replace('/', ', ').replace(/Day\w+$/, (l) => lightingName(l))).join(' → ')}
+                              </span>
+                            )}
                           </>
                         ) : (
                           <span className="text-muted">Picks the next map when it sees the match being played.</span>
