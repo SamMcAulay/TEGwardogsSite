@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { TimezoneNote } from '@/components/local-time';
-import { Rubik, Unbounded } from 'next/font/google';
+import localFont from 'next/font/local';
 import Link from 'next/link';
 import { type Me, SiteNav } from '@/components/nav';
 import { PageSwipe } from '@/components/page-swipe';
@@ -15,8 +15,10 @@ import './globals.css';
 // Every page reads live data from Warcon (cached briefly in memory).
 export const dynamic = 'force-dynamic';
 
-const rubik = Rubik({ subsets: ['latin'], weight: ['400', '500', '700', '800'], variable: '--font-rubik', display: 'swap' });
-const unbounded = Unbounded({ subsets: ['latin'], weight: ['800', '900'], variable: '--font-unbounded', display: 'swap' });
+// Bundled (Fontsource variable, latin, OFL) rather than next/font/google: fetching from Google during
+// the build kept failing CI with "Can't resolve '@vercel/turbopack-next/internal/font/google/font'".
+const rubik = localFont({ src: './fonts/rubik-latin-wght-normal.woff2', weight: '300 900', variable: '--font-rubik', display: 'swap' });
+const unbounded = localFont({ src: './fonts/unbounded-latin-wght-normal.woff2', weight: '200 900', variable: '--font-unbounded', display: 'swap' });
 
 export const metadata: Metadata = {
   title: { default: 'TEG WARDOGS — Servers, Stats & Leaderboards', template: '%s · TEG WARDOGS' },
