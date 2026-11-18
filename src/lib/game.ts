@@ -29,10 +29,18 @@ export const ROTATION: readonly { map: string; lighting: string }[] = [
   { map: 'Ozeti', lighting: 'DayClear' },
 ];
 
-/** Screenshots in public/maps for each rotation map and time of day. */
+/** Times of day with a screenshot in public/maps (copied from Warcon's map art): every one, except Sabatulo's four. */
+const LIGHTINGS = ['DayStartClear', 'DayEarlyClear', 'DayEarlyFog', 'DayClear', 'DayLateClear', 'DayLateGray', 'DayLateGrayFog', 'DayEndClear', 'DayLateRain'];
+const ART: Record<string, string[]> = {
+  Bakurani: LIGHTINGS,
+  Ozeti: LIGHTINGS,
+  Zestafona: LIGHTINGS,
+  Sabatulo: ['DayClear', 'DayLateClear', 'DayLateGray', 'DayLateRain'],
+};
+
+/** The screenshot in public/maps for a map at a time of day; null when there isn't one. */
 export function mapArt(map: string, lighting: string | null): string | null {
-  const known = ROTATION.some((r) => r.map === map && r.lighting === lighting);
-  return known ? `/maps/${map}-${lighting}.webp` : null;
+  return lighting && ART[map]?.includes(lighting) ? `/maps/${map}-${lighting}.webp` : null;
 }
 
 export interface RotationStop {

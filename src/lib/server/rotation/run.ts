@@ -1,12 +1,13 @@
 // The weighted map rotation job (staff /admin/rotation). On each server staff switched it on for,
-// every new match: the entry that loaded scores its step, the next map is picked (./pool.ts) and
-// written into the server's rotation as [pick, pick], so whichever slot the server goes to next is
-// the pick. A write that fails is tried again at the next look, and a server that loads something
+// every new match: the entry that loaded scores its step, the plan of the next AHEAD maps is moved
+// on one (or made afresh when the server loaded something else) and topped up (./pool.ts), and its
+// first map is written into the server's rotation as [pick, pick], so whichever slot the server goes
+// to next, or starts on after a restart, is the pick. A write that fails is tried again at the next look, and a server that loads something
 // other than the pick is noted for staff.
 import type { Store } from '../accounts/store';
 import { jobRan } from '../jobs';
 import type { RotationConfig } from '../warcon/rotation-config';
-import { configEntry, entryOf, pickNext, scoresOf, START, STEP } from './pool';
+import { configEntry, entryOf, plan, scoresOf, START, STEP } from './pool';
 
 export const LOOK_MS = 15_000;
 
@@ -47,7 +48,7 @@ export async function rotationLook(deps: RotationDeps): Promise<{ notes: string[
         // The same match: only a pick that didn't reach the server needs anything.
         if (s.written || !s.nextKey) continue;
         await write(s.nextKey);
-        deps.store.setRotationPick(id, { match: open.startedAt, nextKey: s.nextKey, written: true, note: null });
+        deps.store.setRotationPick(id, { match: open.startedAt, nextKey: s.nextKey, later: s.later, written: true, note: null });
         notes.push(`${id.slice(0, 8)}: set ${s.nextKey} next on a retry`);
         continue;
       }
@@ -57,13 +58,15 @@ export async function rotationLook(deps: RotationDeps): Promise<{ notes: string[
       if (on) deps.store.addRotationScore(id, on.key, START[on.kind], STEP[on.kind]);
       const loaded = `${open.map ?? 'unknown'}/${open.lighting ?? 'unknown'}`;
       const missed = s.match && s.nextKey && on?.key !== s.nextKey ? `Picked ${s.nextKey}, but the server loaded ${loaded}. ` : '';
-      const next = pickNext(scoresOf(deps.store.rotationScores(id)), on?.map ?? open.map, deps.random);
+      // What was planned after the pick still stands only if the pick is what loaded.
+      const kept = on && on.key === s.nextKey ? s.later : [];
+      const [nextKey, ...later] = plan(scoresOf(deps.store.rotationScores(id)), on?.map ?? open.map, kept, deps.random);
       try {
-        await write(next.key);
-        deps.store.setRotationPick(id, { match: open.startedAt, nextKey: next.key, written: true, note: missed || null });
-        notes.push(`${id.slice(0, 8)}: ${loaded} on, ${next.key} next`);
+        await write(nextKey);
+        deps.store.setRotationPick(id, { match: open.startedAt, nextKey, later, written: true, note: missed || null });
+        notes.push(`${id.slice(0, 8)}: ${loaded} on, ${nextKey} next`);
       } catch (e) {
-        deps.store.setRotationPick(id, { match: open.startedAt, nextKey: next.key, written: false, note: `${missed}Couldn't set ${next.key} next: ${errText(e)}` });
+        deps.store.setRotationPick(id, { match: open.startedAt, nextKey, later, written: false, note: `${missed}Couldn't set ${nextKey} next: ${errText(e)}` });
         throw e;
       }
       if (missed) errors.push(`${id.slice(0, 8)}: ${missed.trim()}`);

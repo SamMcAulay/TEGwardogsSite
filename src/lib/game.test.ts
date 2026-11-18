@@ -78,7 +78,9 @@ describe('mapArt', () => {
 
   it('points at files that exist', async () => {
     const { existsSync } = await import('node:fs');
-    for (const r of ROTATION) expect(existsSync(`public${mapArt(r.map, r.lighting)}`), `${r.map} ${r.lighting}`).toBe(true);
+    const { POOL } = await import('./server/rotation/pool');
+    for (const r of [...ROTATION, ...POOL]) expect(existsSync(`public${mapArt(r.map, r.lighting)}`), `${r.map} ${r.lighting}`).toBe(true);
+    expect(mapArt('Sabatulo', 'DayEarlyClear')).toBeNull();
   });
 });
 

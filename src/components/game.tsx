@@ -277,7 +277,7 @@ function WeatherIcon({ weather }: { weather: Weather }) {
   );
 }
 
-const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next' } as const;
+const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next', then: 'Then' } as const;
 
 function RotationCard({ stop, role, eta, weighted }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL; eta?: number | null; weighted?: boolean }) {
   const weather = weatherOf(stop?.lighting ?? null);
@@ -340,20 +340,22 @@ export function MapRotation({
   eta,
   starts,
   list = ROTATION,
-  picked,
+  upcoming,
 }: {
   status: ServerStatus;
   eta?: number | null;
   starts?: (number | null)[] | null;
   list?: readonly { map: string; lighting: string }[];
-  /** the weighted rotation's pick for the next map: shown instead of the fixed rotation */
-  picked?: { map: string; lighting: string } | null;
+  /** the weighted rotation's planned maps, next first: shown instead of the fixed rotation */
+  upcoming?: readonly { map: string; lighting: string }[];
 }) {
-  if (picked) {
+  if (upcoming?.length) {
     return (
-      <div className="grid grid-cols-2 items-end gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-4 sm:gap-3">
         <RotationCard stop={{ map: status.map, lighting: status.lighting, slot: null }} role="now" weighted />
-        <RotationCard stop={{ ...picked, slot: null }} role="next" eta={eta} weighted />
+        {upcoming.map((u, i) => (
+          <RotationCard key={i} stop={{ ...u, slot: null }} role={i ? 'then' : 'next'} eta={i ? null : eta} weighted />
+        ))}
       </div>
     );
   }
