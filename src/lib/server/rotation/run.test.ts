@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { openStore } from '../accounts/store';
-import { configEntry, entryOf } from './pool';
+import { AHEAD, configEntry, entryOf } from './pool';
 import { rotationLook, type OpenMatch } from './run';
 
 const setup = (open: OpenMatch | null) => {
@@ -71,20 +71,20 @@ describe('rotationLook', () => {
     store.setRotationEnabled('s1', true, ['old'], 'staff');
     await rotationLook(deps);
     const first = store.rotationServer('s1')!;
-    expect(first.later).toHaveLength(2);
+    expect(first.later).toHaveLength(AHEAD - 1);
     const [map, lighting] = first.nextKey!.split('/');
     deps.openMatch.mockResolvedValue({ startedAt: '2026-11-16T11:00:00.000Z', map, lighting });
     await rotationLook(deps);
     const second = store.rotationServer('s1')!;
-    expect([second.nextKey, ...second.later.slice(0, 1)]).toEqual(first.later);
-    expect(second.later).toHaveLength(2);
+    expect([second.nextKey, ...second.later.slice(0, -1)]).toEqual(first.later);
+    expect(second.later).toHaveLength(AHEAD - 1);
     // the server loads something else: the old plan is dropped
     deps.random = () => 0.999;
     deps.openMatch.mockResolvedValue({ startedAt: '2026-11-16T12:00:00.000Z', map: 'Sabatulo', lighting: 'DayLateRain' });
     await rotationLook(deps);
     const third = store.rotationServer('s1')!;
     expect(third.nextKey!.startsWith('Sabatulo')).toBe(false);
-    expect(third.later).toHaveLength(2);
+    expect(third.later).toHaveLength(AHEAD - 1);
   });
 
   test('step through 300 matches: rolls one on each match, never the same map twice running, every map comes back', async () => {
@@ -101,9 +101,9 @@ describe('rotationLook', () => {
       deps.openMatch.mockResolvedValue({ startedAt: `match-${i}`, map, lighting });
       await rotationLook(deps);
       const after = store.rotationServer('s1')!;
-      // rolling: what was 2nd is now next, what was 3rd is now 2nd, and one new map on the end
-      expect([after.nextKey, after.later[0]]).toEqual(before.later);
-      expect(after.later).toHaveLength(2);
+      // rolling: everything moves up one, and one new map on the end
+      expect([after.nextKey, ...after.later.slice(0, -1)]).toEqual(before.later);
+      expect(after.later).toHaveLength(AHEAD - 1);
       // never back to back, in what was played or anywhere in the plan
       const chain = [map, ...[after.nextKey!, ...after.later].map((k) => k.split('/')[0])];
       chain.forEach((m, j) => j && expect(m, `match ${i}: ${chain.join(' > ')}`).not.toBe(chain[j - 1]));
@@ -123,7 +123,7 @@ describe('rotationLook', () => {
     await rotationLook(deps);
     const s = store.rotationServer('s1')!;
     expect(s.nextKey!.startsWith('Sabatulo')).toBe(false);
-    expect(s.later).toHaveLength(2);
+    expect(s.later).toHaveLength(AHEAD - 1);
     expect(write).toHaveBeenCalledTimes(1);
     expect(store.rotationScores('s1').size).toBe(0);
   });

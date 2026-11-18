@@ -266,7 +266,13 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           st &&
           upcoming.length > 0 && (
             <Panel title="Map rotation" action="Weighted: least-played maps come up most">
-              <MapRotation status={st} eta={eta} upcoming={upcoming} />
+              <MapRotation
+                status={st}
+                eta={eta}
+                upcoming={upcoming}
+                previous={matches instanceof Error ? null : (matches.data.rows.find((m) => m.endedAt != null) ?? null)}
+                starts={rotationStarts(0, upcoming.length + 1, untilNext, roundLength)}
+              />
             </Panel>
           )
         ) : (

@@ -277,7 +277,7 @@ function WeatherIcon({ weather }: { weather: Weather }) {
   );
 }
 
-const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next', then: 'Then' } as const;
+const STOP_LABEL = { prev: 'Previous', now: 'Now playing', next: 'Up next' } as const;
 
 function RotationCard({ stop, role, eta, weighted }: { stop: RotationStop | null; role: keyof typeof STOP_LABEL; eta?: number | null; weighted?: boolean }) {
   const weather = weatherOf(stop?.lighting ?? null);
@@ -341,37 +341,35 @@ export function MapRotation({
   starts,
   list = ROTATION,
   upcoming,
+  previous,
 }: {
   status: ServerStatus;
   eta?: number | null;
   starts?: (number | null)[] | null;
   list?: readonly { map: string; lighting: string }[];
-  /** the weighted rotation's planned maps, next first: shown instead of the fixed rotation */
+  /** the weighted rotation's planned maps, next first: shown in place of the fixed rotation */
   upcoming?: readonly { map: string; lighting: string }[];
+  /** with upcoming: the last round played */
+  previous?: { map: string; lighting: string | null } | null;
 }) {
-  if (upcoming?.length) {
-    return (
-      <div className="grid grid-cols-2 items-end gap-2 sm:grid-cols-4 sm:gap-3">
-        <RotationCard stop={{ map: status.map, lighting: status.lighting, slot: null }} role="now" weighted />
-        {upcoming.map((u, i) => (
-          <RotationCard key={i} stop={{ ...u, slot: null }} role={i ? 'then' : 'next'} eta={i ? null : eta} weighted />
-        ))}
-      </div>
-    );
-  }
-  const view = rotationView(status, list);
+  // Weighted: the plan reads as a rotation that starts at the map being played.
+  const weighted = !!upcoming?.length;
+  const rows = weighted ? [{ map: status.map, lighting: status.lighting ?? '' }, ...upcoming!] : list;
+  const view = weighted
+    ? { prev: previous ? { ...previous, slot: null } : null, now: { ...rows[0], slot: 0 }, next: { ...rows[1], slot: 1 } }
+    : rotationView(status, list);
   if (!view) return null;
   const { prev, now, next } = view;
   return (
     <div>
       <div className="grid grid-cols-[1fr_1.35fr_1fr] items-end gap-2 sm:gap-3">
-        <RotationCard stop={prev} role="prev" />
-        <RotationCard stop={now} role="now" />
-        <RotationCard stop={next} role="next" eta={eta} />
+        <RotationCard stop={prev} role="prev" weighted={weighted} />
+        <RotationCard stop={now} role="now" weighted={weighted} />
+        <RotationCard stop={next} role="next" eta={eta} weighted={weighted} />
       </div>
-      <h3 className="eyebrow mt-6 mb-2 !text-[0.66rem]">Full rotation</h3>
+      <h3 className="eyebrow mt-6 mb-2 !text-[0.66rem]">{weighted ? 'Coming up' : 'Full rotation'}</h3>
       <ol className="grid grid-cols-3 gap-1.5 sm:grid-cols-9 sm:gap-2">
-        {list.map((r, i) => {
+        {rows.map((r, i) => {
           const isNow = i === now.slot;
           const isNext = i === next?.slot;
           const weather = weatherOf(r.lighting);
