@@ -261,10 +261,14 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
           </Section>
         </StatGrid>
 
-        {st && upcoming.length ? (
-          <Panel title="Map rotation" action="Weighted: least-played maps come up most">
-            <MapRotation status={st} eta={eta} upcoming={upcoming} />
-          </Panel>
+        {weighted?.enabled ? (
+          // The fixed list means nothing while the weighted rotation runs; no plan yet is only a few seconds.
+          st &&
+          upcoming.length > 0 && (
+            <Panel title="Map rotation" action="Weighted: least-played maps come up most">
+              <MapRotation status={st} eta={eta} upcoming={upcoming} />
+            </Panel>
+          )
         ) : (
           st &&
           rotationView(st) && (

@@ -44,20 +44,21 @@ export async function rotationLook(deps: RotationDeps): Promise<{ notes: string[
         await deps.config.write(id, [configEntry(e), configEntry(e)]);
       };
 
-      if (open.startedAt === s.match) {
+      const same = open.startedAt === s.match;
+      if (same && s.nextKey) {
         // The same match: only a pick that didn't reach the server needs anything.
-        if (s.written || !s.nextKey) continue;
+        if (s.written) continue;
         await write(s.nextKey);
         deps.store.setRotationPick(id, { match: open.startedAt, nextKey: s.nextKey, later: s.later, written: true, note: null });
         notes.push(`${id.slice(0, 8)}: set ${s.nextKey} next on a retry`);
         continue;
       }
 
-      // A new match.
+      // A new match, or the same one with no plan yet (after an upgrade dropped it): plan now, not a round later.
       const on = entryOf(open.map, open.lighting);
-      if (on) deps.store.addRotationScore(id, on.key, START[on.kind], STEP[on.kind]);
+      if (on && !same) deps.store.addRotationScore(id, on.key, START[on.kind], STEP[on.kind]);
       const loaded = `${open.map ?? 'unknown'}/${open.lighting ?? 'unknown'}`;
-      const missed = s.match && s.nextKey && on?.key !== s.nextKey ? `Picked ${s.nextKey}, but the server loaded ${loaded}. ` : '';
+      const missed = !same && s.match && s.nextKey && on?.key !== s.nextKey ? `Picked ${s.nextKey}, but the server loaded ${loaded}. ` : '';
       // What was planned after the pick still stands only if the pick is what loaded.
       const kept = on && on.key === s.nextKey ? s.later : [];
       const [nextKey, ...later] = plan(scoresOf(deps.store.rotationScores(id)), on?.map ?? open.map, kept, deps.random);
