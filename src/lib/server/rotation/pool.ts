@@ -55,17 +55,17 @@ export function scoresOf(stored: Map<string, number>): Map<string, number> {
  * Each entry's chance of being picked next. Never the map being played (in any lighting), so the
  * same map doesn't come round twice in a row; the rest by e^(−LEAN × (score − lowest)).
  */
-export function chances(scores: Map<string, number>, playing: string | null): Map<string, number> {
-  const others = POOL.filter((e) => e.map !== playing);
+export function chances(scores: Map<string, number>, playing: string | null, only?: Kind): Map<string, number> {
+  const others = POOL.filter((e) => e.map !== playing && (!only || e.kind === only));
   const lowest = Math.min(...others.map((e) => scores.get(e.key)!));
   const weights = others.map((e) => Math.exp(-LEAN * (scores.get(e.key)! - lowest)));
   const total = weights.reduce((a, b) => a + b, 0);
   return new Map(others.map((e, i) => [e.key, weights[i] / total]));
 }
 
-export function pickNext(scores: Map<string, number>, playing: string | null, random: () => number = Math.random): PoolEntry {
+export function pickNext(scores: Map<string, number>, playing: string | null, random: () => number = Math.random, only?: Kind): PoolEntry {
   let r = random();
-  const odds = [...chances(scores, playing)];
+  const odds = [...chances(scores, playing, only)];
   for (const [key, p] of odds) {
     r -= p;
     if (r < 0) return POOL.find((e) => e.key === key)!;
@@ -76,6 +76,10 @@ export function pickNext(scores: Map<string, number>, playing: string | null, ra
 /** How many maps ahead the rotation is planned (the next one included): with the one on, the 9 the server page shows. */
 export const AHEAD = 8;
 
+const isRain = (key: string) => POOL.some((e) => e.key === key && e.kind === 'rain');
+/** Rain is forced when the 7 picks before index i have none, so any 8 planned in a row (and so every 9 shown) hold a rain. */
+const rainDue = (keys: string[], i: number) => i >= 7 && !keys.slice(i - 7, i).some(isRain);
+
 /**
  * Tops `queue` (keys already planned after the map being played) up to AHEAD entries. Each pick sees
  * the scores as they will be once the maps before it have played, so the plan is what picking one
@@ -83,7 +87,8 @@ export const AHEAD = 8;
  */
 export function plan(scores: Map<string, number>, playing: string | null, queue: string[], random: () => number = Math.random): string[] {
   // A key the pool no longer has (and everything after it, picked around it) is planned afresh.
-  const bad = queue.findIndex((k) => !POOL.some((e) => e.key === k));
+  // So is a pick that breaks the rain rule (plans made before it).
+  const bad = queue.findIndex((k, i) => !POOL.some((e) => e.key === k) || (rainDue(queue, i) && !isRain(k)));
   const out = queue.slice(0, bad < 0 ? AHEAD : Math.min(bad, AHEAD));
   const sim = new Map(scores);
   const play = (key: string) => {
@@ -94,7 +99,7 @@ export function plan(scores: Map<string, number>, playing: string | null, queue:
   let last = playing;
   for (const k of out) last = play(k);
   while (out.length < AHEAD) {
-    const next = pickNext(sim, last, random);
+    const next = pickNext(sim, last, random, rainDue(out, out.length) ? 'rain' : undefined);
     out.push(next.key);
     last = play(next.key);
   }
