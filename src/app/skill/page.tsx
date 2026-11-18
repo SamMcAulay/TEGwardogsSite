@@ -49,7 +49,7 @@ export default async function SkillPage({ searchParams }: PageProps<'/skill'>) {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th className="w-20">Rank</th>
+                      <th className="w-12 sm:w-20">Rank</th>
                       <th>Player</th>
                       <th className="r !text-accent">Rating</th>
                       <th className="r">Rounds</th>
@@ -63,7 +63,7 @@ export default async function SkillPage({ searchParams }: PageProps<'/skill'>) {
                           <RankCell rank={r.rank} />
                           <RankMove moved={r.moved} since="a week ago" />
                         </td>
-                        <td className="max-w-64">
+                        <td className="max-w-40 sm:max-w-64">
                           <PlayerLink steamId={r.steamId} name={r.name} avatarUrl={r.avatarUrl} />
                         </td>
                         <td className="r font-display text-base font-bold text-text">{int(r.rating)}</td>

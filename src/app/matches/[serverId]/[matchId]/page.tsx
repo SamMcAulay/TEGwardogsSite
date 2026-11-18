@@ -7,7 +7,7 @@ import { AutoRefresh } from '@/components/client';
 import { FactionScores, KillList, MapBackdrop } from '@/components/game';
 import { PlayerLink } from '@/components/player';
 import { safe } from '@/components/section';
-import { Badge, Container, Empty, FactionTag, Meter, Panel, Stat, StatGrid } from '@/components/ui';
+import { Badge, Container, cx, Empty, FactionTag, Meter, Panel, Stat, StatGrid } from '@/components/ui';
 import { duration, int, kd, metres, money } from '@/lib/format';
 import { causeLabel, factionColor, KOTH_CAP, lightingName, mapName } from '@/lib/game';
 import { MatchReplay } from '@/components/replay';
@@ -141,11 +141,8 @@ function TeamTable({ name, rows, winner }: { name: string; rows: MatchPlayerRow[
   const kills = rows.reduce((a, r) => a + r.kills, 0);
   const deaths = rows.reduce((a, r) => a + r.deaths, 0);
   return (
-    <section className="panel min-w-0">
-      <div
-        className="flex items-center justify-between border-b border-line px-4 py-3"
-        style={{ boxShadow: `inset 3px 0 0 ${factionColor(name)}` }}
-      >
+    <section className="panel min-w-0 overflow-hidden border-l-[10px]" style={{ borderLeftColor: factionColor(name) }}>
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="flex items-center gap-2">
           <h2 className="display text-[15px]">{name}</h2>
           {winner && <Badge tone="accent">Winner</Badge>}
@@ -204,6 +201,9 @@ function balanceOf(serverId: string, matchId: number): Analysed | null {
   }
 }
 
+// Avg on and Kills/min columns: dropped on phones so the table fits.
+const PHONE_HIDDEN = new Set([1, 3]);
+
 /** How the sides compared, and the best guess at why the winner won (lib/balance.ts). */
 function SidesCompared({ a }: { a: Analysed }) {
   const cols = ['Side', 'Avg on', 'K/D', 'Kills/min', 'Avg rating', 'Win chance', `Deaths traded (${REFRAG_SECONDS}s)`];
@@ -224,16 +224,16 @@ function SidesCompared({ a }: { a: Analysed }) {
         <table className="table">
           <thead>
             <tr>
-              {cols.map((h, i) => <th key={h} className={i ? 'r' : undefined}>{h}</th>)}
+              {cols.map((h, i) => <th key={h} className={cx(i > 0 && 'r whitespace-normal', PHONE_HIDDEN.has(i) && 'hidden sm:table-cell')}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             {a.sides.map((s) => (
               <tr key={s.faction} className={s.faction === a.winner ? 'font-semibold' : undefined}>
                 <td><FactionTag name={s.faction} /></td>
-                <td className="r">{s.avgOn.toFixed(1)}</td>
+                <td className="r hidden sm:table-cell">{s.avgOn.toFixed(1)}</td>
                 <td className="r">{kdOf(s).toFixed(2)}</td>
-                <td className="r">{s.kpm.toFixed(2)}</td>
+                <td className="r hidden sm:table-cell">{s.kpm.toFixed(2)}</td>
                 <td className="r">{s.rating == null ? '—' : s.rating.toFixed(1)}</td>
                 <td className="r">{share(s.chance)}</td>
                 <td className="r">{share(tradeRate(s.teamplay))}</td>

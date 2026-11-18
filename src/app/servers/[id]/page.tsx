@@ -72,11 +72,8 @@ function Scoreboard({
 }) {
   const sorted = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
   return (
-    <div className="min-w-0 border border-line">
-      <div
-        className="flex items-center justify-between border-b border-line px-3 py-2.5"
-        style={{ boxShadow: `inset 3px 0 0 ${factionColor(faction)}` }}
-      >
+    <div className="min-w-0 border border-l-4 border-line" style={{ borderLeftColor: factionColor(faction) }}>
+      <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
         <span className="display text-sm">{faction}</span>
         <span className="num text-xs text-muted">
           {players.length} players
@@ -430,7 +427,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                           <td className="hidden text-muted sm:table-cell"><LocalTime ts={m.startedAt} /></td>
                           <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
                           <td className="r">{m.peakPlayers}</td>
-                          <td>
+                          <td className="whitespace-normal">
                             {m.endedAt ? <FactionTag name={m.winner} /> : <span className="text-dim">In progress</span>}
                           </td>
                         </tr>

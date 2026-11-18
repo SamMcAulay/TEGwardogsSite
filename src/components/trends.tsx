@@ -205,8 +205,8 @@ export function PlayerTrends({
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          <div role="tablist" aria-label="Trend" className="inline-flex rounded-2xl border-[3px] border-edge bg-surface">
+        <div className="w-full sm:w-auto">
+          <div role="tablist" aria-label="Trend" className="flex overflow-hidden rounded-2xl border-[3px] border-edge bg-surface sm:inline-flex">
             {tabs.map((t) => (
               <button
                 key={t.key}
@@ -215,7 +215,7 @@ export function PlayerTrends({
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
                 className={cx(
-                  'px-3 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors',
+                  'flex-1 px-2 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors sm:flex-none sm:px-3',
                   tab === t.key ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
                 )}
               >
@@ -253,7 +253,7 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
   };
   return (
     <div>
-      <div role="tablist" aria-label="Activity" className="mb-4 inline-flex rounded-2xl border-[3px] border-edge bg-surface">
+      <div role="tablist" aria-label="Activity" className="mb-4 flex overflow-hidden rounded-2xl border-[3px] border-edge bg-surface sm:inline-flex">
         {NET_TABS.map((x) => (
           <button
             key={x.key}
@@ -262,7 +262,7 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
             aria-selected={tab === x.key}
             onClick={() => setTab(x.key)}
             className={cx(
-              'px-3 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors',
+              'flex-1 px-2 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors sm:flex-none sm:px-3',
               tab === x.key ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
             )}
           >

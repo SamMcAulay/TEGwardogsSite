@@ -20,7 +20,7 @@ import { PROFILE_COLOURS, profileThemeStyle } from '@/lib/profile-themes';
 import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam, standing, viewer } from '@/lib/server/accounts';
 import { withoutPresence } from '@/lib/server/presence';
-import { getPlayer, playerSeason } from '@/lib/server/data';
+import { getPlayer, playerSeason, shortNameOf } from '@/lib/server/data';
 import { isFrozen, parseSeason, SEASON_LABELS, SEASON_TWO_START, SEASONS } from '@/lib/server/seasons';
 import { playerSkill, playerTrends } from '@/lib/server/trends';
 import { PlayerTrends } from '@/components/trends';
@@ -155,7 +155,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                   {player.onlineOn ? (
                     <Link href={serverPath(player.onlineOn.serverName)}>
                       <Badge tone="good">
-                        <StatusDot online /> Playing on {player.onlineOn.serverName}
+                        <StatusDot online /> Playing on {shortNameOf(player.onlineOn.serverName)}
                       </Badge>
                     </Link>
                   ) : stand.seesPresence ? (
@@ -163,7 +163,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                   ) : null}
                   {tier && <TierBadge tier={tier} />}
                 </div>
-                <h1 className="display truncate text-4xl leading-none sm:text-5xl">
+                <h1 className="display text-3xl leading-none break-words sm:truncate sm:text-5xl">
                   <NameTag style={look?.nameStyle ?? null}>{player.name}</NameTag>
                 </h1>
                 {custom?.bio && <p className="mt-3 max-w-xl text-[15px] text-text/90">{custom.bio}</p>}
@@ -387,7 +387,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                   <thead>
                     <tr>
                       <th>Round</th>
-                      <th>Server</th>
+                      <th className="hidden sm:table-cell">Server</th>
                       <th>Faction</th>
                       <th className="r">Kills</th>
                       <th className="r">Deaths</th>
@@ -404,7 +404,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
                           </Link>
                           <div className="text-xs text-dim"><LocalTime ts={m.startedAt} /></div>
                         </td>
-                        <td className="text-muted">{m.serverName}</td>
+                        <td className="hidden text-muted sm:table-cell">{m.serverName}</td>
                         <td>
                           {m.faction ? <FactionTag name={m.faction} /> : <span className="text-dim">—</span>}
                         </td>

@@ -114,7 +114,9 @@ export function createWorld(canvas: HTMLCanvasElement): World {
   const cap = at(part(box(5.6, 0.7, 5.6), 0x4a3f57), TW.x, 1.45 + TW.h + 0.35, TW.z, world);
   const TOP = V(TW.x, 1.45 + TW.h + 1.2, TW.z);
   const flags: T.Group[] = [];
-  for (const [x, y, z, c] of [[-7, 7.95, -3, 0xff6b6b], [6, 5.95, 5, 0x5aa8ff], [-2, 7.95, 5, 0x8be36b]]) {
+  // Flags stand on the roof caps of blocks 0, 2 and 1 (cap top = 1.45 + h + 0.5).
+  for (const [b, c] of [[0, 0xff6b6b], [2, 0x5aa8ff], [1, 0x8be36b]]) {
+    const [x, z, , h] = blocks[b], y = 1.95 + h;
     at(part(box(0.18, 3.2, 0.18), 0x2b2533, { t: 0.08 }), x, y + 1.6, z, world);
     const f = at(new T.Group(), x, y + 2.6, z, world);
     at(part(box(1.8, 1, 0.08), c, { t: 0.1 }), 0.95, 0, 0, f);
