@@ -73,8 +73,8 @@ export function pickNext(scores: Map<string, number>, playing: string | null, ra
   return POOL.find((e) => e.key === odds[odds.length - 1][0])!;
 }
 
-/** How many maps ahead the rotation is planned (the next one included). */
-export const AHEAD = 3;
+/** How many maps ahead the rotation is planned (the next one included): with the one on, the 9 the server page shows. */
+export const AHEAD = 8;
 
 /**
  * Tops `queue` (keys already planned after the map being played) up to AHEAD entries. Each pick sees
