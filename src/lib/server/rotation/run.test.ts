@@ -87,6 +87,47 @@ describe('rotationLook', () => {
     expect(third.later).toHaveLength(2);
   });
 
+  test('step through 300 matches: rolls one on each match, never the same map twice running, every map comes back', async () => {
+    const { store, write, deps } = setup(M1);
+    let seed = 42; // repeatable "random": a small LCG
+    deps.random = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    store.setRotationEnabled('s1', true, ['old'], 'staff');
+    await rotationLook(deps);
+    const played = ['Sabatulo'];
+    let soonAfter = 0; // plans where the map just played shows up again 2 or 3 maps on
+    for (let i = 1; i <= 300; i++) {
+      const before = store.rotationServer('s1')!;
+      const [map, lighting] = before.nextKey!.split('/');
+      deps.openMatch.mockResolvedValue({ startedAt: `match-${i}`, map, lighting });
+      await rotationLook(deps);
+      const after = store.rotationServer('s1')!;
+      // rolling: what was 2nd is now next, what was 3rd is now 2nd, and one new map on the end
+      expect([after.nextKey, after.later[0]]).toEqual(before.later);
+      expect(after.later).toHaveLength(2);
+      // never back to back, in what was played or anywhere in the plan
+      const chain = [map, ...[after.nextKey!, ...after.later].map((k) => k.split('/')[0])];
+      chain.forEach((m, j) => j && expect(m, `match ${i}: ${chain.join(' > ')}`).not.toBe(chain[j - 1]));
+      if (chain.slice(2).includes(map)) soonAfter++;
+      played.push(map);
+    }
+    // the map being played is only kept out of the very next slot
+    expect(soonAfter).toBeGreaterThan(30);
+    for (const m of ['Sabatulo', 'Bakurani', 'Ozeti', 'Zestafona']) expect(played.filter((p) => p === m).length).toBeGreaterThan(40);
+    expect(write).toHaveBeenCalledTimes(301);
+  });
+
+  test('a match with no plan yet (as after an upgrade) is planned at once, without scoring it twice', async () => {
+    const { store, write, deps } = setup(M1);
+    store.setRotationEnabled('s1', true, ['old'], 'staff');
+    store.setRotationPick('s1', { match: M1.startedAt, nextKey: null, written: true, note: null });
+    await rotationLook(deps);
+    const s = store.rotationServer('s1')!;
+    expect(s.nextKey!.startsWith('Sabatulo')).toBe(false);
+    expect(s.later).toHaveLength(2);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(store.rotationScores('s1').size).toBe(0);
+  });
+
   test('between matches: waits', async () => {
     const { store, write, deps } = setup(null);
     store.setRotationEnabled('s1', true, ['old'], 'staff');
