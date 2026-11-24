@@ -85,10 +85,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to content
         </a>
+        <div className="bc-backdrop" aria-hidden>
+          <span className="bc-pl bc-p1" />
+          <span className="bc-pl bc-p2" />
+          <span className="bc-pl bc-p3" />
+          <span className="bc-st" />
+          <span className="bc-st bc-st2" />
+          <b>WARDOGS</b>
+        </div>
         <SiteNav me={me} air={air} />
         <InstallPrompt auto />
         {SITE_NOTICE && (
-          <Container className="mt-4">
+          <Container className="relative z-10 mt-4">
             <div role="note" className="panel px-5 py-3 text-sm">
               <span className="mr-2 font-extrabold text-accent">Heads up</span>
               {SITE_NOTICE}

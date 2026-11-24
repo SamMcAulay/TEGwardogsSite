@@ -15,6 +15,7 @@ import {
 import { Feed, Standings, type Bug, type Segment } from '@/components/broadcast-feed';
 import { AutoRefresh } from '@/components/client';
 import { safe } from '@/components/section';
+import { SectionTabs } from '@/components/section-tabs';
 import { compact, int, kd } from '@/lib/format';
 import { KOTH_CAP, lightingName, mapArt, mapName } from '@/lib/game';
 import { viewer } from '@/lib/server/accounts';
@@ -98,6 +99,7 @@ export default async function Home() {
       source: s.name,
       where: [map, [lightingName(st.lighting), clock != null && `round ${mmss(clock)}`, `${s.playerCount}/${st.players.max} playing`].filter(Boolean).join(' · ')],
       bug: n,
+      href: `/servers/${s.slug}`,
     };
   });
   const r = feed.roundSoFar;
@@ -152,6 +154,7 @@ export default async function Home() {
       cam: 'NEXT',
       source: `${nextOn.shortName} · up next`,
       where: [first.map, [lightingName(first.lighting), inMinutes(first.inSeconds), rest.length && `then ${rest.map((m) => m.map).join(', ')}`].filter(Boolean).join(' · ')],
+      href: `/servers/${nextOn.slug}`,
     });
   }
   if (feed.milestone) {
@@ -199,6 +202,9 @@ export default async function Home() {
     <>
       <AutoRefresh seconds={15} />
       <div className="mx-auto max-w-[1480px] px-4 pt-2 md:px-[clamp(16px,2.4vw,32px)]">
+        <div className="mb-4">
+          <SectionTabs section="live" current="home" />
+        </div>
         <div className="bc-stage">
           {segments.length ? (
             <Feed bugs={bugs} segments={segments} lowerThird={top ? <LowerThird steamId={top.steamId} name={top.name} avatarUrl={top.avatarUrl} kills={top.value} /> : null} />

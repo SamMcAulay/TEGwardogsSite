@@ -218,7 +218,9 @@ export function RunningOrder({ servers }: { servers: { id: string; name: string;
       </div>
       {servers.map((s) => (
         <div key={s.id} className="contents">
-          <div className="bc-sep">{s.name}</div>
+          <Link href={`/servers/${s.slug}`} className="bc-sep hover:text-white">
+            {s.name} →
+          </Link>
           {s.now && (
             <Link href={`/servers/${s.slug}`} className="bc-slot" data-now>
               <span className="bc-t">NOW</span>

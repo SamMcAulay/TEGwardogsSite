@@ -3,6 +3,7 @@
 // segment strip, and a take on click (a segment, or a server's scorebug). Reduced motion: no
 // rotation and no camera drift; the viewer picks.
 /* eslint-disable @next/next/no-img-element -- map banners at the feed's size */
+import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FACTIONS, factionColor } from '@/lib/game';
 import { hourMinute } from '@/lib/format';
@@ -36,6 +37,8 @@ export interface Segment {
   source: string;
   /** the map title bottom right */
   where?: [string, string];
+  /** where the map title leads: the server's own page */
+  href?: string;
   /** which scorebug this segment is about */
   bug?: number;
   /** the full-frame graphic, for data segments */
@@ -145,12 +148,19 @@ export function Feed({ bugs, segments, lowerThird }: { bugs: Bug[]; segments: Se
           <div />
           <div className="bc-l3row">
             {lowerThird}
-            {seg.where && (
-              <div className="bc-where">
-                <b>{seg.where[0]}</b>
-                <span>{seg.where[1]}</span>
-              </div>
-            )}
+            {seg.where &&
+              (seg.href ? (
+                <Link href={seg.href} className="bc-where">
+                  <b>{seg.where[0]}</b>
+                  <span>{seg.where[1]}</span>
+                  <small>Server page →</small>
+                </Link>
+              ) : (
+                <div className="bc-where">
+                  <b>{seg.where[0]}</b>
+                  <span>{seg.where[1]}</span>
+                </div>
+              ))}
           </div>
         </div>
         {seg.body && (

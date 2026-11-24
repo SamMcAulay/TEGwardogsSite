@@ -702,6 +702,23 @@ a:hover > * > .name-verified {
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
+  a.bc-where:hover b {
+    text-decoration: underline;
+    text-decoration-thickness: 4px;
+    text-underline-offset: 8px;
+  }
+  .bc-where small {
+    display: block;
+    margin-top: 8px;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  a.bc-where:hover small {
+    color: #fff;
+  }
   .bc-feed[data-full] .bc-l3 {
     visibility: hidden;
   }
@@ -1122,6 +1139,7 @@ a:hover > * > .name-verified {
     color: #fff;
   }
   .bc-sep {
+    display: block;
     overflow-wrap: anywhere;
     padding: 10px 0 4px;
     font-weight: 800;
@@ -1466,6 +1484,98 @@ a:hover > * > .name-verified {
   .bc-prog i,
   .bc-segs button i,
   .bc-tape {
+    animation: none !important;
+  }
+}
+
+/*
+ * The studio backdrop behind every page: big dark angled plates and a red stripe drifting, with
+ * giant outlined WARDOGS crawling across. It only shows in the gaps; panels stay solid on top.
+ */
+.bc-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bc-backdrop span,
+.bc-backdrop b {
+  position: absolute;
+}
+.bc-backdrop .bc-pl {
+  clip-path: polygon(18% 0, 100% 0, 82% 100%, 0 100%);
+  animation: bc-drift 38s ease-in-out infinite alternate;
+}
+.bc-backdrop .bc-p1 {
+  width: 62vw;
+  height: 70vh;
+  left: -8vw;
+  top: 8vh;
+  background: #10141c;
+}
+.bc-backdrop .bc-p2 {
+  width: 46vw;
+  height: 56vh;
+  right: -6vw;
+  top: 34vh;
+  background: #0e1219;
+  animation-duration: 46s;
+  animation-direction: alternate-reverse;
+}
+.bc-backdrop .bc-p3 {
+  width: 30vw;
+  height: 40vh;
+  left: 38vw;
+  top: -12vh;
+  background: #0d1118;
+  animation-duration: 52s;
+}
+.bc-backdrop .bc-st {
+  width: 140vw;
+  height: 46px;
+  left: -20vw;
+  top: 58vh;
+  background: linear-gradient(90deg, transparent, rgb(217 43 29 / 0.55) 30%, rgb(217 43 29 / 0.55) 70%, transparent);
+  transform: rotate(-12deg);
+  animation: bc-stripe 24s ease-in-out infinite alternate;
+}
+.bc-backdrop .bc-st2 {
+  top: 64vh;
+  height: 6px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.18) 40%, transparent);
+  animation-duration: 30s;
+}
+.bc-backdrop b {
+  left: -5vw;
+  top: 14vh;
+  font-weight: 900;
+  font-size: clamp(160px, 24vw, 420px);
+  line-height: 0.8;
+  font-stretch: 62%;
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgb(255 255 255 / 0.06);
+  white-space: nowrap;
+  transform: rotate(-12deg);
+  animation: bc-word 60s linear infinite;
+}
+@keyframes bc-drift {
+  to {
+    transform: translate(6vw, -3vh);
+  }
+}
+@keyframes bc-stripe {
+  to {
+    transform: rotate(-12deg) translateX(14vw);
+  }
+}
+@keyframes bc-word {
+  to {
+    transform: rotate(-12deg) translateX(-30vw);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bc-backdrop * {
     animation: none !important;
   }
 }
