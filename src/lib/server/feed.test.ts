@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestMilestone, pickLongest, roundClock, turnsOf } from './feed';
+import { nearestMilestone, pickLongest, roundClock, scored, turnsOf } from './feed';
 import type { RecordShot, ServerRow } from './views';
 
 const shot = (distance: number, ts: number): RecordShot => ({ steamId: 's', name: 'n', victim: 'v', cause: 'Id.Item.SVDM', distance, ts, serverId: 'x', serverName: 'EU' });
@@ -44,5 +44,12 @@ describe('roundClock', () => {
   });
   it('has no clock on an empty, scoreless server', () => {
     expect(roundClock(server(0, [0, 0]), [open], 1600)).toBeNull();
+  });
+});
+
+describe('scored', () => {
+  it('drops rounds nobody scored in', () => {
+    expect(scored([{ score: 0 }, { score: 0 }, { score: 0 }])).toBe(false);
+    expect(scored([{ score: 0 }, { score: 3 }])).toBe(true);
   });
 });

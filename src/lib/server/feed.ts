@@ -52,6 +52,9 @@ export interface HomeFeed {
   milestone: { steamId: string; name: string; avatarUrl: string | null; label: string; value: number; next: number; badge: string } | null;
 }
 
+/** A round somebody actually scored in; empty servers end rounds at 0–0–0. */
+export const scored = (scores: { score: number }[]) => scores.some((x) => x.score > 0);
+
 const quiet = <T>(p: Promise<T>): Promise<T | null> =>
   p.catch((e) => {
     console.error('[feed]', e instanceof Error ? e.message : e);
@@ -150,7 +153,7 @@ export async function homeFeed(servers: ServerRow[], recs: { longestShots: Recor
     .filter((x) => x.s.online && x.s.playerCount > 0 && x.live)
     .sort((a, b) => b.s.playerCount - a.s.playerCount)[0];
   const last = servers
-    .flatMap((s, i) => (lists[i] ?? []).filter((m) => m.endedAt != null).map((m) => ({ s, m })))
+    .flatMap((s, i) => (lists[i] ?? []).filter((m) => m.endedAt != null && scored(m.scores)).map((m) => ({ s, m })))
     .sort((a, b) => b.m.endedAt! - a.m.endedAt!)[0];
 
   const topToday = recs?.today[0] ?? null;

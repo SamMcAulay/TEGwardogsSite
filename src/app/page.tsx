@@ -19,7 +19,7 @@ import { compact, int, kd } from '@/lib/format';
 import { KOTH_CAP, lightingName, mapArt, mapName } from '@/lib/game';
 import { viewer } from '@/lib/server/accounts';
 import { endedRounds, friendsPage, getServers, leaderboard, networkSummary, recentKills, records, shortNameOf } from '@/lib/server/data';
-import { homeFeed } from '@/lib/server/feed';
+import { homeFeed, scored } from '@/lib/server/feed';
 import { boardMoves } from '@/lib/server/trends';
 import type { LeaderRow, Loaded } from '@/lib/server/views';
 
@@ -183,7 +183,7 @@ export default async function Home() {
   }
 
   const top = feed.topToday;
-  const recent = ended instanceof Error ? [] : [...ended].sort((a, b) => b.endedAt - a.endedAt).slice(0, 4);
+  const recent = ended instanceof Error ? [] : ended.filter((m) => scored(m.scores)).sort((a, b) => b.endedAt - a.endedAt).slice(0, 4);
   const climbers =
     allTime instanceof Error || !moves
       ? []
