@@ -81,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: KEEP_INSTALL_OFFER }} />
         <a
           href="#main"
-          className="pill pill-on sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus: focus: focus: focus:"
+          className="pill pill-on sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
         >
           Skip to content
         </a>

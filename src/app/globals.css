@@ -1113,12 +1113,12 @@ a:hover > * > .name-verified {
     font-stretch: 75%;
     text-transform: uppercase;
   }
-  .bc-gh a {
+  .bc-gh > a {
     color: var(--muted);
     font-weight: 700;
     font-size: 14px;
   }
-  .bc-gh a:hover {
+  .bc-gh > a:hover {
     color: #fff;
   }
   .bc-sep {

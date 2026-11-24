@@ -102,7 +102,7 @@ export function MatchReplay({
           {clock(t)}
           <span className="text-base text-dim"> / {clock(length)}</span>
         </span>
-        <div role="group" aria-label="Speed" className="ml-auto inline-flex rounded-2xl border-[3px] border-edge bg-surface">
+        <div role="group" aria-label="Speed" className="ml-auto inline-flex border border-surface-3 bg-surface">
           {SPEEDS.map((s) => (
             <button
               key={s}
@@ -111,7 +111,7 @@ export function MatchReplay({
               onClick={() => setSpeed(s)}
               className={cx(
                 'num px-2.5 py-1 font-display text-[12px] font-semibold transition-colors',
-                speed === s ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
+                speed === s ? 'bg-text text-on-fill' : 'text-muted hover:bg-surface-3 hover:text-text',
               )}
             >
               {s}×

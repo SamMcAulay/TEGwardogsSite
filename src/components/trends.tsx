@@ -206,7 +206,7 @@ export function PlayerTrends({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="w-full sm:w-auto">
-          <div role="tablist" aria-label="Trend" className="flex overflow-hidden rounded-2xl border-[3px] border-edge bg-surface sm:inline-flex">
+          <div role="tablist" aria-label="Trend" className="flex overflow-hidden border border-surface-3 bg-surface sm:inline-flex">
             {tabs.map((t) => (
               <button
                 key={t.key}
@@ -216,7 +216,7 @@ export function PlayerTrends({
                 onClick={() => setTab(t.key)}
                 className={cx(
                   'flex-1 px-2 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors sm:flex-none sm:px-3',
-                  tab === t.key ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
+                  tab === t.key ? 'bg-text text-on-fill' : 'text-muted hover:bg-surface-3 hover:text-text',
                 )}
               >
                 {t.label}
@@ -253,7 +253,7 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
   };
   return (
     <div>
-      <div role="tablist" aria-label="Activity" className="mb-4 flex overflow-hidden rounded-2xl border-[3px] border-edge bg-surface sm:inline-flex">
+      <div role="tablist" aria-label="Activity" className="mb-4 flex overflow-hidden border border-surface-3 bg-surface sm:inline-flex">
         {NET_TABS.map((x) => (
           <button
             key={x.key}
@@ -263,7 +263,7 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
             onClick={() => setTab(x.key)}
             className={cx(
               'flex-1 px-2 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors sm:flex-none sm:px-3',
-              tab === x.key ? 'bg-accent text-accent-ink' : 'text-muted hover:bg-surface-3 hover:text-text',
+              tab === x.key ? 'bg-text text-on-fill' : 'text-muted hover:bg-surface-3 hover:text-text',
             )}
           >
             {x.label}

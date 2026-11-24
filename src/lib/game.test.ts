@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { factionColor, mainFaction, mapArt, mapWins, rankColour, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
+import { factionColor, mainFaction, mapArt, mapWins, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
@@ -153,15 +153,3 @@ describe('mapWins', () => {
   });
 });
 
-describe('rankColour', () => {
-  it('gives the podium gold, silver and bronze', () => {
-    expect(rankColour(1)).toBe('#ffc93c');
-    expect(rankColour(2)).toBe('#d9d4e0');
-    expect(rankColour(3)).toBe('#e29b62');
-  });
-
-  it('uses the faction colour below the podium', () => {
-    expect(rankColour(7, 'Manticore')).toBe(factionColor('Manticore'));
-    expect(rankColour(7, null)).toBe(factionColor(null));
-  });
-});

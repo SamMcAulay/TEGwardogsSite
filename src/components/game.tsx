@@ -65,7 +65,7 @@ export function ServerCard({ server }: { server: ServerRow }) {
   const art = st ? mapArt(mapName(st.map), st.lighting) : null;
   return (
     <Link href={`/servers/${server.slug}`} className="group panel relative block overflow-hidden">
-      <div className="relative h-28 overflow-hidden border-b-[3px] border-edge bg-surface-2 text-accent/60">
+      <div className="relative h-28 overflow-hidden bg-surface-2 text-accent/60">
         {art ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={art} alt="" loading="lazy" decoding="async" className={cx('absolute inset-0 h-full w-full object-cover', !server.online && 'opacity-30 grayscale')} />
@@ -85,8 +85,8 @@ export function ServerCard({ server }: { server: ServerRow }) {
         </div>
       </div>
       <div className="px-5 pt-4 pb-5">
-        <div className="mb-4 h-4 overflow-hidden rounded-full border-[3px] border-edge bg-bg">
-          <div className="h-full rounded-full bg-accent transition-[width] duration-700" style={{ width: `${fill * 100}%` }} />
+        <div className="mb-4 h-2.5 overflow-hidden bg-surface-3">
+          <div className="h-full bg-onair transition-[width] duration-700" style={{ width: `${fill * 100}%` }} />
         </div>
         {st ? (
           <>
@@ -131,7 +131,7 @@ export function KillTags({ tags }: { tags: string }) {
         <span
           key={t}
           className={cx(
-            'rounded-md border-2 border-edge px-1.5 text-[11px] font-extrabold',
+            'px-1.5 text-[11px] font-extrabold',
             t === 'Headshot' ? 'bg-accent text-on-fill' : 'bg-surface-2 text-muted',
           )}
         >
@@ -164,7 +164,7 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
         <span className="min-w-0 truncate sm:hidden">{k.suicide ? null : who(k.victimSteamId, k.victimName)}</span>
       </div>
       <div className="hidden min-w-0 items-center justify-center gap-1.5 sm:flex">
-        <span className="truncate rounded-full border-2 border-edge bg-surface-2 px-2.5 py-0.5 text-center text-xs font-bold text-muted">
+        <span className="truncate bg-surface-2 px-2.5 py-0.5 text-center text-xs font-bold text-muted">
           {k.suicide ? 'Suicide' : weapon.label}
         </span>
         <KillTags tags={k.tags} />
@@ -182,72 +182,10 @@ export function KillLine({ k, showServer, now }: { k: KillRow; showServer?: bool
   );
 }
 
-/** A name in a faction-coloured pill (plain when the faction isn't known); links to the profile. */
-function NamePill({ id, name, faction, bad }: { id: string | null; name: string | null; faction?: string; bad?: boolean }) {
-  const colour = faction ? factionColor(faction) : null;
-  const cls = cx(
-    'inline-flex max-w-full min-w-0 items-center rounded-full border-2 border-edge px-2.5 py-0.5 text-sm font-bold',
-    colour ? 'text-on-fill' : 'bg-surface-2 text-text',
-    bad && '!bg-bad !text-on-fill',
-  );
-  const label = <span className="truncate">{name ?? 'World'}</span>;
-  return id && name ? (
-    <Link prefetch={false} href={`/players/${id}`} className={cls} style={colour ? { background: colour } : undefined}>
-      {label}
-    </Link>
-  ) : (
-    <span className={cls} style={colour ? { background: colour } : undefined}>
-      {label}
-    </span>
-  );
-}
-
-/**
- * A narrow kill feed for cards: killer → weapon → victim as pills, then distance, server and time.
- * `factionOf`: steam id → faction for the players on the servers now, to colour their pills.
- */
-export function KillStack({ kills, factionOf, showServer }: { kills: KillRow[]; factionOf?: Record<string, string>; showServer?: boolean }) {
-  const now = nowSec();
-  const f = (id: string | null) => (id ? factionOf?.[id] : undefined);
-  return (
-    <ol className="divide-y-2 divide-dashed divide-line">
-      {kills.map((k) => (
-        <li key={k.eventId} className="px-6 py-2.5">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {k.suicide ? (
-              <>
-                <NamePill id={k.victimSteamId} name={k.victimName} faction={f(k.victimSteamId)} />
-                <span className="shrink-0 text-sm text-muted">suicide</span>
-              </>
-            ) : (
-              <>
-                <span className="min-w-0 shrink">
-                  <NamePill id={k.killerSteamId} name={k.killerName} faction={f(k.killerSteamId)} bad={!!k.teamkill} />
-                </span>
-                <span className="shrink-0 text-xs font-bold text-muted">{causeInfo(k.cause).label} →</span>
-                <span className="min-w-0 shrink">
-                  <NamePill id={k.victimSteamId} name={k.victimName} faction={f(k.victimSteamId)} />
-                </span>
-              </>
-            )}
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted">
-            <KillTags tags={k.tags} />
-            {k.teamkill ? <span className="font-extrabold text-bad">Teamkill</span> : null}
-            {k.distance != null && !k.suicide && <span className="num">{metres(k.distance)}</span>}
-            {showServer && <span>{k.serverName}</span>}
-            <span className="num ml-auto">{ago(k.ts, now)}</span>
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 export function KillList({ kills, showServer }: { kills: KillRow[]; showServer?: boolean }) {
   const now = nowSec();
   return (
-    <div className="divide-y-2 divide-dashed divide-line">
+    <div className="divide-y divide-line">
       {kills.map((k) => (
         <KillLine key={k.eventId} k={k} showServer={showServer} now={now} />
       ))}

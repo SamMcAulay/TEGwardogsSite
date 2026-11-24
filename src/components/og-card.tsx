@@ -3,15 +3,15 @@
 import type { CardModel } from '@/lib/server/card';
 
 const C = {
-  bg: '#16131c',
-  surface: '#221e2b',
-  line: '#2c2738',
-  lineStrong: '#07060a',
-  text: '#f4efe6',
-  muted: '#b3aabd',
-  dim: '#8f869e',
-  accent: '#ffc93c',
-  accentInk: '#1d1606',
+  bg: '#0b0d12',
+  surface: '#151a24',
+  line: '#1d2431',
+  lineStrong: '#2a3242',
+  text: '#ffffff',
+  muted: '#b4bccb',
+  dim: '#8590a3',
+  accent: '#d92b1d',
+  accentInk: '#ffffff',
 };
 
 const label = {
@@ -34,7 +34,7 @@ function Frame({ children, accent = C.accent }: { children: React.ReactNode; acc
         background: C.bg,
         backgroundImage: `linear-gradient(${C.surface} 1px, transparent 1px), linear-gradient(90deg, ${C.surface} 1px, transparent 1px)`,
         backgroundSize: '48px 48px',
-        borderLeft: `12px solid ${accent}`,
+        borderTop: `12px solid ${accent}`,
         padding: '48px 64px 40px 64px',
         fontFamily: 'Inter',
         color: C.text,

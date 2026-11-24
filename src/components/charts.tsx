@@ -146,7 +146,7 @@ export function AreaChart({
               style={{ left: `${((hp.t - t0) / span) * 100}%`, top: `${(1 - hp.v / max) * 100}%`, background: color }}
             />
             <div
-              className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1 text-xs whitespace-nowrap shadow-lg"
+              className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 border border-surface-3 bg-surface-2 px-2 py-1 text-xs whitespace-nowrap"
               style={{ left: `clamp(60px, ${((hp.t - t0) / span) * 100}%, calc(100% - 60px))` }}
             >
               <span className="num font-semibold text-text">
@@ -370,7 +370,7 @@ function DayChart({ day, usual, label }: { day: { m: number; v: number }[]; usua
                 />
               )}
               <div
-                className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1 text-xs whitespace-nowrap shadow-lg"
+                className="pointer-events-none absolute top-0 z-10 -translate-x-1/2 border border-surface-3 bg-surface-2 px-2 py-1 text-xs whitespace-nowrap"
                 style={{ left: `clamp(80px, ${x(at)}%, calc(100% - 80px))` }}
               >
                 <span className="text-muted">{hhmm(at)}</span>
