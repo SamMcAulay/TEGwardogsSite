@@ -14,7 +14,7 @@ export type Me = { steamId: string | null; name: string | null } | null | undefi
 function Badge({ n }: { n: number }) {
   if (!n) return null;
   return (
-    <span className="num inline-flex min-w-5 items-center justify-center rounded-full border-2 border-edge bg-accent px-1 text-[11px] leading-4 font-extrabold text-on-fill">
+    <span className="num inline-flex min-w-5 items-center justify-center bg-onair px-1 text-[11px] leading-4 font-extrabold text-white">
       {n > 9 ? '9+' : n}
       <span className="sr-only"> new</span>
     </span>
@@ -30,39 +30,38 @@ function SearchIcon() {
   );
 }
 
-/** The header (logo, Live · Stats · Players, search, You) and, on phones, the bottom bar. */
-export function SiteNav({ me }: { me: Me }) {
+/** The header (logo plate, Live · Stats · Players · You, search, who's on) and, on phones, the bottom bar. */
+export function SiteNav({ me, air }: { me: Me; air: { live: number; playing: number } | null }) {
   const path = usePathname();
   const tab = activeTab(path);
   const news = useFriendNews(!!me?.steamId);
   const count = newsCount(news);
   return (
     <>
-      <header style={{ viewTransitionName: 'site-header' }} className="sticky top-0 z-30 px-4 pt-4 sm:px-6 lg:px-8">
-        {/* A solid bar, so the logo never sits over the content scrolling under it. */}
-        <div className="mx-auto flex max-w-[1440px] items-center gap-3 rounded-[24px] border-[3px] border-edge bg-surface-2/90 py-2 pr-2 pl-4 shadow-[0_6px_0_var(--edge)] backdrop-blur sm:gap-4">
-          <Link href="/" className="display shrink-0 text-xl" aria-label="TEG WARDOGS home">
-            TEG <span className="text-accent">WARDOGS</span>
+      <header style={{ viewTransitionName: 'site-header' }} className="bc-top">
+        <div className="bc-bar mx-auto max-w-[1480px] px-4 md:px-[clamp(16px,2.4vw,32px)]">
+          <Link href="/" className="bc-logo" aria-label="TEG WARDOGS home">
+            <b>TEG</b>
+            <span>WARDOGS</span>
           </Link>
-          <nav className="hidden items-center gap-2 md:flex" aria-label="Main">
+          <nav className="bc-nav" aria-label="Main">
             {TABS.map((t) => (
-              <Link
-                key={t.key}
-                href={t.href}
-                aria-current={tab === t.key ? 'page' : undefined}
-                className={cx('pill', tab === t.key && 'pill-on')}
-              >
+              <Link key={t.key} href={t.href} aria-current={tab === t.key ? 'page' : undefined}>
                 {t.label}
               </Link>
             ))}
-          </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <Link href="/players" className="pill !px-3 sm:!px-4" aria-label="Search players">
-              <SearchIcon />
-              <span className="hidden text-muted lg:inline">Find a player</span>
-            </Link>
             {me !== undefined && <YouMenu me={me} count={count} on={tab === 'you'} />}
-          </div>
+          </nav>
+          <Link href="/players" className="bc-search bc-plate" aria-label="Find a player">
+            <SearchIcon />
+            <span>Find a player</span>
+          </Link>
+          {air && (
+            <span className="bc-air">
+              <i aria-hidden />
+              {air.live} SERVER{air.live === 1 ? '' : 'S'} LIVE · {air.playing} PLAYING
+            </span>
+          )}
         </div>
       </header>
       <BottomBar me={me} count={count} />
@@ -113,16 +112,16 @@ function YouMenu({
   const box = useRef<HTMLDivElement>(null);
   useDismiss(open, () => setOpenOn(null), box);
   return (
-    <div ref={box} className="relative hidden md:block">
+    <div ref={box} className="relative">
       <button
         type="button"
         aria-expanded={open}
         aria-label={count ? `You, ${count} friend update${count === 1 ? '' : 's'}` : 'You'}
         onClick={() => setOpen(!open)}
-        className={cx('pill', on && 'pill-on')}
+        data-on={on || undefined}
+        className="flex items-center gap-2"
       >
-        <span className="size-6 rounded-full border-2 border-edge bg-manticore" aria-hidden />
-        <span className="max-w-32 truncate">{me?.name ?? (me ? 'You' : 'Sign in')}</span>
+        <span className="max-w-32 truncate">{me ? 'You' : 'Sign in'}</span>
         <Badge n={count} />
       </button>
       {open && <YouPanel me={me} count={count} className="absolute top-full right-0 mt-3 w-64" />}
@@ -147,7 +146,7 @@ function FriendsOnline() {
   }, []);
   if (!online?.length) return null;
   return (
-    <div className="mb-2 border-b-2 border-dashed border-line px-3 pb-3">
+    <div className="mb-2 border-b border-line px-3 pb-3">
       <div className="eyebrow mb-1.5">Friends playing now</div>
       <ul className="grid gap-1 text-sm">
         {online.slice(0, 5).map((f) => (
@@ -187,7 +186,7 @@ function YouPanel({
             <Link
               href={i.href}
               prefetch={i.href.startsWith('/players/') ? false : undefined}
-              className="flex items-center justify-between rounded-2xl px-3 py-2 font-bold hover:bg-surface-2"
+              className="flex items-center justify-between px-3 py-2 font-bold hover:bg-surface-2"
             >
               {i.label}
               {i.href === '/friends' && <Badge n={count} />}
@@ -199,7 +198,7 @@ function YouPanel({
             <form action={signOut}>
               <button
                 type="submit"
-                className="w-full rounded-2xl px-3 py-2 text-left font-bold text-muted hover:bg-surface-2 hover:text-text"
+                className="w-full px-3 py-2 text-left font-bold text-muted hover:bg-surface-2 hover:text-text"
               >
                 Sign out
               </button>
@@ -223,20 +222,20 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
   useDismiss(you, () => setYouOn(null), panel, toggle);
   const item = (on: boolean) =>
     cx(
-      'flex flex-col items-center gap-1 rounded-2xl py-1.5 text-xs font-bold',
-      on ? 'bg-accent text-on-fill' : 'text-muted',
+      'flex flex-col items-center justify-center gap-1 py-2 text-xs font-extrabold uppercase tracking-wider [font-stretch:80%]',
+      on ? 'bg-white text-on-fill' : 'text-muted',
     );
   return (
     <>
       {you && me !== undefined && (
         <div ref={panel}>
-          <YouPanel me={me} count={count} className="fixed right-3 bottom-24 left-3 md:hidden" />
+          <YouPanel me={me} count={count} className="fixed right-3 bottom-16 left-3 md:hidden" />
         </div>
       )}
       <nav
         aria-label="Main"
         style={{ viewTransitionName: 'site-tabbar' }}
-        className="fixed right-3 bottom-3 left-3 z-40 grid grid-flow-col auto-cols-fr gap-1 rounded-[24px] border-[3px] border-edge bg-surface-2 p-1.5 shadow-[0_6px_0_var(--edge)] md:hidden"
+        className="fixed right-0 bottom-0 left-0 z-40 grid grid-flow-col auto-cols-fr gap-0.5 border-t-2 border-onair bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {TABS.map((t) => (
           <Link
@@ -245,18 +244,15 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
             aria-current={tab === t.key ? 'page' : undefined}
             className={item(tab === t.key)}
           >
-            <span className="size-5 rounded-md border-2 border-current" aria-hidden />
             {t.label}
           </Link>
         ))}
         {me !== undefined && (
           <button ref={toggle} type="button" aria-expanded={you} onClick={() => setYou(!you)} className={item(tab === 'you' || you)}>
-            <span className="relative size-5 rounded-full border-2 border-current" aria-hidden>
-              {count > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 size-2.5 rounded-full border-2 border-edge bg-accent" />
-              )}
+            <span className="flex items-center gap-1">
+              You
+              {count > 0 && <span className="size-2 bg-onair" aria-label={`${count} new`} />}
             </span>
-            You
           </button>
         )}
       </nav>
