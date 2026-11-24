@@ -26,6 +26,9 @@ export async function register() {
       players: async (id) => (await warcon().live(id)).value?.players ?? [],
     });
   }
+  // A test copy beside the live site (SITE_JOBS=off) reads everything but acts on nothing: no Discord
+  // syncs, posts or alerts, and nothing that moves players or changes maps on the game servers.
+  if (process.env.SITE_JOBS === 'off') return;
   const { accounts } = await import('./lib/server/accounts');
   const { startTierSync } = await import('./lib/server/accounts/sync');
   try {

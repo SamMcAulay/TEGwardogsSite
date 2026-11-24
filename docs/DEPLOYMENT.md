@@ -266,3 +266,24 @@ a restart. They live in the volume, so deploys keep them.
 | `/account` says linking is not switched on | The account block of `.env` is empty. |
 | Discord says `Invalid OAuth2 redirect_uri` | The redirect in step 9.1 doesn't match `SITE_URL` exactly. |
 | Profiles never get a tag | Check the doctor's role lines, and the site log for `tier sync stopped`. |
+
+## 10. Test copy (staging)
+
+A second container runs a branch's image beside the live site, on real Warcon data, so changes can
+be tried before they reach `main`. It reads everything and acts on nothing.
+
+1. Push the branch to `staging` (`git push -f origin <branch>:staging`). CI publishes
+   `ghcr.io/sammcaulay/tegwardogssite:sha-<commit>` and `:staging`; Deploy ignores it.
+2. On the VPS, once: make `.env.test` from `.env` without the action keys
+   (`WARCON_MOVE_TOKEN`, `WARCON_ROTATION_TOKEN`, `WARCON_SLOTS_TOKEN`, `PRIORITY_API_KEY`,
+   `DISCORD_ROUNDS_CHANNEL_ID`, `DISCORD_PUBLIC_KEY`) and with `SITE_URL=https://test.tegwardogs.fyi`,
+   `ALLOW_INDEXING=false` and `SITE_JOBS=off`. Seed its data from a snapshot of the live data.
+3. Each update: `docker pull …:staging && docker tag …:staging teg-wardogs-site:test`, then
+   `docker compose -f docker-compose.test.yml -p teg-wardogs-test up -d`. It listens on
+   `127.0.0.1:3101`.
+4. Tunnel: a public hostname `test.tegwardogs.fyi` → `http://127.0.0.1:3101`, ideally behind
+   Cloudflare Access. Signing in on it also needs `https://test.tegwardogs.fyi/auth/discord/callback`
+   as a redirect in the Discord application.
+
+Remove it with `docker compose -f docker-compose.test.yml -p teg-wardogs-test down` (add `-v` to
+drop its data; it holds only copies).

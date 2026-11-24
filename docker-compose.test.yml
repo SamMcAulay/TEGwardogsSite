@@ -1,0 +1,30 @@
+# The test copy: a branch's image beside the live site, for trying changes on real data before they
+# go live (docs/DEPLOYMENT.md, step 10). Its own container, port and data; SITE_JOBS=off in
+# .env.test, so it never acts on Discord or the game servers.
+#
+#   docker compose -f docker-compose.test.yml -p teg-wardogs-test up -d
+
+services:
+  site:
+    image: teg-wardogs-site:test
+    pull_policy: never
+    container_name: teg-wardogs-site-test
+    restart: unless-stopped
+    env_file: .env.test
+    ports:
+      - '127.0.0.1:3101:3000'
+    networks: [warcon]
+    volumes:
+      - test-data:/app/data
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+
+volumes:
+  test-data:
+
+networks:
+  warcon:
+    external: true
+    name: warcon_default
