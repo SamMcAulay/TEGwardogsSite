@@ -20,7 +20,7 @@ type Section = keyof typeof SECTIONS;
 /** A home's own pages as a row of pills (Live: Now · Servers · Matches · Kill feed; Stats: …). */
 export function SectionTabs<S extends Section>({ section, current }: { section: S; current: (typeof SECTIONS)[S][number]['key'] }) {
   return (
-    <nav aria-label={section === 'live' ? 'Live' : 'Stats'} className="flex flex-wrap gap-2">
+    <nav aria-label={section === 'live' ? 'Live' : 'Stats'} className="flex flex-wrap gap-0.5">
       {SECTIONS[section].map((s) => (
         <Pill key={s.key} href={s.href} on={s.key === current}>
           {s.label}

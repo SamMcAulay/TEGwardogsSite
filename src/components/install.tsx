@@ -129,7 +129,7 @@ export function InstallPrompt({ auto }: { auto: boolean }) {
         e.preventDefault();
         close();
       }}
-      className="m-auto w-[min(26rem,calc(100vw-2rem))] rounded-2xl border-[3px] border-edge bg-surface p-0 text-text backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+      className="m-auto w-[min(26rem,calc(100vw-2rem))] border border-surface-3 bg-surface p-0 text-text backdrop:bg-black/60 backdrop:backdrop-blur-sm"
     >
       <div className="p-5 sm:p-6">
         <div className="flex items-center gap-3">

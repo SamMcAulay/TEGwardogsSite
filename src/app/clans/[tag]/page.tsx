@@ -142,7 +142,7 @@ export default async function ClanPage({ params, searchParams }: PageProps<'/cla
                           <select
                             name="vs"
                             defaultValue={vs ? clanSlug(vs.tag) : ''}
-                            className="min-w-0 flex-1 rounded-2xl border-[3px] border-edge bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
+                            className="min-w-0 flex-1 border border-surface-3 bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
                             aria-label="Clan to compare with"
                           >
                             <option value="">Pick a clan…</option>

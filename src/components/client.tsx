@@ -61,7 +61,7 @@ export function SearchBox({
         placeholder="Search players or Steam ID"
         aria-label="Search players"
         className={cx(
-          'w-full rounded-full border-[3px] border-edge bg-surface-2 pr-4 pl-10 text-sm shadow-[0_4px_0_var(--edge)] outline-none transition-colors placeholder:text-muted focus:border-accent',
+          'w-full border border-surface-3 bg-surface-2 pr-4 pl-10 text-sm outline-none transition-colors placeholder:text-muted focus:border-accent',
           large ? 'h-14 text-base' : 'h-11',
         )}
       />

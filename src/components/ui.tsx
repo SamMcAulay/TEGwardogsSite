@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { BAND_TONE, bandLabel, bandOf, closeness } from '@/lib/balance';
-import { factionColor, KOTH_CAP, rankColour } from '@/lib/game';
+import { factionColor, KOTH_CAP } from '@/lib/game';
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(' ');
@@ -17,7 +16,7 @@ const BUTTONS = {
 export const buttonClass = (kind: keyof typeof BUTTONS = 'secondary') => BUTTONS[kind];
 
 export function Container({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8', className)}>{children}</div>;
+  return <div className={cx('mx-auto w-full max-w-[1480px] px-4 md:px-[clamp(16px,2.4vw,32px)]', className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -38,12 +37,12 @@ export function PageHeader({
 }) {
   return (
     <header>
-      <Container className="pt-8 pb-4 sm:pt-10">
+      <Container className="pt-6 pb-4 sm:pt-8">
         {tabs && <div className="mb-6">{tabs}</div>}
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="min-w-0">
             {eyebrow && <div className="eyebrow mb-3 flex items-center gap-2">{eyebrow}</div>}
-            <h1 className="display text-4xl sm:text-5xl">{title}</h1>
+            <h1 className="display text-5xl uppercase sm:text-7xl">{title}</h1>
             {description && <p className="mt-3 max-w-2xl text-base text-muted">{description}</p>}
           </div>
           {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -69,22 +68,22 @@ export function Panel({
   flush?: boolean;
 }) {
   return (
-    <section className={cx('panel min-w-0 overflow-hidden', className)}>
+    <section className={cx('flex min-w-0 flex-col', className)}>
       {(title || action) && (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 pt-5 pb-3">
-          <h2 className="display text-xl text-text">{title}</h2>
-          {action && <div className="text-sm text-muted">{action}</div>}
+        <div className="bc-gh flex-wrap">
+          <h2>{title}</h2>
+          {action && <div className="text-sm font-bold text-muted">{action}</div>}
         </div>
       )}
-      <div className={flush ? 'pb-2' : 'px-6 pt-1 pb-6'}>{children}</div>
+      <div className={cx('panel relative min-w-0 flex-1 overflow-hidden', flush ? 'pb-2' : 'px-6 pt-5 pb-6')}>{children}</div>
     </section>
   );
 }
 
 export function PanelLink({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <Link href={href} className="text-sm font-bold whitespace-nowrap text-accent transition-opacity hover:opacity-80">
-      {children} →
+    <Link href={href} className="text-sm font-bold whitespace-nowrap text-muted transition-colors hover:text-text">
+      {children}
     </Link>
   );
 }
@@ -122,17 +121,17 @@ export function Stat({
   accent?: boolean;
 }) {
   return (
-    <div className="min-w-0 px-5 py-4">
+    <div className="bc-plate min-w-0 px-5 py-4">
       <div className="eyebrow">{label}</div>
-      <div className={cx('display num mt-2 truncate text-[30px]', accent && 'text-accent')}>{value}</div>
+      <div className={cx('display num mt-2 truncate text-[34px]', accent && 'text-accent')}>{value}</div>
       {sub && <div className="mt-1.5 truncate text-sm text-muted">{sub}</div>}
     </div>
   );
 }
 
-/** Stat tiles in one chunky card, split by dashed lines. */
+/** Stat tiles: one plate each, two pixels apart. */
 export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cx('panel grid divide-x-2 divide-dashed divide-line', className)}>{children}</div>;
+  return <div className={cx('grid gap-0.5', className)}>{children}</div>;
 }
 
 /** online null: status unknown (Warcon didn't answer), drawn as a hollow ring. */
@@ -160,7 +159,7 @@ export function Badge({
 }) {
   const tones = {
     default: 'bg-surface-2 text-text',
-    accent: 'bg-accent text-on-fill',
+    accent: 'bg-onair text-white',
     good: 'bg-good text-on-fill',
     bad: 'bg-bad text-on-fill',
     admin: 'bg-text text-on-fill',
@@ -171,7 +170,7 @@ export function Badge({
   return (
     <span
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border-2 border-edge px-2.5 py-0.5 text-xs font-extrabold whitespace-nowrap',
+        'inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-extrabold tracking-wide whitespace-nowrap uppercase [font-stretch:85%]',
         tones[tone],
         className,
       )}
@@ -185,7 +184,7 @@ export function FactionTag({ name }: { name: string | null | undefined }) {
   if (!name) return <span className="text-dim">—</span>;
   return (
     <span className="inline-flex items-center gap-1.5 text-muted">
-      <span className="inline-block size-2.5 rounded-full border-2 border-edge" style={{ background: factionColor(name) }} />
+      <span className="inline-block size-2.5" style={{ background: factionColor(name) }} />
       {name}
     </span>
   );
@@ -205,7 +204,7 @@ export function Segmented({
   prefetch?: false;
 }) {
   return (
-    <nav aria-label={label} className="inline-flex flex-wrap gap-2">
+    <nav aria-label={label} className="inline-flex flex-wrap gap-0.5">
       {items.map((it) => (
         <Link
           key={it.key}
@@ -258,12 +257,12 @@ export function meterWidth(value: number, max: number): number {
   return max > 0 ? Math.min(100, Math.max(1.5, (value / max) * 100)) : 0;
 }
 
-/** A fat rounded bar, for share-of-total columns. */
+/** A flat bar, for share-of-total columns. */
 export function Meter({ value, max, color }: { value: number; max: number; color?: string }) {
   const w = meterWidth(value, max);
   return (
-    <div className="h-4 w-full overflow-hidden rounded-full border-[3px] border-edge bg-bg">
-      <div className="h-full rounded-full" style={{ width: `${w}%`, background: color ?? 'var(--accent)' }} />
+    <div className="h-2.5 w-full overflow-hidden bg-surface-3">
+      <div className="h-full" style={{ width: `${w}%`, background: color ?? 'var(--onair)' }} />
     </div>
   );
 }
@@ -277,39 +276,11 @@ export function RaceLane({ name, score, cap = KOTH_CAP, color }: { name: string;
         <span className="truncate">{name}</span>
         <span className="display num text-2xl">{score}</span>
       </div>
-      <div className="edge h-7 overflow-hidden rounded-full bg-bg">
-        <div className="h-full rounded-full border-r-[3px] border-edge" style={{ width: `${w}%`, background: color ?? factionColor(name) }} />
+      <div className="h-7 overflow-hidden bg-surface-3">
+        <div className="h-full" style={{ width: `${w}%`, background: color ?? factionColor(name) }} />
       </div>
     </div>
   );
-}
-
-/** A round's final scores as small faction-coloured tags, highest first. */
-export function ScoreChips({ scores }: { scores: { name: string; score: number }[] }) {
-  return (
-    <span className="inline-flex gap-1">
-      {[...scores]
-        .sort((a, b) => b.score - a.score)
-        .map((s) => (
-          <span
-            key={s.name}
-            title={s.name}
-            className="num rounded-lg border-2 border-edge px-1.5 text-xs font-extrabold text-on-fill"
-            style={{ background: factionColor(s.name) }}
-          >
-            {s.score}
-          </span>
-        ))}
-    </span>
-  );
-}
-
-/** Fair / One-sided / Landslide for a finished round; nothing when it can't be told. */
-export function ClosenessChip({ scores }: { scores: number[] }) {
-  const c = closeness(scores);
-  if (c === null) return null;
-  const band = bandOf(c);
-  return <Badge tone={BAND_TONE[band]}>{bandLabel(band)}</Badge>;
 }
 
 /** Places climbed (▲) or fallen (▼) since a past board; nothing when unchanged or unknown. */
@@ -328,17 +299,17 @@ export function RankMove({ moved, since }: { moved: number | null | undefined; s
   );
 }
 
-/** A chunky rank badge: gold, silver, bronze, then the player's faction (or plain when unknown). */
+/** A timing-tower position: on-air red for the leader, the player's faction when known, else white. */
 export function RankCell({ rank, faction, large }: { rank: number; faction?: string | null; large?: boolean }) {
-  const filled = rank <= 3 || !!faction;
+  const lead = rank === 1;
   return (
     <span
       className={cx(
-        'display num inline-flex shrink-0 items-center justify-center border-[3px] border-edge',
-        large ? 'size-11 rounded-[14px] text-base shadow-[0_3px_0_var(--edge)]' : 'size-8 rounded-[10px] text-xs',
-        filled ? 'text-on-fill' : 'bg-surface-2 text-muted',
+        'display num inline-flex shrink-0 items-center justify-center',
+        large ? 'size-11 text-xl' : 'size-8 text-base',
+        lead ? 'bg-onair text-white' : 'bg-white text-on-fill',
       )}
-      style={filled ? { background: rankColour(rank, faction) } : undefined}
+      style={!lead && faction ? { background: factionColor(faction) } : undefined}
     >
       {rank}
     </span>

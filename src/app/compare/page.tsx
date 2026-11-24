@@ -38,7 +38,7 @@ function PlayerInput({ name, value, label, autoFocus }: { name: string; value?: 
         defaultValue={value}
         autoFocus={autoFocus}
         placeholder="Name or Steam ID"
-        className="h-11 w-full rounded-2xl border-[3px] border-edge bg-bg px-3 text-sm outline-none focus:border-accent"
+        className="h-11 w-full border border-surface-3 bg-bg px-3 text-sm outline-none focus:border-accent"
       />
     </label>
   );

@@ -180,11 +180,6 @@ export function factionColor(name: string | null | undefined, fallback = '#8b93a
  * The faction a player is loyal to: one known faction holding at least `threshold` of their rounds.
  * Warcon only splits a career by rounds, not seconds, so round share stands in for play time.
  */
-/** A rank badge's fill: gold, silver and bronze for the podium, the player's faction below it. */
-export function rankColour(rank: number, faction?: string | null): string {
-  return ['#ffc93c', '#d9d4e0', '#e29b62'][rank - 1] ?? factionColor(faction);
-}
-
 export function mainFaction(factions: { key: string; matches: number }[], threshold = 0.65): string | null {
   const total = factions.reduce((a, f) => a + f.matches, 0);
   if (!total) return null;

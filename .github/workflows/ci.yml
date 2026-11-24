@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
 
 concurrency:
@@ -26,7 +26,9 @@ jobs:
       - run: npm run build
 
   # Builds the production image here, never on the VPS. Pushes from main go to ghcr.io as
-  # sha-<commit> (what Deploy pulls) and main; pull requests only check that it builds.
+  # sha-<commit> (what Deploy pulls) and main; pushes to staging as sha-<commit> and staging, for the
+  # test copy (docs/DEPLOYMENT.md, step 10), which Deploy never touches. Pull requests only check
+  # that it builds.
   docker:
     needs: check
     runs-on: ubuntu-latest
@@ -34,7 +36,7 @@ jobs:
       contents: read
       packages: write
     env:
-      PUBLISH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      PUBLISH: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging') }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -50,6 +52,6 @@ jobs:
           push: ${{ env.PUBLISH == 'true' }}
           tags: |
             ghcr.io/sammcaulay/tegwardogssite:sha-${{ github.sha }}
-            ghcr.io/sammcaulay/tegwardogssite:main
+            ghcr.io/sammcaulay/tegwardogssite:${{ github.ref_name == 'staging' && 'staging' || 'main' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -47,9 +47,9 @@ export default async function RotationPage({ searchParams }: PageProps<'/admin/r
       />
       <Container className="mt-8 space-y-4">
         <AdminNav active="rotation" />
-        {done && <p role="status" className="rounded-2xl border-[3px] border-edge bg-surface-2 px-4 py-3 text-sm">{done}</p>}
+        {done && <p role="status" className="border border-surface-3 bg-surface-2 px-4 py-3 text-sm">{done}</p>}
         {!canWrite && (
-          <p role="status" className="rounded-2xl border-[3px] border-edge bg-surface-2 px-4 py-3 text-sm text-muted">
+          <p role="status" className="border border-surface-3 bg-surface-2 px-4 py-3 text-sm text-muted">
             Off for now: the site has no Warcon key that may change the rotation (<code>WARCON_ROTATION_TOKEN</code>).
           </p>
         )}
@@ -130,7 +130,7 @@ export default async function RotationPage({ searchParams }: PageProps<'/admin/r
                         )}
                       </p>
                     )}
-                    {on && state?.note && <p className="mb-4 rounded-2xl border-[3px] border-edge bg-surface-2 px-3 py-2 text-sm text-bad">{state.note}</p>}
+                    {on && state?.note && <p className="mb-4 border border-surface-3 bg-surface-2 px-3 py-2 text-sm text-bad">{state.note}</p>}
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm tabular-nums">
                         <thead className="text-left text-xs text-muted">

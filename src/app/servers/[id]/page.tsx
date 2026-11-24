@@ -72,15 +72,15 @@ function Scoreboard({
 }) {
   const sorted = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
   return (
-    <div className="min-w-0 border border-l-4 border-line" style={{ borderLeftColor: factionColor(faction) }}>
-      <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
-        <span className="display text-sm">{faction}</span>
-        <span className="num text-xs text-muted">
+    <div className="min-w-0 border border-line">
+      <div className="flex items-center justify-between px-3 py-2.5 text-on-fill" style={{ background: factionColor(faction) }}>
+        <span className="display text-sm uppercase">{faction}</span>
+        <span className="num text-xs font-bold">
           {players.length} players
           {score != null && (
             <>
               {' '}
-              · <span className="font-semibold text-text">{score}</span> pts
+              · <span className="font-extrabold">{score}</span> pts
             </>
           )}
         </span>
@@ -215,7 +215,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
         actions={
           server.joinCode && (
             <div className="flex flex-col items-start gap-1.5 md:items-end">
-              <div className="flex items-center gap-2 rounded-2xl border-[3px] border-edge bg-surface px-3 py-2">
+              <div className="flex items-center gap-2 border border-surface-3 bg-surface px-3 py-2">
                 <span className="eyebrow !text-[0.66rem]">Join code</span>
                 <code className="font-mono text-xs text-text">{server.joinCode}</code>
                 <CopyButton value={server.joinCode} />
