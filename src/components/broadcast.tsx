@@ -230,7 +230,7 @@ export function RunningOrder({ servers }: { servers: { id: string; name: string;
             </Link>
           )}
           {s.next.map((m, i) => (
-            <div key={`${m.map}-${m.lighting}-${i}`} className="bc-slot">
+            <div key={`${m.map}-${m.lighting}-${i}`} className="bc-slot" data-later={i > 0 || undefined}>
               <span className="bc-t num">{m.at ? <ClockAt ts={m.at} /> : 'Later'}</span>
               {art(m.map, m.lighting)}
               <span>
