@@ -202,6 +202,7 @@ export default async function Home() {
     <>
       <AutoRefresh seconds={15} />
       <div className="mx-auto max-w-[1480px] px-4 pt-2 md:px-[clamp(16px,2.4vw,32px)]">
+        <h1 className="sr-only">TEG WARDOGS live: servers, rounds and stats</h1>
         <div className="mb-4">
           <SectionTabs section="live" current="home" />
         </div>

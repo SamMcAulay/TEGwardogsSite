@@ -187,13 +187,6 @@ export function mainFaction(factions: { key: string; matches: number }[], thresh
   return FACTIONS[top.key] && top.matches / total >= threshold ? top.key : null;
 }
 
-export function experienceName(id: string): string {
-  if (/KOTH_Hardcore/i.test(id)) return 'Hardcore';
-  if (/KOTH_InfantryOnly/i.test(id)) return 'Infantry only';
-  if (/_KOTH_/i.test(id)) return 'King of the Hill';
-  return pretty(id);
-}
-
 export function lightingName(id: string | null | undefined): string {
   if (!id) return '';
   return (

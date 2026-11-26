@@ -226,7 +226,7 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
               )}
               {player.streak && (
                 <div className="text-muted">
-                  {player.streak.n} {player.streak.kind === 'win' ? 'wins' : 'losses'} in a row
+                  {player.streak.n} {player.streak.kind === 'win' ? 'win' : 'loss'}{player.streak.n === 1 ? '' : player.streak.kind === 'win' ? 's' : 'es'} in a row
                 </div>
               )}
             </div>
@@ -443,15 +443,17 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
               {p.recentKills.length ? <KillList kills={p.recentKills} showServer /> : <Empty>Nothing yet.</Empty>}
             </Panel>
           )}
-          <Panel title="Known names" flush>
-            <ul className="divide-y divide-line">
-              {player.aliases.map((a) => (
-                <li key={a} className="px-4 py-2.5 text-sm">
-                  <span className="block truncate">{a}</span>
-                </li>
-              ))}
-            </ul>
-          </Panel>
+          {player.aliases.length > 0 && (
+            <Panel title="Known names" flush>
+              <ul className="divide-y divide-line">
+                {player.aliases.map((a) => (
+                  <li key={a} className="px-4 py-2.5 text-sm">
+                    <span className="block truncate">{a}</span>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
         </div>
       </Container>
     </div>

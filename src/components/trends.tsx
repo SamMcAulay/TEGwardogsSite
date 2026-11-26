@@ -206,13 +206,12 @@ export function PlayerTrends({
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="w-full sm:w-auto">
-          <div role="tablist" aria-label="Trend" className="flex overflow-hidden border border-surface-3 bg-surface sm:inline-flex">
+          <div role="group" aria-label="Trend" className="flex overflow-x-auto border border-surface-3 bg-surface sm:inline-flex">
             {tabs.map((t) => (
               <button
                 key={t.key}
                 type="button"
-                role="tab"
-                aria-selected={tab === t.key}
+                aria-pressed={tab === t.key}
                 onClick={() => setTab(t.key)}
                 className={cx(
                   'flex-1 px-2 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors sm:flex-none sm:px-3',
@@ -253,13 +252,12 @@ export function NetworkActivity({ days, from, today }: { days: { day: string; ro
   };
   return (
     <div>
-      <div role="tablist" aria-label="Activity" className="mb-4 flex overflow-hidden border border-surface-3 bg-surface sm:inline-flex">
+      <div role="group" aria-label="Activity" className="mb-4 flex overflow-x-auto border border-surface-3 bg-surface sm:inline-flex">
         {NET_TABS.map((x) => (
           <button
             key={x.key}
             type="button"
-            role="tab"
-            aria-selected={tab === x.key}
+            aria-pressed={tab === x.key}
             onClick={() => setTab(x.key)}
             className={cx(
               'flex-1 px-2 py-1.5 text-[12px] font-bold whitespace-nowrap transition-colors sm:flex-none sm:px-3',

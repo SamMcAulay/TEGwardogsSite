@@ -125,8 +125,7 @@ body {
   }
 
   /* A plate: the one surface. Flat, square, no blur, no shadow. */
-  .panel,
-  .slab {
+  .panel {
     background: var(--surface);
   }
 
@@ -264,21 +263,6 @@ body {
   animation: pulse-dot 2s infinite;
 }
 
-@keyframes feed-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.feed-in {
-  animation: feed-in 240ms ease-out;
-}
-
 /* Linked members' names: staff aurora, Premium gold sheen, Verified pearl blue, and custom styles */
 .name-aurora,
 .name-pink,
@@ -375,8 +359,7 @@ a:hover > * > .name-verified {
   .name-pink,
   .name-premium,
   .name-verified,
-  .live-dot,
-  .feed-in {
+  .live-dot {
     animation: none;
   }
 }
@@ -430,11 +413,6 @@ a:hover > * > .name-verified {
  * (a stream), all cut from the same plate. Phone first; the desktop layout is layered on at 1100px.
  */
 @layer components {
-  .bc-cond {
-    font-stretch: 75%;
-    font-weight: 800;
-    text-transform: uppercase;
-  }
   /* The one shape: a plate with its leading corner cut. */
   .bc-plate {
     background: var(--surface);
@@ -1087,6 +1065,9 @@ a:hover > * > .name-verified {
     background: #fff;
     color: var(--on-fill);
   }
+  .bc-segs button[aria-pressed='true']:focus-visible {
+    outline-color: var(--onair);
+  }
   .bc-segs button i {
     position: absolute;
     left: 0;
@@ -1349,7 +1330,7 @@ a:hover > * > .name-verified {
     color: var(--muted);
     cursor: pointer;
   }
-  .bc-seg button[aria-selected='true'] {
+  .bc-seg button[aria-pressed='true'] {
     background: #fff;
     color: var(--on-fill);
   }
@@ -1531,7 +1512,7 @@ a:hover > * > .name-verified {
   background: #0d1118;
   animation-duration: 52s;
 }
-.bc-backdrop .bc-st {
+.bc-backdrop .bc-stripe {
   width: 140vw;
   height: 46px;
   left: -20vw;
@@ -1540,7 +1521,7 @@ a:hover > * > .name-verified {
   transform: rotate(-12deg);
   animation: bc-stripe 24s ease-in-out infinite alternate;
 }
-.bc-backdrop .bc-st2 {
+.bc-backdrop .bc-stripe2 {
   top: 64vh;
   height: 6px;
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.18) 40%, transparent);

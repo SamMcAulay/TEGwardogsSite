@@ -76,7 +76,3 @@ export async function member(env: AccountsEnv, discordId: string, f: Fetch = fet
   };
 }
 
-/** The member's role ids in the TEG guild; null when they are not in it. Throws when Discord can't say. */
-export async function memberRoles(env: AccountsEnv, discordId: string, f: Fetch = fetch): Promise<string[] | null> {
-  return (await member(env, discordId, f))?.roles ?? null;
-}

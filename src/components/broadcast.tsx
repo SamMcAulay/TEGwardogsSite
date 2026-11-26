@@ -110,9 +110,13 @@ export function LongestShot({ shot, today }: { shot: RecordShot; today: boolean 
       </div>
       <div className="bc-ruler" />
       <div className="bc-line">
-        <Link prefetch={false} href={`/players/${shot.steamId}`}>
-          {shot.name}
-        </Link>{' '}
+        {shot.steamId ? (
+          <Link prefetch={false} href={`/players/${shot.steamId}`}>
+            {shot.name}
+          </Link>
+        ) : (
+          shot.name
+        )}{' '}
         <em>{causeLabel(shot.cause)} →</em> {shot.victim} <em>· {shot.serverName}</em>
       </div>
     </>
@@ -137,7 +141,7 @@ export function LastResult({ round }: { round: RoundStory }) {
           </span>
         ))}
       </div>
-      <div className="bc-line">{margin <= 5 ? `Photo finish: ${winner.name} held on by ${margin}` : `${winner.name} win by ${margin}`}</div>
+      <div className="bc-line">{margin === 0 ? `A dead heat at ${winner.score}` : margin <= 5 ? `Photo finish: ${winner.name} held on by ${margin}` : `${winner.name} win by ${margin}`}</div>
       {round.turns.length > 0 && (
         <div className="bc-tps">
           {round.turns.slice(-3).map((t) => (
@@ -256,7 +260,7 @@ export function Ticker({ kills, factionOf }: { kills: KillRow[]; factionOf: Reco
   const shown = kills.filter((k) => !k.suicide);
   const items = (copy: string) =>
     shown.map((k) => (
-      <span key={copy + k.eventId}>
+      <span key={copy + k.eventId} role="listitem">
         {sw(k.killerSteamId)}
         {k.killerName ?? 'World'}
         <span className="bc-g">{causeLabel(k.cause)}</span>
@@ -270,7 +274,7 @@ export function Ticker({ kills, factionOf }: { kills: KillRow[]; factionOf: Reco
     <div className="bc-ticker">
       <Link href="/feed">KILL FEED</Link>
       {shown.length ? (
-        <div className="bc-tape" aria-label="Latest kills">
+        <div className="bc-tape" role="list" aria-label="Latest kills">
           {items('a')}
           {/* a second copy so the loop joins up; hidden from screen readers */}
           <span aria-hidden className="contents">

@@ -29,7 +29,17 @@ async function resolve(input: string | undefined): Promise<Resolved | null> {
   return (await safe(getPlayer(steamId))) ?? 'none';
 }
 
-function PlayerInput({ name, value, label, autoFocus }: { name: string; value?: string; label: string; autoFocus?: boolean }) {
+function PlayerInput({
+  name,
+  value,
+  label,
+  autoFocus,
+}: {
+  name: string;
+  value?: string;
+  label: string;
+  autoFocus?: boolean;
+}) {
   return (
     <label className="block min-w-0 flex-1">
       <span className="eyebrow mb-1.5 block !text-[0.66rem]">{label}</span>
@@ -98,9 +108,7 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
           <PlayerInput name="a" value={qa} label="Player one" />
           {/* Arriving from a profile's "Compare with…": only the second player is left to pick. */}
           <PlayerInput name="b" value={qb} label="Player two" autoFocus={!!qa && !qb} />
-          <button className="pill pill-on h-11">
-            Compare
-          </button>
+          <button className="pill pill-on h-11">Compare</button>
         </form>
       </PageHeader>
       <Container className="mt-8">
@@ -111,16 +119,19 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
                 ? 'Stats are temporarily unavailable. Try again in a minute.'
                 : warming
                   ? 'Search is warming up. Try again in a moment.'
-                  : qa || qb
-                    ? `Could not find ${!a && qa ? `“${qa}”` : ''}${!a && qa && !b && qb ? ' or ' : ''}${!b && qb ? `“${qb}”` : ''}${!qa || !qb ? 'both players' : ''}.`
-                    : 'Enter two players to compare.'}
+                  : (a && !qb) || (b && !qa)
+                    ? `Now pick someone to put next to ${(a ?? b)!.data.name}.`
+                    : qa || qb
+                      ? `Could not find ${!a && qa ? `“${qa}”` : ''}${!a && qa && !b && qb ? ' or ' : ''}${!b && qb ? `“${qb}”` : ''}${!qa || !qb ? 'both players' : ''}.`
+                      : 'Enter two players to compare.'}
             </Empty>
           </Panel>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 panel p-5">
               {[a.data, b.data].map((p, i) => (
-                <Link prefetch={false}
+                <Link
+                  prefetch={false}
                   key={p.steamId}
                   href={`/players/${p.steamId}`}
                   className={cx(
@@ -128,7 +139,13 @@ export default async function ComparePage({ searchParams }: PageProps<'/compare'
                     i === 1 && 'col-start-3 flex-row-reverse text-right',
                   )}
                 >
-                  <Avatar name={p.name} steamId={p.steamId} url={p.avatarUrl} size={56} faction={mainFaction(p.factions)} />
+                  <Avatar
+                    name={p.name}
+                    steamId={p.steamId}
+                    url={p.avatarUrl}
+                    size={56}
+                    faction={mainFaction(p.factions)}
+                  />
                   <div className="min-w-0">
                     <div className={cx('flex min-w-0 items-center gap-2', i === 1 && 'flex-row-reverse')}>
                       <PlayerName steamId={p.steamId} name={p.name} className="display text-2xl leading-none" />

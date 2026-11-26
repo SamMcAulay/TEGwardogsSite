@@ -81,11 +81,6 @@ export function turnsOf(timeline: number[][], factions: string[]): Turn[] {
   return turningPoints(timeline, factions.length).map((p) => ({ t: p.t, faction: factions[p.faction], kind: p.kind }));
 }
 
-/**
- * The next three maps on a server with when each should start: the weighted plan when staff run one,
- * else the fixed rotation. Times follow the server page: the round in progress ends on its score
- * pace (or a typical round's length), and each later map runs a typical round.
- */
 /** Seconds into a server's round: the server's own clock, else since its open match started. An empty
  *  server's round sits open for hours with nobody scoring, so that has no clock. */
 export function roundClock(server: ServerRow, matches: MatchRow[], now: number): number | null {
@@ -95,6 +90,11 @@ export function roundClock(server: ServerRow, matches: MatchRow[], now: number):
   return st.matchSeconds ?? (live ? now - live.startedAt : null);
 }
 
+/**
+ * The next three maps on a server with when each should start: the weighted plan when staff run one,
+ * else the fixed rotation. Times follow the server page: the round in progress ends on its score
+ * pace (or a typical round's length), and each later map runs a typical round.
+ */
 export function upNextOf(server: ServerRow, matches: MatchRow[], now: number): UpNext[] {
   const st = server.status;
   if (!st) return [];
@@ -141,6 +141,13 @@ async function story(server: { id: string; shortName: string }, row: MatchRow, n
   };
 }
 
+/** The match list is cached for minutes: just after a map change its open match can still be the
+ *  last round. When the server's own clock says the round began well after that match, it isn't this one. */
+export const sameRound = (server: ServerRow, match: MatchRow, now: number) => {
+  const secs = server.status?.matchSeconds;
+  return secs == null || Math.abs(now - secs - match.startedAt) <= 120;
+};
+
 export async function homeFeed(servers: ServerRow[], recs: { longestShots: RecordShot[]; today: RecordRow[] } | null): Promise<HomeFeed> {
   const now = Math.floor(Date.now() / 1000);
   const lists = await Promise.all(servers.map((s) => quiet(listMatches({ serverId: s.id, limit: 20 }).then((r) => r.data.rows))));
@@ -150,7 +157,7 @@ export async function homeFeed(servers: ServerRow[], recs: { longestShots: Recor
   // The busiest server with a round actually being played.
   const busiest = servers
     .map((s, i) => ({ s, live: lists[i]?.find((m) => m.endedAt == null) }))
-    .filter((x) => x.s.online && x.s.playerCount > 0 && x.live)
+    .filter((x) => x.s.online && x.s.playerCount > 0 && x.live && sameRound(x.s, x.live, now))
     .sort((a, b) => b.s.playerCount - a.s.playerCount)[0];
   const last = servers
     .flatMap((s, i) => (lists[i] ?? []).filter((m) => m.endedAt != null && scored(m.scores)).map((m) => ({ s, m })))

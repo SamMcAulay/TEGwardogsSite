@@ -35,7 +35,7 @@ export function RecentForm({ rounds, streak }: { rounds: PlayerMatchRow[]; strea
         </span>
         {streak && streak.n > 1 && (
           <span className={streak.kind === 'win' ? 'text-good' : 'text-bad'}>
-            {streak.n} {streak.kind === 'win' ? 'wins' : 'losses'} in a row
+            {streak.n} {streak.kind === 'win' ? 'win' : 'loss'}{streak.n === 1 ? '' : streak.kind === 'win' ? 's' : 'es'} in a row
           </span>
         )}
       </div>

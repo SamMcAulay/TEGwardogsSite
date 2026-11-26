@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestMilestone, pickLongest, roundClock, scored, turnsOf } from './feed';
+import { nearestMilestone, pickLongest, roundClock, sameRound, scored, turnsOf } from './feed';
 import type { RecordShot, ServerRow } from './views';
 
 const shot = (distance: number, ts: number): RecordShot => ({ steamId: 's', name: 'n', victim: 'v', cause: 'Id.Item.SVDM', distance, ts, serverId: 'x', serverName: 'EU' });
@@ -51,5 +51,17 @@ describe('scored', () => {
   it('drops rounds nobody scored in', () => {
     expect(scored([{ score: 0 }, { score: 0 }, { score: 0 }])).toBe(false);
     expect(scored([{ score: 0 }, { score: 3 }])).toBe(true);
+  });
+});
+
+describe('sameRound', () => {
+  const server = (matchSeconds: number | null) => ({ status: { matchSeconds } }) as unknown as ServerRow;
+  const match = { startedAt: 1000 } as never;
+  it("trusts the cached open match when the server's clock agrees or is unknown", () => {
+    expect(sameRound(server(600), match, 1630)).toBe(true);
+    expect(sameRound(server(null), match, 9999)).toBe(true);
+  });
+  it('drops it when the server says the round began much later', () => {
+    expect(sameRound(server(30), match, 4000)).toBe(false);
   });
 });

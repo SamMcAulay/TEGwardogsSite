@@ -89,8 +89,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="bc-pl bc-p1" />
           <span className="bc-pl bc-p2" />
           <span className="bc-pl bc-p3" />
-          <span className="bc-st" />
-          <span className="bc-st bc-st2" />
+          <span className="bc-stripe" />
+          <span className="bc-stripe bc-stripe2" />
           <b>WARDOGS</b>
         </div>
         <SiteNav me={me} air={air} />

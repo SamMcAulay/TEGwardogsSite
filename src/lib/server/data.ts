@@ -19,7 +19,7 @@ import { RECORD_CAUSES } from '@/lib/weapon-classes';
 import { clanTag } from '@/lib/clans';
 import { accounts, presenceHidden } from './accounts';
 import { MAX_FRIENDS } from './accounts/store';
-import { maskAward, maskKill, maskLine, maskLive, RECENT_S, recentRound } from './presence';
+import { HIDDEN_NAME, maskAward, maskKill, maskLine, maskLive, RECENT_S, recentRound } from './presence';
 import { momentum } from '@/lib/momentum';
 import type { ReplayData } from '@/lib/replay';
 import { groupClans, type Clan, type ClanSort } from './clans';
@@ -991,6 +991,8 @@ export async function records(): Promise<Loaded<Records>> {
   let stale = banned.stale;
   const missing = new Set<string>();
 
+  const hidden = presenceHidden();
+  const nowS = Math.floor(Date.now() / 1000);
   const searches = list.flatMap((s) => RECORD_CAUSES.map((cause) => ({ serverId: s.id, cause })));
   const found = await mapLimited(searches, 4, async ({ serverId, cause }) => {
     try {
@@ -1016,16 +1018,22 @@ export async function records(): Promise<Loaded<Records>> {
     })
     .sort((a, b) => b.k.distanceM! - a.k.distanceM!)
     .slice(0, RECORD_ROWS)
-    .map(({ k, serverId }) => ({
-      steamId: k.killer!.steamId,
-      name: k.killer!.name,
-      victim: k.victim.name,
-      cause: k.cause ?? '',
-      distance: k.distanceM!,
-      ts: sec(k.ts)!,
-      serverId,
-      serverName: nameOf.get(serverId) ?? serverId,
-    }));
+    .map(({ k, serverId }) => {
+      const ts = sec(k.ts)!;
+      // A recent shot says where its players were: hidden members go unnamed, as in every kill feed.
+      const recent = nowS - ts <= RECENT_S;
+      const killerHidden = recent && hidden.has(k.killer!.steamId);
+      return {
+        steamId: killerHidden ? '' : k.killer!.steamId,
+        name: killerHidden ? HIDDEN_NAME : k.killer!.name,
+        victim: recent && hidden.has(k.victim.steamId) ? HIDDEN_NAME : k.victim.name,
+        cause: k.cause ?? '',
+        distance: k.distanceM!,
+        ts,
+        serverId,
+        serverName: nameOf.get(serverId) ?? serverId,
+      };
+    });
 
   let board: WBoardRow[] = [];
   try {
