@@ -180,6 +180,8 @@ export interface MatchRow {
   scores: { name: string; colorHex: string; score: number }[];
   peakPlayers: number;
   players: number;
+  /** seconds with people on, when listMatches was asked for it and the history reaches back */
+  playedSeconds?: number | null;
 }
 
 export interface MatchPlayerRow {

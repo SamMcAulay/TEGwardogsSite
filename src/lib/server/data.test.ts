@@ -713,6 +713,21 @@ describe('records', () => {
     expect(r.data.longestShots.filter((x) => x.serverName === 'EU#1').map((x) => [x.name, x.distance])).toEqual([['K2', 1199], ['K4', 880]]);
   });
 
+  test('a recent shot leaves hidden members unnamed; an old one names them', async () => {
+    presence.hidden = new Set([id(2), id(99)]);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-10T13:00:00Z'));
+      const recent = (await records()).data.longestShots[0];
+      expect([recent.name, recent.steamId, recent.victim]).toEqual(['Hidden player', '', 'Hidden player']);
+      vi.setSystemTime(new Date('2026-10-11T12:00:00Z'));
+      const old = (await records()).data.longestShots[0];
+      expect([old.name, old.victim]).toEqual(['K2', 'V']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('a failed search marks its server missing instead of failing the page', async () => {
     api.kills.mockRejectedValue(new Error('down'));
     const r = await records();

@@ -30,6 +30,8 @@ export const metadata: Metadata = {
   description:
     'Live server status, player profiles, match history and leaderboards for The Employed Gamers WARDOGS servers.',
   metadataBase: process.env.SITE_URL ? new URL(process.env.SITE_URL) : undefined,
+  // A link pasted into Discord shows this card unless the page names its own picture.
+  openGraph: { siteName: 'TEG WARDOGS', type: 'website', images: ['/icons/icon-512.png'] },
   // Installed on an iPhone's home screen: open full screen, named WARDOGS under the icon.
   appleWebApp: { capable: true, title: 'WARDOGS', statusBarStyle: 'black-translucent' },
 };
@@ -89,8 +91,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="bc-pl bc-p1" />
           <span className="bc-pl bc-p2" />
           <span className="bc-pl bc-p3" />
-          <span className="bc-st" />
-          <span className="bc-st bc-st2" />
+          <span className="bc-stripe" />
+          <span className="bc-stripe bc-stripe2" />
           <b>WARDOGS</b>
         </div>
         <SiteNav me={me} air={air} />

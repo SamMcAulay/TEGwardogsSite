@@ -12,7 +12,7 @@ import {
   Ticker,
   Tower,
 } from '@/components/broadcast';
-import { Feed, Standings, type Bug, type Segment } from '@/components/broadcast-feed';
+import { ClockAt, Feed, Standings, type Bug, type Segment } from '@/components/broadcast-feed';
 import { AutoRefresh } from '@/components/client';
 import { safe } from '@/components/section';
 import { SectionTabs } from '@/components/section-tabs';
@@ -97,7 +97,16 @@ export default async function Home() {
       art: mapArt(map, st.lighting),
       cam: `CAM ${n + 1}`,
       source: s.name,
-      where: [map, [lightingName(st.lighting), clock != null && `round ${mmss(clock)}`, `${s.playerCount}/${st.players.max} playing`].filter(Boolean).join(' · ')],
+      where: [
+        map,
+        s.playerCount === 0 && feed.busyAt[s.id] ? (
+          <>
+            Quiet right now · usually busiest around <ClockAt ts={feed.busyAt[s.id]!} />
+          </>
+        ) : (
+          [lightingName(st.lighting), clock != null && `round ${mmss(clock)}`, `${s.playerCount}/${st.players.max} playing`].filter(Boolean).join(' · ')
+        ),
+      ],
       bug: n,
       href: `/servers/${s.slug}`,
     };
@@ -202,6 +211,7 @@ export default async function Home() {
     <>
       <AutoRefresh seconds={15} />
       <div className="mx-auto max-w-[1480px] px-4 pt-2 md:px-[clamp(16px,2.4vw,32px)]">
+        <h1 className="sr-only">TEG WARDOGS live: servers, rounds and stats</h1>
         <div className="mb-4">
           <SectionTabs section="live" current="home" />
         </div>
@@ -225,14 +235,14 @@ export default async function Home() {
 
         <div className="bc-wall">
           <section>
-            <Heading title="Standings this week" href="/leaderboards" link="Leaderboards" />
+            <Heading title="Standings · last 7 days" href="/leaderboards" link="Leaderboards" />
             <Standings kills={board(killsBoard, (row) => int(row.kills))} kd={board(kdBoard, (row) => kd(row.kills, row.deaths))} />
           </section>
           <section>
-            <Heading title="Results" href="/matches" link="All matches" />
+            <Heading title="Latest results" href="/matches" link="All matches" />
             <Results rounds={recent.map((m) => ({ serverId: m.serverId, serverName: shortNameOf(m.serverName), matchId: m.matchId, map: mapName(m.map), scores: m.scores }))} />
             <div className="mt-[clamp(16px,2.4vw,32px)]">
-              <Heading title="Climbing" href="/leaderboards?metric=kills&period=all" link="All-time board" />
+              <Heading title="Climbing the all-time board · 7 days" href="/leaderboards?metric=kills&period=all" link="All-time board" />
               <Tower
                 empty="Nobody has climbed the all-time board this week yet."
                 rows={climbers.map(({ row, up }) => ({ key: row.steamId, href: `/players/${row.steamId}`, name: row.name, value: <span className="text-good">+{up}</span> }))}
@@ -240,7 +250,7 @@ export default async function Home() {
             </div>
           </section>
           <section>
-            <Heading title="Today" />
+            <Heading title="Last 24 hours" />
             {summary instanceof Error ? (
               <p className="bc-empty">Today&apos;s numbers are temporarily unavailable.</p>
             ) : (
@@ -259,7 +269,7 @@ export default async function Home() {
               </div>
             )}
             <div className="mt-[clamp(16px,2.4vw,32px)]">
-              <Heading title="Top dogs today" href="/records" link="Records" />
+              <Heading title="Most kills · 24 hours" href="/records" link="Records" />
               <Tower
                 empty="No kills in the last 24 hours."
                 rows={(recs instanceof Error ? [] : recs.data.today.slice(0, 3)).map((row) => ({ key: row.steamId, href: `/players/${row.steamId}`, name: row.name, value: int(row.value) }))}

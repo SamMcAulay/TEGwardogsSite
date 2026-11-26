@@ -11,7 +11,7 @@ import { getServers, recentPlayers, searchPlayers } from '@/lib/server/data';
 import type { PlayerSearchRow } from '@/lib/server/views';
 import { one } from '@/lib/url';
 
-export const metadata: Metadata = { title: 'Players' };
+export const metadata: Metadata = { title: 'Players', description: 'Find any player on the TEG WARDOGS servers and see who is online now.' };
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 

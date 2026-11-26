@@ -193,11 +193,12 @@ function above(sorted: Float64Array, v: number): number {
  * the board snapshots). masked: the viewer may not see this hidden player's recent play, so
  * rounds from the last RECENT_S are left out.
  */
-export async function playerTrends(steamId: string, masked = false): Promise<PlayerTrends | null> {
+/** since: the first second counted (the season's start); rounds and rank days before it are left out. */
+export async function playerTrends(steamId: string, masked = false, since = SEASON_TWO_START): Promise<PlayerTrends | null> {
   const h = history();
   if (!h) return null;
   const now = nowSec();
-  const rounds = h.playerRounds(steamId, SEASON_TWO_START).filter((r) => !masked || now - r.endedAt > RECENT_S);
+  const rounds = h.playerRounds(steamId, since).filter((r) => !masked || now - r.endedAt > RECENT_S);
   const p = ratings()?.get(steamId);
   // Masked: only rounds that ended over RECENT_S ago, as with the days above.
   const rated = !p ? [] : masked ? historyBefore(p, now - RECENT_S) : p.history;
@@ -222,6 +223,7 @@ export async function playerTrends(steamId: string, masked = false): Promise<Pla
   if (mine.length && !ban.has(steamId)) {
     // Masked: a snapshot under RECENT_S old could hold a round they just played.
     for (const { day, takenAt } of h.snapshotTimes()) {
+      if (day < dayOf(since)) continue;
       if (masked && now - takenAt <= RECENT_S) continue;
       const own = mine.filter((m) => m.day <= day).at(-1);
       if (!own) continue;

@@ -125,8 +125,7 @@ body {
   }
 
   /* A plate: the one surface. Flat, square, no blur, no shadow. */
-  .panel,
-  .slab {
+  .panel {
     background: var(--surface);
   }
 
@@ -151,6 +150,12 @@ body {
     color: var(--text);
     transition: background 120ms, color 120ms;
     white-space: nowrap;
+  }
+  /* Fingers need a bigger target than a mouse: buttons reach 44px tall on touch screens. */
+  @media (pointer: coarse) {
+    .pill {
+      min-height: 44px;
+    }
   }
   .pill:hover {
     background: var(--surface-3);
@@ -264,21 +269,6 @@ body {
   animation: pulse-dot 2s infinite;
 }
 
-@keyframes feed-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.feed-in {
-  animation: feed-in 240ms ease-out;
-}
-
 /* Linked members' names: staff aurora, Premium gold sheen, Verified pearl blue, and custom styles */
 .name-aurora,
 .name-pink,
@@ -375,8 +365,7 @@ a:hover > * > .name-verified {
   .name-pink,
   .name-premium,
   .name-verified,
-  .live-dot,
-  .feed-in {
+  .live-dot {
     animation: none;
   }
 }
@@ -430,11 +419,6 @@ a:hover > * > .name-verified {
  * (a stream), all cut from the same plate. Phone first; the desktop layout is layered on at 1100px.
  */
 @layer components {
-  .bc-cond {
-    font-stretch: 75%;
-    font-weight: 800;
-    text-transform: uppercase;
-  }
   /* The one shape: a plate with its leading corner cut. */
   .bc-plate {
     background: var(--surface);
@@ -519,8 +503,26 @@ a:hover > * > .name-verified {
   .bc-search:hover {
     color: #fff;
   }
-  .bc-search span {
+  .bc-search-box {
     display: none;
+  }
+  .bc-search-box:focus-within {
+    color: #fff;
+    outline: 2px solid #fff;
+    outline-offset: -2px;
+  }
+  .bc-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: none;
+    border: 0;
+    outline: none;
+    color: var(--text);
+    font: inherit;
+  }
+  .bc-search input::placeholder {
+    color: var(--dim);
   }
   .bc-air {
     display: none;
@@ -548,8 +550,11 @@ a:hover > * > .name-verified {
       flex: 1 1 180px;
       max-width: 300px;
     }
-    .bc-search span {
-      display: inline;
+    .bc-search-icon {
+      display: none;
+    }
+    .bc-search-box {
+      display: flex;
     }
   }
   @media (min-width: 1200px) {
@@ -912,6 +917,13 @@ a:hover > * > .name-verified {
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
+  a.bc-k:hover {
+    background: var(--accent);
+  }
+  a.bc-k:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
   .bc-huge {
     font-weight: 900;
     font-size: clamp(80px, 12vw, 190px);
@@ -1058,6 +1070,17 @@ a:hover > * > .name-verified {
     margin-top: 2px;
     overflow-x: auto;
     scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .bc-segs button {
+    scroll-snap-align: start;
+  }
+  /* Phones: the strip runs off the edge; a fade there says there's more to swipe to. */
+  @media (max-width: 899px) {
+    .bc-segs {
+      mask-image: linear-gradient(90deg, #000 82%, transparent);
+      padding-right: 40px;
+    }
   }
   .bc-segs button {
     position: relative;
@@ -1086,6 +1109,9 @@ a:hover > * > .name-verified {
   .bc-segs button[aria-pressed='true'] {
     background: #fff;
     color: var(--on-fill);
+  }
+  .bc-segs button[aria-pressed='true']:focus-visible {
+    outline-color: var(--onair);
   }
   .bc-segs button i {
     position: absolute;
@@ -1194,8 +1220,10 @@ a:hover > * > .name-verified {
   .bc-slot[data-now] {
     background: var(--surface-2);
   }
+  /* 19px bold is "large text" (3:1 needed); red on the slot is 4.1:1, short of 4.5 for smaller type. */
   .bc-slot[data-now] .bc-t {
     color: var(--accent);
+    font-size: 19px;
   }
 
   /* ticker */
@@ -1349,7 +1377,7 @@ a:hover > * > .name-verified {
     color: var(--muted);
     cursor: pointer;
   }
-  .bc-seg button[aria-selected='true'] {
+  .bc-seg button[aria-pressed='true'] {
     background: #fff;
     color: var(--on-fill);
   }
@@ -1383,8 +1411,10 @@ a:hover > * > .name-verified {
   .bc-trio span {
     display: grid;
     place-items: center;
+    align-content: center;
+    gap: 2px;
     min-width: 42px;
-    height: 34px;
+    height: 42px;
     background: var(--surface-2);
     font-weight: 800;
     font-size: 18px;
@@ -1393,6 +1423,11 @@ a:hover > * > .name-verified {
   }
   .bc-trio span[data-win] {
     color: var(--on-fill);
+  }
+  .bc-trio small {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
   }
   .bc-photo {
     grid-column: 1 / -1;
@@ -1531,7 +1566,7 @@ a:hover > * > .name-verified {
   background: #0d1118;
   animation-duration: 52s;
 }
-.bc-backdrop .bc-st {
+.bc-backdrop .bc-stripe {
   width: 140vw;
   height: 46px;
   left: -20vw;
@@ -1540,7 +1575,7 @@ a:hover > * > .name-verified {
   transform: rotate(-12deg);
   animation: bc-stripe 24s ease-in-out infinite alternate;
 }
-.bc-backdrop .bc-st2 {
+.bc-backdrop .bc-stripe2 {
   top: 64vh;
   height: 6px;
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.18) 40%, transparent);

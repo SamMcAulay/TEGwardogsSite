@@ -195,13 +195,13 @@ export function BarChart({
             <span className="ml-2">{hb.label}</span>
           </>
         ) : (
-          <span className="text-dim">Hover a bar for detail</span>
+          <span className="text-dim">Hover or tap a bar for detail</span>
         )}
       </div>
       <div
         className="flex items-end gap-[3px] border-b border-line"
         style={{ height }}
-        onPointerLeave={() => setHover(null)}
+        onPointerLeave={(e) => e.pointerType !== 'touch' && setHover(null)}
       >
         {bars.map((b, i) => (
           <div

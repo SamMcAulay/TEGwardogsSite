@@ -9,9 +9,11 @@ import { duration, pct } from '@/lib/format';
 import { factionColor, lightingName, mapName } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { factionWins, getServers, listMatches } from '@/lib/server/data';
+import { wasPlayed } from '@/lib/server/rounds';
+import type { MatchRow } from '@/lib/server/views';
 import { one, pageParam, withParams } from '@/lib/url';
 
-export const metadata: Metadata = { title: 'Match history' };
+export const metadata: Metadata = { title: 'Match history', description: 'Every round on the TEG WARDOGS servers: map, length, final score and winner.' };
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -27,6 +29,9 @@ function CloseBadge({ scores }: { scores: number[] }) {
   );
 }
 
+/** Rounds on an empty server that ended at nil-all (overnight idling, restarts) aren't matches anyone played. */
+const shown = (m: MatchRow) => m.endedAt == null || wasPlayed(m);
+
 export default async function MatchesPage({ searchParams }: PageProps<'/matches'>) {
   const sp = await searchParams;
   const servers = await safe(getServers());
@@ -34,7 +39,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
   const serverId = serverList.some((s) => s.id === one(sp.server)) ? one(sp.server)! : null;
   // Older pages only per server (spec §12.5): "All servers" is the newest 50 merged.
   const page = serverId ? pageParam(one(sp.page)) : 1;
-  const [matches, wins] = await Promise.all([safe(listMatches({ serverId, page })), safe(factionWins(null))]);
+  const [matches, wins] = await Promise.all([safe(listMatches({ serverId, page, played: true })), safe(factionWins(null))]);
   if (!(matches instanceof Error) && !matches.missing.length && page > matches.data.pages) {
     redirect(withParams('/matches', sp, { page: matches.data.pages > 1 ? matches.data.pages : null }));
   }
@@ -102,7 +107,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                         </tr>
                       </thead>
                       <tbody>
-                        {rows.map((m) => (
+                        {rows.filter(shown).map((m) => (
                           <tr key={`${m.serverId}-${m.id}`}>
                             <td>
                               <Link prefetch={false} href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
@@ -112,7 +117,7 @@ export default async function MatchesPage({ searchParams }: PageProps<'/matches'
                             </td>
                             <td className="text-muted">{m.serverName}</td>
                             <td className="whitespace-normal text-muted"><LocalTime ts={m.startedAt} /></td>
-                            <td className="r hidden sm:table-cell">{duration((m.endedAt ?? now) - m.startedAt)}</td>
+                            <td className="r hidden sm:table-cell">{duration(m.playedSeconds ?? (m.endedAt ?? now) - m.startedAt)}</td>
                             <td className="r hidden sm:table-cell">{m.players}</td>
                             <td className="hidden sm:table-cell">
                               <div className="flex h-2 w-48 gap-px bg-surface-3">

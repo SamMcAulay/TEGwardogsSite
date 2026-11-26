@@ -9,7 +9,7 @@ import { PlayerLink } from '@/components/player';
 import { safe } from '@/components/section';
 import { Badge, Container, cx, Empty, FactionTag, Meter, Panel, Stat, StatGrid } from '@/components/ui';
 import { duration, int, kd, metres, money } from '@/lib/format';
-import { causeLabel, factionColor, KOTH_CAP, lightingName, mapName } from '@/lib/game';
+import { causeLabel, factionColor, KOTH_CAP, lightingName, mapArt, mapName } from '@/lib/game';
 import { MatchReplay } from '@/components/replay';
 import { getMatch } from '@/lib/server/data';
 import type { MatchPlayerRow } from '@/lib/server/views';
@@ -29,7 +29,11 @@ export async function generateMetadata({ params }: PageProps<'/matches/[serverId
   if (loaded === null) return { title: 'Match not found' };
   if (loaded instanceof Error) return { title: 'Match' };
   const m = loaded.data.match;
-  return { title: `${mapName(m.map)} on ${m.serverName}` };
+  const title = `${mapName(m.map)} on ${m.serverName}`;
+  const score = m.scores.map((s) => `${s.name} ${s.score}`).join(' · ');
+  const description = m.endedAt ? `${m.winner ? `${m.winner} won. ` : ''}Final: ${score}. Scoreboard, kills and how the lead changed.` : `Live now: ${score}.`;
+  const art = mapArt(mapName(m.map), m.lighting);
+  return { title, description, openGraph: { title, description, ...(art ? { images: [art] } : {}) } };
 }
 
 /** Score over time, one line per faction on a shared scale. */

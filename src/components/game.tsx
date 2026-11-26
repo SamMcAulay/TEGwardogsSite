@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { contours } from '@/lib/topo';
-import { ago, clock, duration, metres } from '@/lib/format';
-import { causeInfo, factionColor, lightingName, mapArt, mapName, type MapWins, REGION_NAMES, ROTATION, type RotationStop, rotationView } from '@/lib/game';
-import type { FactionScore, KillRow, ServerRow, ServerStatus } from '@/lib/server/views';
+import { ago, duration, metres } from '@/lib/format';
+import { causeInfo, factionColor, lightingName, mapArt, mapName, type MapWins, ROTATION, type RotationStop, rotationView } from '@/lib/game';
+import type { FactionScore, KillRow, ServerStatus } from '@/lib/server/views';
 
 import { PlayerName } from './tier';
-import { cx, RaceLane, StatusDot } from './ui';
+import { cx, RaceLane } from './ui';
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 
@@ -56,61 +56,6 @@ export function FactionScores({
 
 export const statusLabel = (online: boolean | null) =>
   online === null ? 'Status unavailable' : online ? 'Online' : 'Offline';
-
-export function ServerCard({ server }: { server: ServerRow }) {
-  const st = server.status;
-  const pop = server.playerCount;
-  const max = st?.players.max ?? 0;
-  const fill = max ? pop / max : 0;
-  const art = st ? mapArt(mapName(st.map), st.lighting) : null;
-  return (
-    <Link href={`/servers/${server.slug}`} className="group panel relative block overflow-hidden">
-      <div className="relative h-28 overflow-hidden bg-surface-2 text-accent/60">
-        {art ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={art} alt="" loading="lazy" decoding="async" className={cx('absolute inset-0 h-full w-full object-cover', !server.online && 'opacity-30 grayscale')} />
-        ) : (
-          <MapBackdrop map={st?.map} className={server.online ? '' : 'opacity-30 grayscale'} />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-r from-bg/85 to-bg/20" />
-        <div className="absolute top-3 left-5 flex items-center gap-2 text-sm font-bold">
-          <StatusDot online={server.online} />
-          {statusLabel(server.online)}
-        </div>
-        <div className="absolute top-3 right-5 text-sm font-bold text-muted">{REGION_NAMES[server.region] ?? server.region}</div>
-        <div className="display absolute bottom-3 left-5 text-2xl">{server.shortName}</div>
-        <div className="display num absolute right-5 bottom-3 text-2xl">
-          {server.online ? pop : '—'}
-          <span className="text-base text-muted">/{max || '—'}</span>
-        </div>
-      </div>
-      <div className="px-5 pt-4 pb-5">
-        <div className="mb-4 h-2.5 overflow-hidden bg-surface-3">
-          <div className="h-full bg-onair transition-[width] duration-700" style={{ width: `${fill * 100}%` }} />
-        </div>
-        {st ? (
-          <>
-            <div className="mb-3 flex items-center justify-between text-sm">
-              <span className="font-extrabold">{mapName(st.map)}</span>
-              <span className="text-muted">
-                King of the Hill{st.matchSeconds != null && <span className="num"> · {clock(st.matchSeconds)}</span>}
-              </span>
-            </div>
-            <FactionScores scores={st.factionScores} cap={st.scoreCap} compact />
-          </>
-        ) : (
-          <div className="py-5 text-center text-sm text-muted">
-            {server.online === null
-              ? 'Status unavailable right now'
-              : server.updatedAt
-                ? `Last seen ${ago(server.updatedAt)}`
-                : 'Waiting for first contact'}
-          </div>
-        )}
-      </div>
-    </Link>
-  );
-}
 
 const TAG_LABEL: Record<string, string> = {
   Headshot: 'HS',

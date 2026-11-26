@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestMilestone, pickLongest, roundClock, scored, turnsOf } from './feed';
+import { nearestMilestone, nextBusiest, pickLongest, roundClock, sameRound, scored, turnsOf } from './feed';
 import type { RecordShot, ServerRow } from './views';
 
 const shot = (distance: number, ts: number): RecordShot => ({ steamId: 's', name: 'n', victim: 'v', cause: 'Id.Item.SVDM', distance, ts, serverId: 'x', serverName: 'EU' });
@@ -51,5 +51,32 @@ describe('scored', () => {
   it('drops rounds nobody scored in', () => {
     expect(scored([{ score: 0 }, { score: 0 }, { score: 0 }])).toBe(false);
     expect(scored([{ score: 0 }, { score: 3 }])).toBe(true);
+  });
+});
+
+describe('sameRound', () => {
+  const server = (matchSeconds: number | null) => ({ status: { matchSeconds } }) as unknown as ServerRow;
+  const match = { startedAt: 1000 } as never;
+  it("trusts the cached open match when the server's clock agrees or is unknown", () => {
+    expect(sameRound(server(600), match, 1630)).toBe(true);
+    expect(sameRound(server(null), match, 9999)).toBe(true);
+  });
+  it('drops it when the server says the round began much later', () => {
+    expect(sameRound(server(30), match, 4000)).toBe(false);
+  });
+});
+
+describe('nextBusiest', () => {
+  const day = 86_400;
+  // Two days of 2 h buckets: 20:00 UTC is the busy one.
+  const points = [0, 1].flatMap((d) => Array.from({ length: 12 }, (_, h) => ({ ts: d * day + h * 7200, players: h === 10 ? 40 : 3 })));
+  it("gives today's busy time when it is still to come", () => {
+    expect(nextBusiest(points, 5 * day + 3600)).toBe(5 * day + 20 * 3600);
+  });
+  it("gives tomorrow's once today's has passed", () => {
+    expect(nextBusiest(points, 5 * day + 21 * 3600)).toBe(6 * day + 20 * 3600);
+  });
+  it('is null with no history', () => {
+    expect(nextBusiest([], 0)).toBeNull();
   });
 });

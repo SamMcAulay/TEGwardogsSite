@@ -36,7 +36,7 @@ export interface Segment {
   cam: string;
   source: string;
   /** the map title bottom right */
-  where?: [string, string];
+  where?: [string, ReactNode];
   /** where the map title leads: the server's own page */
   href?: string;
   /** which scorebug this segment is about */
@@ -62,19 +62,23 @@ function useReducedMotion(): boolean {
 
 export function Feed({ bugs, segments, lowerThird }: { bugs: Bug[]; segments: Segment[]; lowerThird: ReactNode }) {
   const reduce = useReducedMotion();
-  const [on, setOn] = useState(0);
+  // Track the segment by id: each 15s refresh hands over a new list, maybe with a segment more or less.
+  const [onId, setOnId] = useState(segments[0]?.id);
   // Each take adds a camera that wipes in over the last one; the old ones go once it has landed.
   const [cams, setCams] = useState<{ key: number; art: string | null; dim: boolean }[]>(() =>
     segments.length ? [{ key: 0, art: segments[0].art, dim: !!segments[0].dim }] : [],
   );
   const takes = useRef(0);
-  const i = Math.min(on, Math.max(0, segments.length - 1));
+  // The director holds the shot while the viewer is pointing at or tabbed into the feed.
+  const [held, setHeld] = useState(false);
+  const i = Math.max(0, segments.findIndex((s) => s.id === onId));
   const seg = segments[i];
+  const ids = segments.map((s) => s.id).join();
 
   function take(n: number) {
     const next = segments[n];
     if (!next) return;
-    setOn(n);
+    setOnId(next.id);
     const key = ++takes.current;
     setCams((c) => [...c.slice(-1), { key, art: next.art, dim: !!next.dim }]);
   }
@@ -88,19 +92,24 @@ export function Feed({ bugs, segments, lowerThird }: { bugs: Bug[]; segments: Se
 
   // The director moves on every few seconds, unless motion is reduced or the tab is hidden.
   useEffect(() => {
-    if (reduce || segments.length < 2) return;
+    if (reduce || held || segments.length < 2) return;
     const t = setTimeout(() => {
       if (!document.hidden) take((i + 1) % segments.length);
     }, SEGMENT_MS);
     return () => clearTimeout(t);
-    // take is stable enough: it only reads segments, which this effect lists
+    // keyed on the ids, not the array: a refresh must not restart the segment's clock
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i, reduce, segments]);
+  }, [i, reduce, held, ids]);
 
   if (!seg) return null;
   const live = cams.at(-1)?.key;
   return (
-    <div>
+    <div
+      onMouseEnter={() => setHeld(true)}
+      onMouseLeave={() => setHeld(false)}
+      onFocus={() => setHeld(true)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setHeld(false)}
+    >
       <section className="bc-feed" aria-label={`Feed: ${seg.label}`} data-full={seg.body ? '' : undefined}>
         {cams.map((c) => (
           <div key={c.key} className={['bc-cam', c.dim && 'bc-dim', c.key === live && cams.length > 1 && 'bc-in'].filter(Boolean).join(' ')}>
@@ -129,16 +138,22 @@ export function Feed({ bugs, segments, lowerThird }: { bugs: Bug[]; segments: Se
               >
                 <span className="bc-sv">{b.name}</span>
                 {b.scores.map((s) => (
-                  <span key={s.name} className="bc-tm num">
+                  <span key={s.name} className="bc-tm num" title={`${s.name}: ${s.score} points`}>
                     <small style={{ background: factionColor(s.name) }}>{FACTIONS[s.name]?.short ?? s.name.slice(0, 3).toUpperCase()}</small>
                     {s.score}
                   </span>
                 ))}
-                {b.clock != null && <span className="bc-clk num">{mmss(b.clock)}</span>}
+                {b.clock != null && (
+                  <span className="bc-clk num" title="Round time">
+                    {mmss(b.clock)}
+                  </span>
+                )}
                 {b.max != null && b.players >= b.max ? (
-                  <span className="bc-ful">FULL</span>
+                  <span className="bc-ful" title={`${b.players} of ${b.max} slots taken`}>
+                    FULL
+                  </span>
                 ) : (
-                  <span className="bc-clk num">
+                  <span className="bc-clk num" title={`${b.players} playing of ${b.max ?? '?'} slots`}>
                     {b.players}/{b.max ?? '—'}
                   </span>
                 )}
@@ -175,7 +190,7 @@ export function Feed({ bugs, segments, lowerThird }: { bugs: Bug[]; segments: Se
             {s.label}
             <small>{s.sub}</small>
             {/* restart the progress bar on every take */}
-            {n === i && !reduce && <i key={cams.at(-1)?.key} />}
+            {n === i && !reduce && !held && <i key={cams.at(-1)?.key} />}
           </button>
         ))}
       </div>
@@ -188,15 +203,15 @@ export function Standings({ kills, kd }: { kills: ReactNode; kd: ReactNode }) {
   const [tab, setTab] = useState<'kills' | 'kd'>('kills');
   return (
     <>
-      <div className="bc-seg" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'kills'} onClick={() => setTab('kills')}>
+      <div className="bc-seg" role="group" aria-label="Rank by">
+        <button type="button" aria-pressed={tab === 'kills'} onClick={() => setTab('kills')}>
           Kills
         </button>
-        <button type="button" role="tab" aria-selected={tab === 'kd'} onClick={() => setTab('kd')}>
+        <button type="button" aria-pressed={tab === 'kd'} onClick={() => setTab('kd')}>
           K/D
         </button>
       </div>
-      <div role="tabpanel">{tab === 'kills' ? kills : kd}</div>
+      <div>{tab === 'kills' ? kills : kd}</div>
     </>
   );
 }

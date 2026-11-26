@@ -52,10 +52,14 @@ export function SiteNav({ me, air }: { me: Me; air: { live: number; playing: num
             ))}
             {me !== undefined && <YouMenu me={me} count={count} on={tab === 'you'} />}
           </nav>
-          <Link href="/players" className="bc-search bc-plate" aria-label="Find a player">
+          {/* Phones: an icon to the players page; wider: type and press Enter. */}
+          <Link href="/players" className="bc-search bc-search-icon bc-plate" aria-label="Find a player">
             <SearchIcon />
-            <span>Find a player</span>
           </Link>
+          <form action="/players" role="search" className="bc-search bc-search-box bc-plate">
+            <SearchIcon />
+            <input name="q" type="search" placeholder="Find a player" aria-label="Find a player" autoComplete="off" />
+          </form>
           {air && (
             <span className="bc-air">
               <i aria-hidden />
@@ -222,7 +226,7 @@ function BottomBar({ me, count }: { me: Me; count: number }) {
   useDismiss(you, () => setYouOn(null), panel, toggle);
   const item = (on: boolean) =>
     cx(
-      'flex flex-col items-center justify-center gap-1 py-2 text-xs font-extrabold uppercase tracking-wider [font-stretch:80%]',
+      'flex min-h-11 flex-col items-center justify-center gap-1 py-2 text-xs font-extrabold uppercase tracking-wider [font-stretch:80%]',
       on ? 'bg-white text-on-fill' : 'text-muted',
     );
   return (

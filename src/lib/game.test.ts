@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { factionColor, mainFaction, mapArt, mapWins, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
+import { mainFaction, mapArt, mapWins, ROTATION, roundEta, rotationStarts, rotationView, typicalRound } from './game';
 
 describe('mainFaction', () => {
   it('picks a faction holding at least 65% of rounds', () => {
