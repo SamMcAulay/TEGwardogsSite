@@ -56,7 +56,7 @@ export function Avatar({
   if (url) {
     // Steam CDN avatars; plain img keeps next/image remote config out of self-hosted setups.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" width={size} height={size} className={cx('shrink-0 bg-surface-3', className)} style={ringCss} />;
+    return <img src={url} alt="" width={size} height={size} loading="lazy" className={cx('shrink-0 bg-surface-3', className)} style={ringCss} />;
   }
   const h = hue(steamId);
   return (

@@ -151,6 +151,12 @@ body {
     transition: background 120ms, color 120ms;
     white-space: nowrap;
   }
+  /* Fingers need a bigger target than a mouse: buttons reach 44px tall on touch screens. */
+  @media (pointer: coarse) {
+    .pill {
+      min-height: 44px;
+    }
+  }
   .pill:hover {
     background: var(--surface-3);
   }
@@ -497,8 +503,26 @@ a:hover > * > .name-verified {
   .bc-search:hover {
     color: #fff;
   }
-  .bc-search span {
+  .bc-search-box {
     display: none;
+  }
+  .bc-search-box:focus-within {
+    color: #fff;
+    outline: 2px solid #fff;
+    outline-offset: -2px;
+  }
+  .bc-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    background: none;
+    border: 0;
+    outline: none;
+    color: var(--text);
+    font: inherit;
+  }
+  .bc-search input::placeholder {
+    color: var(--dim);
   }
   .bc-air {
     display: none;
@@ -526,8 +550,11 @@ a:hover > * > .name-verified {
       flex: 1 1 180px;
       max-width: 300px;
     }
-    .bc-search span {
-      display: inline;
+    .bc-search-icon {
+      display: none;
+    }
+    .bc-search-box {
+      display: flex;
     }
   }
   @media (min-width: 1200px) {
@@ -890,6 +917,13 @@ a:hover > * > .name-verified {
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
+  a.bc-k:hover {
+    background: var(--accent);
+  }
+  a.bc-k:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
   .bc-huge {
     font-weight: 900;
     font-size: clamp(80px, 12vw, 190px);
@@ -1036,6 +1070,17 @@ a:hover > * > .name-verified {
     margin-top: 2px;
     overflow-x: auto;
     scrollbar-width: none;
+    scroll-snap-type: x proximity;
+  }
+  .bc-segs button {
+    scroll-snap-align: start;
+  }
+  /* Phones: the strip runs off the edge; a fade there says there's more to swipe to. */
+  @media (max-width: 899px) {
+    .bc-segs {
+      mask-image: linear-gradient(90deg, #000 82%, transparent);
+      padding-right: 40px;
+    }
   }
   .bc-segs button {
     position: relative;
@@ -1175,8 +1220,10 @@ a:hover > * > .name-verified {
   .bc-slot[data-now] {
     background: var(--surface-2);
   }
+  /* 19px bold is "large text" (3:1 needed); red on the slot is 4.1:1, short of 4.5 for smaller type. */
   .bc-slot[data-now] .bc-t {
     color: var(--accent);
+    font-size: 19px;
   }
 
   /* ticker */
@@ -1364,8 +1411,10 @@ a:hover > * > .name-verified {
   .bc-trio span {
     display: grid;
     place-items: center;
+    align-content: center;
+    gap: 2px;
     min-width: 42px;
-    height: 34px;
+    height: 42px;
     background: var(--surface-2);
     font-weight: 800;
     font-size: 18px;
@@ -1374,6 +1423,11 @@ a:hover > * > .name-verified {
   }
   .bc-trio span[data-win] {
     color: var(--on-fill);
+  }
+  .bc-trio small {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    opacity: 0.85;
   }
   .bc-photo {
     grid-column: 1 / -1;

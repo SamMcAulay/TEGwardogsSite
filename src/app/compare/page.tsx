@@ -10,7 +10,7 @@ import { getPlayer, headToHead, searchPlayers } from '@/lib/server/data';
 import type { Loaded, PlayerProfile } from '@/lib/server/views';
 import { one } from '@/lib/url';
 
-export const metadata: Metadata = { title: 'Compare players' };
+export const metadata: Metadata = { title: 'Compare players', description: 'Two players side by side, including how often they have killed each other.' };
 
 type Resolved = Loaded<PlayerProfile> | 'none' | 'warming' | Error;
 

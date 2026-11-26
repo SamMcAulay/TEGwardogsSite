@@ -12,7 +12,7 @@ import { METRIC_LABELS, METRICS, parseMetric, parsePeriod, PERIOD_LABELS, PERIOD
 import { one, pageParam, withParams } from '@/lib/url';
 import { boardMoves } from '@/lib/server/trends';
 
-export const metadata: Metadata = { title: 'Leaderboards' };
+export const metadata: Metadata = { title: 'Leaderboards', description: 'Kills, K/D, playtime and wins on the TEG WARDOGS servers, by week, month, season or all time.' };
 
 const nowSec = () => Math.floor(Date.now() / 1000);
 

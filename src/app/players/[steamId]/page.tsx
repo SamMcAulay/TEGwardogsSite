@@ -21,7 +21,7 @@ import { playerMetadata } from '@/lib/server/card';
 import { lookOfSteam, standing, viewer } from '@/lib/server/accounts';
 import { withoutPresence } from '@/lib/server/presence';
 import { getPlayer, playerSeason, shortNameOf } from '@/lib/server/data';
-import { isFrozen, parseSeason, SEASON_LABELS, SEASON_TWO_START, SEASONS } from '@/lib/server/seasons';
+import { isFrozen, parseSeason, SEASON_LABELS, SEASON_THREE_START, SEASON_TWO_START, SEASONS } from '@/lib/server/seasons';
 import { playerSkill, playerTrends } from '@/lib/server/trends';
 import { PlayerTrends } from '@/components/trends';
 
@@ -97,10 +97,12 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
   // A member hiding where they play: only they and their friends see it (lib/server/presence.ts).
   const player = stand.seesPresence ? loadedPlayer.data : withoutPresence(loadedPlayer.data, nowSec());
   const masked = !stand.seesPresence;
+  // All time's trends start where the round history does (season two); a season's at its start.
+  const trendsFrom = season === 's3' ? SEASON_THREE_START : SEASON_TWO_START;
   const [view, skill, trends] = await Promise.all([
     season === 'all' ? null : playerSeason(player, season),
     playerSkill(steamId, me).catch(() => null),
-    isFrozen(season) ? null : playerTrends(steamId, masked).catch(() => null),
+    isFrozen(season) ? null : playerTrends(steamId, masked, trendsFrom).catch(() => null),
   ]);
   // The header is always all time; everything under the tabs is the chosen season.
   const p = view && view !== 'unavailable' ? view.profile : player;
@@ -275,11 +277,11 @@ export default async function PlayerPage({ params, searchParams }: PageProps<'/p
           {season === 'all' && <Milestones totals={milestoneTotals} />}
 
           {trends && trends.days.length > 0 && (
-            <Panel title="Trends" action="Since Season 2 · per UTC day">
+            <Panel title="Trends" action={`${season === 's3' ? 'Season 3' : 'Since Season 2'} · per UTC day`}>
               <PlayerTrends
                 days={trends.days}
                 killsRank={trends.killsRank}
-                from={new Date(SEASON_TWO_START * 1000).toISOString().slice(0, 10)}
+                from={new Date(trendsFrom * 1000).toISOString().slice(0, 10)}
                 today={new Date(now * 1000).toISOString().slice(0, 10)}
               />
             </Panel>

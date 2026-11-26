@@ -8,7 +8,7 @@ import { Section, safe } from '@/components/section';
 import { getServers, recentKills } from '@/lib/server/data';
 import { one, withParams } from '@/lib/url';
 
-export const metadata: Metadata = { title: 'Kill feed' };
+export const metadata: Metadata = { title: 'Kill feed', description: 'Kills as they happen across the TEG WARDOGS servers.' };
 
 const LIMIT = 60;
 const MIN_DISTANCES = [100, 250, 400] as const;

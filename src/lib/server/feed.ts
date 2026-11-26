@@ -27,6 +27,7 @@ export interface Turn {
 
 export interface RoundStory {
   serverId: string;
+  matchId: number;
   serverName: string;
   map: string;
   lighting: string | null;
@@ -50,6 +51,8 @@ export interface HomeFeed {
   longest: { shot: RecordShot; today: boolean } | null;
   topToday: RecordRow | null;
   milestone: { steamId: string; name: string; avatarUrl: string | null; label: string; value: number; next: number; badge: string } | null;
+  /** for each empty server: when it's next usually at its busiest (unix seconds); null when unknown */
+  busyAt: Record<string, number | null>;
 }
 
 /** A round somebody actually scored in; empty servers end rounds at 0–0–0. */
@@ -60,6 +63,26 @@ const quiet = <T>(p: Promise<T>): Promise<T | null> =>
     console.error('[feed]', e instanceof Error ? e.message : e);
     return null;
   });
+
+/**
+ * The next time of day a server is usually at its busiest: the time-of-day bucket with the highest
+ * average players over the history given, next coming round after now.
+ */
+export function nextBusiest(points: { ts: number; players: number }[], now: number): number | null {
+  const byTime = new Map<number, { sum: number; n: number }>();
+  for (const p of points) {
+    const t = ((p.ts % 86_400) + 86_400) % 86_400;
+    const b = byTime.get(t) ?? { sum: 0, n: 0 };
+    b.sum += p.players;
+    b.n++;
+    byTime.set(t, b);
+  }
+  let best: [number, number] | null = null;
+  for (const [t, b] of byTime) if (b.sum / b.n > (best?.[1] ?? 0)) best = [t, b.sum / b.n];
+  if (!best) return null;
+  const at = now - (((now % 86_400) + 86_400) % 86_400) + best[0];
+  return at > now ? at : at + 86_400;
+}
 
 /** The longest shot of the last 24 hours, else the longest on record. */
 export function pickLongest(shots: RecordShot[], now: number): HomeFeed['longest'] {
@@ -130,6 +153,7 @@ async function story(server: { id: string; shortName: string }, row: MatchRow, n
   const end = row.endedAt ?? now;
   return {
     serverId: server.id,
+    matchId: row.id,
     serverName: server.shortName,
     map: mapName(row.map),
     lighting: row.lighting,
@@ -163,6 +187,13 @@ export async function homeFeed(servers: ServerRow[], recs: { longestShots: Recor
     .flatMap((s, i) => (lists[i] ?? []).filter((m) => m.endedAt != null && scored(m.scores)).map((m) => ({ s, m })))
     .sort((a, b) => b.m.endedAt! - a.m.endedAt!)[0];
 
+  // Empty servers: when they usually fill up, from the last 30 days.
+  const empty = servers.filter((s) => s.online && s.playerCount === 0);
+  const months = await Promise.all(empty.map((s) => quiet(warcon().analytics(s.id, '30d'))));
+  const busyAt = Object.fromEntries(
+    empty.map((s, i) => [s.id, nextBusiest((months[i]?.value.population ?? []).filter((p) => p.avg != null).map((p) => ({ ts: Date.parse(p.ts) / 1000, players: p.avg! })), now)]),
+  );
+
   const topToday = recs?.today[0] ?? null;
   const [roundSoFar, lastResult, player] = await Promise.all([
     busiest ? quiet(story(busiest.s, busiest.live!, now)) : null,
@@ -180,5 +211,6 @@ export async function homeFeed(servers: ServerRow[], recs: { longestShots: Recor
     longest: recs ? pickLongest(recs.longestShots, now) : null,
     topToday,
     milestone: p && near ? { steamId: p.steamId, name: p.name, avatarUrl: p.avatarUrl, ...near } : null,
+    busyAt,
   };
 }

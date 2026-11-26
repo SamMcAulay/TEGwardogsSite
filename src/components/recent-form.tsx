@@ -13,8 +13,9 @@ const RESULT = {
 
 /** The last rounds at a glance: kills per round as bars, coloured by result, oldest on the left. */
 export function RecentForm({ rounds, streak }: { rounds: PlayerMatchRow[]; streak: { kind: 'win' | 'loss'; n: number } | null }) {
-  if (!rounds.length) return null;
-  const ordered = [...rounds].reverse();
+  // A round with no kill and no death either way is a join-and-leave, not form.
+  const ordered = rounds.filter((r) => r.kills > 0 || r.deaths > 0).reverse();
+  if (!ordered.length) return null;
   const most = Math.max(1, ...ordered.map((r) => r.kills));
   const kills = ordered.reduce((n, r) => n + r.kills, 0);
   const deaths = ordered.reduce((n, r) => n + r.deaths, 0);

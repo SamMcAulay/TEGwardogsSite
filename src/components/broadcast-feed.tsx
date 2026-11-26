@@ -36,7 +36,7 @@ export interface Segment {
   cam: string;
   source: string;
   /** the map title bottom right */
-  where?: [string, string];
+  where?: [string, ReactNode];
   /** where the map title leads: the server's own page */
   href?: string;
   /** which scorebug this segment is about */
@@ -138,16 +138,22 @@ export function Feed({ bugs, segments, lowerThird }: { bugs: Bug[]; segments: Se
               >
                 <span className="bc-sv">{b.name}</span>
                 {b.scores.map((s) => (
-                  <span key={s.name} className="bc-tm num">
+                  <span key={s.name} className="bc-tm num" title={`${s.name}: ${s.score} points`}>
                     <small style={{ background: factionColor(s.name) }}>{FACTIONS[s.name]?.short ?? s.name.slice(0, 3).toUpperCase()}</small>
                     {s.score}
                   </span>
                 ))}
-                {b.clock != null && <span className="bc-clk num">{mmss(b.clock)}</span>}
+                {b.clock != null && (
+                  <span className="bc-clk num" title="Round time">
+                    {mmss(b.clock)}
+                  </span>
+                )}
                 {b.max != null && b.players >= b.max ? (
-                  <span className="bc-ful">FULL</span>
+                  <span className="bc-ful" title={`${b.players} of ${b.max} slots taken`}>
+                    FULL
+                  </span>
                 ) : (
-                  <span className="bc-clk num">
+                  <span className="bc-clk num" title={`${b.players} playing of ${b.max ?? '?'} slots`}>
                     {b.players}/{b.max ?? '—'}
                   </span>
                 )}

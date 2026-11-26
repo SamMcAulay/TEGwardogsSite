@@ -31,12 +31,20 @@ import { getServer, leaderboard, listMatches, liveTags, mapWinRates, population,
 import type { LiveTag } from '@/lib/server/live-tags';
 import { liveStrength } from '@/lib/server/trends';
 import type { LivePlayer } from '@/lib/server/views';
+import { wasPlayed } from '@/lib/server/rounds';
 
 export async function generateMetadata({ params }: PageProps<'/servers/[id]'>): Promise<Metadata> {
   const { id } = await params;
   try {
     const s = await getServer(id);
-    return { title: s ? s.data.name : 'Server not found' };
+    if (!s) return { title: 'Server not found' };
+    const st = s.data.status;
+    const map = st ? mapName(st.map) : null;
+    const art = st && map ? mapArt(map, st.lighting) : null;
+    const description = st
+      ? `${s.data.playerCount}/${st.players.max} playing on ${map} now. Live scoreboard, what's up next, population and recent rounds.`
+      : 'Live scoreboard, map rotation, population and recent rounds.';
+    return { title: s.data.name, description, openGraph: { title: s.data.name, description, ...(art ? { images: [art] } : {}) } };
   } catch {
     return { title: 'Server' };
   }
@@ -157,7 +165,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
     safe(populationHistory(server.id)),
     safe(serverTotals(server.id)),
     // More than the table shows, for a typical round length.
-    safe(listMatches({ serverId: server.id, limit: 20 })),
+    safe(listMatches({ serverId: server.id, limit: 20, played: true })),
     safe(leaderboard({ metric: 'kills', period: '7d', serverId: server.id })),
     safe(recentKills({ serverId: server.id, limit: 15 })),
     // Decoration: a failed lookup means no tags, never a broken scoreboard.
@@ -422,7 +430,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.slice(0, 8).map((m) => (
+                      {rows.filter((m) => m.endedAt == null || wasPlayed(m)).slice(0, 8).map((m) => (
                         <tr key={m.id}>
                           <td>
                             <Link prefetch={false} href={`/matches/${m.serverId}/${m.id}`} className="link font-medium">
@@ -435,7 +443,7 @@ export default async function ServerPage({ params, searchParams }: PageProps<'/s
                             )}
                           </td>
                           <td className="hidden text-muted sm:table-cell"><LocalTime ts={m.startedAt} /></td>
-                          <td className="r">{duration((m.endedAt ?? now) - m.startedAt)}</td>
+                          <td className="r">{duration(m.playedSeconds ?? (m.endedAt ?? now) - m.startedAt)}</td>
                           <td className="r">{m.peakPlayers}</td>
                           <td className="whitespace-normal">
                             {m.endedAt ? <FactionTag name={m.winner} /> : <span className="text-dim">In progress</span>}

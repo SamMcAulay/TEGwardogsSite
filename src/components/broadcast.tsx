@@ -4,7 +4,7 @@
 /* eslint-disable @next/next/no-img-element -- Steam avatars and map banners at fixed broadcast sizes */
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { causeLabel, factionColor, lightingName, mapArt } from '@/lib/game';
+import { causeLabel, FACTIONS, factionColor, lightingName, mapArt } from '@/lib/game';
 import { int, metres } from '@/lib/format';
 import type { RoundStory, Turn } from '@/lib/server/feed';
 import type { KillRow, RecordShot } from '@/lib/server/views';
@@ -13,7 +13,7 @@ import { ClockAt } from './broadcast-feed';
 
 /** A player's picture: their Steam avatar square, or initials when there isn't one. */
 export function Pic({ name, steamId, url, size }: { name: string; steamId: string; url: string | null; size: number }) {
-  return url ? <img src={url} alt="" width={size} height={size} /> : <Avatar name={name} steamId={steamId} url={null} size={size} />;
+  return url ? <img src={url} alt="" width={size} height={size} loading="lazy" /> : <Avatar name={name} steamId={steamId} url={null} size={size} />;
 }
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -85,9 +85,9 @@ export function RoundSoFar({ round, cap, scores }: { round: RoundStory; cap: num
   const sorted = [...scores].sort((a, b) => b.score - a.score);
   return (
     <>
-      <span className="bc-k">
-        {round.serverName} · {round.map} · {mmss(round.length)} played
-      </span>
+      <Link prefetch={false} href={`/matches/${round.serverId}/${round.matchId}`} className="bc-k">
+        {round.serverName} · {round.map} · {mmss(round.length)} played · follow it live →
+      </Link>
       <RoundChart round={{ ...round, scores }} cap={cap} />
       {sorted.length > 1 && (
         <div className="bc-line">
@@ -130,9 +130,9 @@ export function LastResult({ round }: { round: RoundStory }) {
   const margin = sorted.length > 1 ? winner.score - sorted[1].score : 0;
   return (
     <>
-      <span className="bc-k">
-        Final · {round.map} · {round.serverName}
-      </span>
+      <Link prefetch={false} href={`/matches/${round.serverId}/${round.matchId}`} className="bc-k">
+        Final · {round.map} · {round.serverName} · match report →
+      </Link>
       <div className="bc-res">
         {round.scores.map((s) => (
           <span key={s.name} className="num" data-win={s.score === top || undefined} style={s.score === top ? { background: factionColor(s.name) } : { color: factionColor(s.name) }}>
@@ -168,7 +168,7 @@ export function Milestone({ m }: { m: { steamId: string; name: string; avatarUrl
             {int(left)}
           </div>
           <div className="bc-line">
-            {m.label.toLowerCase()} from {m.badge}
+            career {m.label.toLowerCase()} from {m.badge}
           </div>
         </div>
       </div>
@@ -305,7 +305,8 @@ export function Results({ rounds }: { rounds: { serverId: string; serverName: st
             </span>
             <span className="bc-trio">
               {r.scores.map((s) => (
-                <span key={s.name} className="num" data-win={s.score === top || undefined} style={s.score === top ? { background: factionColor(s.name) } : { color: factionColor(s.name) }}>
+                <span key={s.name} className="num" title={s.name} data-win={s.score === top || undefined} style={s.score === top ? { background: factionColor(s.name) } : { color: factionColor(s.name) }}>
+                  <small>{FACTIONS[s.name]?.short ?? s.name.slice(0, 3).toUpperCase()}</small>
                   {s.score}
                 </span>
               ))}

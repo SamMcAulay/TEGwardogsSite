@@ -13,7 +13,7 @@ import { lightingName, mapName, REGION_NAMES } from '@/lib/game';
 import { Section, safe } from '@/components/section';
 import { getServers, networkSummary, population } from '@/lib/server/data';
 
-export const metadata: Metadata = { title: 'Servers' };
+export const metadata: Metadata = { title: 'Servers', description: 'Every TEG WARDOGS server: who is playing, the map, the score and how busy it gets.' };
 
 export default async function ServersPage() {
   const servers = await safe(getServers());

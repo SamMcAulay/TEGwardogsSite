@@ -703,7 +703,7 @@ export async function getPlayer(steamId: string): Promise<Loaded<PlayerProfile> 
       aliases: d.names.filter((n) => n !== d.name),
       totals: {
         kills: c.kills, deaths: c.deaths, headshots: c.headshots, suicides: d.combat?.suicides ?? 0,
-        teamkills: d.combat?.teamKills ?? 0, playtime: c.minutes * 60, longest: c.longestM ?? 0,
+        teamkills: d.combat?.teamKills ?? 0, playtime: d.summary.minutes * 60, longest: c.longestM ?? 0,
         matches: c.matches, wins: c.wins, losses: c.losses, draws: c.draws,
         vehicleKills: c.vehicleKills ?? 0, killStreak: c.killStreak ?? 0,
       },
@@ -783,9 +783,23 @@ function matchRow(m: WMatchSummary, serverId: string, serverName: string, colour
   };
 }
 
+/** A function giving a round's time with people on (playedSeconds) from each server's last 7 days of
+ *  population; null when that history is missing or doesn't reach back to the round. */
+async function timePlayed(serverIds: string[]) {
+  const pop = await fanOut(serverIds, (id) => warcon().analytics(id, '7d'));
+  return (id: string, startedAt: number, endedAt: number) => {
+    const a = pop.ok.find((o) => o.id === id)?.value;
+    if (!a) return null;
+    const points = a.population.filter((p) => p.avg != null).map((p) => ({ ts: sec(p.ts)!, players: p.avg! }));
+    if (!points.length || points[0].ts > startedAt) return null;
+    return playedSeconds(startedAt, endedAt, points, a.bucketSeconds);
+  };
+}
+
 /** Pages only for one server: across all servers, the newest `limit` merged from each one's page 1
  *  (merging deeper pages per server would skip or repeat matches). */
-export async function listMatches(q: { serverId?: string | null; limit?: number; page?: number } = {}) {
+/** q.played: also work out each round's time with people on (one more cached Warcon call per server). */
+export async function listMatches(q: { serverId?: string | null; limit?: number; page?: number; played?: boolean } = {}) {
   const { list } = await serverList();
   const servers = q.serverId ? list.filter((s) => s.id === q.serverId) : list;
   const limit = q.limit ?? 50;
@@ -796,7 +810,13 @@ export async function listMatches(q: { serverId?: string | null; limit?: number;
     return value.matches.map((m) => matchRow(m, id, shortNameOf(list.find((s) => s.id === id)!.name), colours));
   });
   const pages = q.serverId ? Math.max(1, ...r.ok.map((o) => o.value.pages)) : 1;
-  return loaded({ rows: mergeNewest(lists, (m) => m.startedAt, limit), pages }, r.stale, r.failed);
+  const rows = mergeNewest(lists, (m) => m.startedAt, limit);
+  if (q.played) {
+    const playedIn = await timePlayed(r.ok.map((o) => o.id));
+    const now = Math.floor(Date.now() / 1000);
+    for (const m of rows) m.playedSeconds = playedIn(m.serverId, m.startedAt, m.endedAt ?? now);
+  }
+  return loaded({ rows, pages }, r.stale, r.failed);
 }
 
 /** Match list pages read for a server's wins by map: about the last few hundred rounds. */
@@ -1075,13 +1095,7 @@ export async function endedRounds(): Promise<import('./rounds').EndedRound[]> {
   const { list } = await serverList();
   const r = await fanOut(list.map((s) => s.id), (id) => warcon().matches(id, 1));
   // Population, for each round's time played; without it a round posts its start-to-end time.
-  const pop = await fanOut(r.ok.map((o) => o.id), (id) => warcon().analytics(id, '7d'));
-  const playedIn = (id: string, startedAt: number, endedAt: number) => {
-    const a = pop.ok.find((o) => o.id === id)?.value;
-    if (!a) return null;
-    const points = a.population.filter((p) => p.avg != null).map((p) => ({ ts: sec(p.ts)!, players: p.avg! }));
-    return playedSeconds(startedAt, endedAt, points, a.bucketSeconds);
-  };
+  const playedIn = await timePlayed(r.ok.map((o) => o.id));
   return r.ok.flatMap(({ id, value }) =>
     value.matches
       .filter((m) => m.endedAt)
